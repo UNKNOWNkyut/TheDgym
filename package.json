@@ -1,0 +1,12 @@
+{
+  "name": "the-dgym",
+  "version": "1.0.0",
+  "private": true,
+  "description": "THE DGYM - Premium Fitness Gym Management & Retention Platform",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "preview": "npm run preview --prefix frontend"
+  }
+}
