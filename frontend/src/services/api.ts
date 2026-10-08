@@ -11,7 +11,6 @@ import type {
   MembershipPlanCreate,
   AssignMembershipCreate,
   MembershipSummary,
-<<<<<<< HEAD
   Visit,
   VisitCreate,
   ClassSession,
@@ -20,7 +19,6 @@ import type {
   PTSessionCreate,
   PTSessionBookCreate,
   TrainerProfile,
-=======
   ExpenseCategory,
   ExpenseCategoryCreate,
   ExpenseCategoryUpdate,
@@ -28,7 +26,6 @@ import type {
   ExpenseCreate,
   ExpenseUpdate,
   FinanceSummary,
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
 } from '@/types/auth'
 
 
@@ -61,19 +58,23 @@ class ApiError extends Error {
 }
 
 
+export { ApiError }
+
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = getStoredToken()
+  const headers = new Headers(options.headers)
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
   }
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
+  const token = getStoredToken()
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   const response = await fetch(endpoint, {
@@ -82,108 +83,112 @@ async function request<T>(
     credentials: 'include',
   })
 
+  if (response.status === 204) {
+    return undefined as unknown as T
+  }
+
+  let data: any
+
+  try {
+    data = await response.json()
+  } catch {
+    data = null
+  }
+
   if (!response.ok) {
-    let errorMessage = 'An error occurred. Please try again.'
+    let message = 'An unexpected error occurred'
 
-    try {
-      const data = await response.json()
-
+    if (data?.detail) {
       if (typeof data.detail === 'string') {
-        errorMessage = data.detail
+        message = data.detail
       } else if (Array.isArray(data.detail)) {
-        errorMessage = data.detail
-          .map((item: { msg?: string }) => item.msg)
-          .filter(Boolean)
+        message = data.detail
+          .map((err: any) => err.msg || JSON.stringify(err))
           .join(', ')
       }
-    } catch {
-      errorMessage = response.statusText || errorMessage
     }
 
-    throw new ApiError(
-      errorMessage,
-      response.status,
-    )
+    throw new ApiError(message, response.status)
   }
 
-  if (response.status === 204) {
-    return undefined as T
-  }
-
-  return response.json() as Promise<T>
+  return data as T
 }
 
 
 export const api = {
-  // ─── Auth ────────────────────────────────────────────────────────────────
+  // ─── Authentication ───────────────────────────────────────────────────────
 
-  async login(
-    credentials: LoginCredentials,
-  ): Promise<TokenResponse> {
-    const data = await request<TokenResponse>(
-      '/api/auth/login',
-      {
-        method: 'POST',
-        body: JSON.stringify(credentials),
-      },
-    )
+  async login(credentials: LoginCredentials): Promise<TokenResponse> {
+    const data = await request<TokenResponse>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    })
 
-    if (data.access_token) {
+    if (data?.access_token) {
       setStoredToken(data.access_token)
     }
 
     return data
   },
 
+  async register(credentials: RegisterCredentials): Promise<TokenResponse> {
+    const data = await request<TokenResponse>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    })
 
-  async register(
-    credentials: RegisterCredentials,
-  ): Promise<TokenResponse> {
-    const data = await request<TokenResponse>(
-      '/api/auth/register',
-      {
-        method: 'POST',
-        body: JSON.stringify(credentials),
-      },
-    )
-
-    if (data.access_token) {
+    if (data?.access_token) {
       setStoredToken(data.access_token)
     }
 
     return data
   },
-
 
   async logout(): Promise<void> {
     try {
-      await request(
-        '/api/auth/logout',
-        {
-          method: 'POST',
-        },
-      )
-    } catch {
-      // Continue local cleanup if network request fails.
+      await request<void>('/api/auth/logout', {
+        method: 'POST',
+      })
     } finally {
       clearStoredToken()
     }
   },
 
-
   async getMe(): Promise<User> {
-    return request<User>(
-      '/api/auth/me',
-    )
+    return request<User>('/api/auth/me')
   },
-
 
   async getUsers(): Promise<User[]> {
-    return request<User[]>(
-      '/api/users',
-    )
+    return request<User[]>('/api/users')
   },
 
+  async createUser(data: {
+    email: string
+    password: string
+    full_name: string
+    phone?: string
+    role: string
+  }): Promise<User> {
+    return request<User>('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updateUser(
+    id: number,
+    data: {
+      role?: string
+      is_active?: boolean
+      full_name?: string
+      phone?: string
+    },
+  ): Promise<User> {
+    return request<User>(`/api/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
 
   // ─── Members ─────────────────────────────────────────────────────────────
 
@@ -196,158 +201,98 @@ export const api = {
     const query = new URLSearchParams()
 
     if (params?.search) {
-      query.set(
-        'search',
-        params.search,
-      )
+      query.set('search', params.search)
     }
 
     if (params?.status) {
-      query.set(
-        'status',
-        params.status,
-      )
+      query.set('status', params.status)
     }
 
     if (params?.skip !== undefined) {
-      query.set(
-        'skip',
-        String(params.skip),
-      )
+      query.set('skip', String(params.skip))
     }
 
     if (params?.limit !== undefined) {
-      query.set(
-        'limit',
-        String(params.limit),
-      )
+      query.set('limit', String(params.limit))
     }
 
-    const qs = query.toString()
+    const queryString = query.toString()
 
     return request<Member[]>(
-      `/api/members${qs ? `?${qs}` : ''}`,
+      `/api/members${queryString ? `?${queryString}` : ''}`,
     )
   },
-
 
   async getMemberStats(): Promise<MemberStats> {
-    return request<MemberStats>(
-      '/api/members/stats',
-    )
+    return request<MemberStats>('/api/members/stats')
   },
-
 
   async getMember(id: number): Promise<Member> {
-    return request<Member>(
-      `/api/members/${id}`,
-    )
+    return request<Member>(`/api/members/${id}`)
   },
 
-
-  async createMember(
-    data: MemberCreate,
-  ): Promise<Member> {
-    return request<Member>(
-      '/api/members',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-    )
+  async createMember(data: MemberCreate): Promise<Member> {
+    return request<Member>('/api/members', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
 
-
-  async updateMember(
-    id: number,
-    data: MemberUpdate,
-  ): Promise<Member> {
-    return request<Member>(
-      `/api/members/${id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      },
-    )
+  async updateMember(id: number, data: MemberUpdate): Promise<Member> {
+    return request<Member>(`/api/members/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   },
 
-
-  async deactivateMember(
-    id: number,
-  ): Promise<void> {
-    return request<void>(
-      `/api/members/${id}`,
-      {
-        method: 'DELETE',
-      },
-    )
+  async deactivateMember(id: number): Promise<void> {
+    return request<void>(`/api/members/${id}`, {
+      method: 'DELETE',
+    })
   },
-
 
   // ─── Membership Plans ────────────────────────────────────────────────────
 
   async getPlans(): Promise<MembershipPlan[]> {
-    return request<MembershipPlan[]>(
-      '/api/plans',
-    )
+    return request<MembershipPlan[]>('/api/plans')
   },
 
-
-  async createPlan(
-    data: MembershipPlanCreate,
-  ): Promise<MembershipPlan> {
-    return request<MembershipPlan>(
-      '/api/plans',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-    )
+  async createPlan(data: MembershipPlanCreate): Promise<MembershipPlan> {
+    return request<MembershipPlan>('/api/plans', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
-
 
   async updatePlan(
     id: number,
     data: Partial<MembershipPlanCreate>,
   ): Promise<MembershipPlan> {
-    return request<MembershipPlan>(
-      `/api/plans/${id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      },
-    )
+    return request<MembershipPlan>(`/api/plans/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   },
 
-
-  async deactivatePlan(
-    id: number,
-  ): Promise<void> {
-    return request<void>(
-      `/api/plans/${id}`,
-      {
-        method: 'DELETE',
-      },
-    )
+  async deactivatePlan(id: number): Promise<void> {
+    return request<void>(`/api/plans/${id}`, {
+      method: 'DELETE',
+    })
   },
-
 
   // ─── Membership Assignments ──────────────────────────────────────────────
 
   async assignMembership(
     data: AssignMembershipCreate,
   ): Promise<MembershipSummary> {
-    return request<MembershipSummary>(
-      '/api/memberships',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-    )
+    return request<MembershipSummary>('/api/memberships', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
 
-<<<<<<< HEAD
   // ─── Visits ────────────────────────────────────────────────────────────────
+
   async checkInMember(data: VisitCreate): Promise<Visit> {
     return request<Visit>('/api/visits', {
       method: 'POST',
@@ -384,6 +329,7 @@ export const api = {
   },
 
   // ─── Class Sessions ─────────────────────────────────────────────────────────
+
   async getClassSessions(params?: {
     status?: string
     class_type?: string
@@ -406,7 +352,10 @@ export const api = {
     })
   },
 
-  async updateClassSession(id: number, data: Partial<ClassSessionCreate> & { status?: string }): Promise<ClassSession> {
+  async updateClassSession(
+    id: number,
+    data: Partial<ClassSessionCreate> & { status?: string },
+  ): Promise<ClassSession> {
     return request<ClassSession>(`/api/classes/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -427,6 +376,7 @@ export const api = {
   },
 
   // ─── PT Sessions ─────────────────────────────────────────────────────────────
+
   async getPTSessions(params?: {
     trainer_id?: number
     member_id?: number
@@ -451,7 +401,10 @@ export const api = {
     })
   },
 
-  async updatePTSession(id: number, data: Partial<PTSessionCreate> & { status?: string }): Promise<PTSession> {
+  async updatePTSession(
+    id: number,
+    data: Partial<PTSessionCreate> & { status?: string },
+  ): Promise<PTSession> {
     return request<PTSession>(`/api/pt-sessions/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -493,9 +446,6 @@ export const api = {
       body: JSON.stringify({}),
     })
   },
-}
-
-=======
 
   // ─── Finance: Categories ─────────────────────────────────────────────────
 
@@ -503,56 +453,36 @@ export const api = {
     includeInactive = false,
   ): Promise<ExpenseCategory[]> {
     const query = new URLSearchParams()
-
-    query.set(
-      'include_inactive',
-      String(includeInactive),
-    )
-
+    query.set('include_inactive', String(includeInactive))
     return request<ExpenseCategory[]>(
       `/api/finance/categories?${query.toString()}`,
     )
   },
 
-
   async createExpenseCategory(
     data: ExpenseCategoryCreate,
   ): Promise<ExpenseCategory> {
-    return request<ExpenseCategory>(
-      '/api/finance/categories',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-    )
+    return request<ExpenseCategory>('/api/finance/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
-
 
   async updateExpenseCategory(
     id: number,
     data: ExpenseCategoryUpdate,
   ): Promise<ExpenseCategory> {
-    return request<ExpenseCategory>(
-      `/api/finance/categories/${id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      },
-    )
+    return request<ExpenseCategory>(`/api/finance/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   },
 
-
-  async deactivateExpenseCategory(
-    id: number,
-  ): Promise<void> {
-    return request<void>(
-      `/api/finance/categories/${id}`,
-      {
-        method: 'DELETE',
-      },
-    )
+  async deactivateExpenseCategory(id: number): Promise<void> {
+    return request<void>(`/api/finance/categories/${id}`, {
+      method: 'DELETE',
+    })
   },
-
 
   // ─── Finance: Expenses ───────────────────────────────────────────────────
 
@@ -568,109 +498,62 @@ export const api = {
     const query = new URLSearchParams()
 
     if (params?.search) {
-      query.set(
-        'search',
-        params.search,
-      )
+      query.set('search', params.search)
     }
 
     if (params?.category_id !== undefined) {
-      query.set(
-        'category_id',
-        String(params.category_id),
-      )
+      query.set('category_id', String(params.category_id))
     }
 
     if (params?.year !== undefined) {
-      query.set(
-        'year',
-        String(params.year),
-      )
+      query.set('year', String(params.year))
     }
 
     if (params?.month !== undefined) {
-      query.set(
-        'month',
-        String(params.month),
-      )
+      query.set('month', String(params.month))
     }
 
     if (params?.include_archived !== undefined) {
-      query.set(
-        'include_archived',
-        String(params.include_archived),
-      )
+      query.set('include_archived', String(params.include_archived))
     }
 
     if (params?.skip !== undefined) {
-      query.set(
-        'skip',
-        String(params.skip),
-      )
+      query.set('skip', String(params.skip))
     }
 
     if (params?.limit !== undefined) {
-      query.set(
-        'limit',
-        String(params.limit),
-      )
+      query.set('limit', String(params.limit))
     }
 
     const qs = query.toString()
-
     return request<Expense[]>(
       `/api/finance/expenses${qs ? `?${qs}` : ''}`,
     )
   },
 
-
-  async getExpense(
-    id: number,
-  ): Promise<Expense> {
-    return request<Expense>(
-      `/api/finance/expenses/${id}`,
-    )
+  async getExpense(id: number): Promise<Expense> {
+    return request<Expense>(`/api/finance/expenses/${id}`)
   },
 
-
-  async createExpense(
-    data: ExpenseCreate,
-  ): Promise<Expense> {
-    return request<Expense>(
-      '/api/finance/expenses',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-    )
+  async createExpense(data: ExpenseCreate): Promise<Expense> {
+    return request<Expense>('/api/finance/expenses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
 
-
-  async updateExpense(
-    id: number,
-    data: ExpenseUpdate,
-  ): Promise<Expense> {
-    return request<Expense>(
-      `/api/finance/expenses/${id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      },
-    )
+  async updateExpense(id: number, data: ExpenseUpdate): Promise<Expense> {
+    return request<Expense>(`/api/finance/expenses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   },
 
-
-  async archiveExpense(
-    id: number,
-  ): Promise<void> {
-    return request<void>(
-      `/api/finance/expenses/${id}`,
-      {
-        method: 'DELETE',
-      },
-    )
+  async archiveExpense(id: number): Promise<void> {
+    return request<void>(`/api/finance/expenses/${id}`, {
+      method: 'DELETE',
+    })
   },
-
 
   // ─── Finance Summary ─────────────────────────────────────────────────────
 
@@ -679,17 +562,10 @@ export const api = {
     month?: number,
   ): Promise<FinanceSummary> {
     const query = new URLSearchParams()
-
-    query.set(
-      'year',
-      String(year),
-    )
+    query.set('year', String(year))
 
     if (month !== undefined) {
-      query.set(
-        'month',
-        String(month),
-      )
+      query.set('month', String(month))
     }
 
     return request<FinanceSummary>(
@@ -697,4 +573,3 @@ export const api = {
     )
   },
 }
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb

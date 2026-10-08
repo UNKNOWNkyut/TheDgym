@@ -20,206 +20,137 @@ import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
 
-<<<<<<< HEAD
-// Authenticated portal pages
-const DashboardPage      = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
-const ManageOverviewPage  = lazy(() => import('@/pages/manage/ManageOverviewPage').then(m => ({ default: m.ManageOverviewPage })))
-const ManageMembersPage   = lazy(() => import('@/pages/manage/ManageMembersPage').then(m => ({ default: m.ManageMembersPage })))
-const MemberFormPage      = lazy(() => import('@/pages/manage/MemberFormPage').then(m => ({ default: m.MemberFormPage })))
-const MemberDetailPage    = lazy(() => import('@/pages/manage/MemberDetailPage').then(m => ({ default: m.MemberDetailPage })))
-const ManagePlansPage     = lazy(() => import('@/pages/manage/ManagePlansPage').then(m => ({ default: m.ManagePlansPage })))
-const ManageUsersPage     = lazy(() => import('@/pages/manage/ManageUsersPage').then(m => ({ default: m.ManageUsersPage })))
-const ManageVisitsPage    = lazy(() => import('@/pages/manage/ManageVisitsPage').then(m => ({ default: m.ManageVisitsPage })))
-const ManageClassesPage   = lazy(() => import('@/pages/manage/ManageClassesPage').then(m => ({ default: m.ManageClassesPage })))
-const ManagePTSessionsPage = lazy(() => import('@/pages/manage/ManagePTSessionsPage').then(m => ({ default: m.ManagePTSessionsPage })))
-const BookTrainerPage     = lazy(() => import('@/pages/manage/BookTrainerPage').then(m => ({ default: m.BookTrainerPage })))
-=======
 // ─── Public Pages ─────────────────────────────────────────────────────────────
 
-const AboutPage = lazy(
-  () =>
-    import('@/pages/AboutPage').then(
-      (module) => ({
-        default: module.AboutPage,
-      }),
-    ),
+const AboutPage = lazy(() =>
+  import('@/pages/AboutPage').then((module) => ({
+    default: module.AboutPage,
+  })),
 )
 
-const MembershipPage = lazy(
-  () =>
-    import('@/pages/MembershipPage').then(
-      (module) => ({
-        default: module.MembershipPage,
-      }),
-    ),
+const MembershipPage = lazy(() =>
+  import('@/pages/MembershipPage').then((module) => ({
+    default: module.MembershipPage,
+  })),
 )
 
-const ClassesPage = lazy(
-  () =>
-    import('@/pages/ClassesPage').then(
-      (module) => ({
-        default: module.ClassesPage,
-      }),
-    ),
+const ClassesPage = lazy(() =>
+  import('@/pages/ClassesPage').then((module) => ({
+    default: module.ClassesPage,
+  })),
 )
 
-const TrainersPage = lazy(
-  () =>
-    import('@/pages/TrainersPage').then(
-      (module) => ({
-        default: module.TrainersPage,
-      }),
-    ),
+const TrainersPage = lazy(() =>
+  import('@/pages/TrainersPage').then((module) => ({
+    default: module.TrainersPage,
+  })),
 )
 
-const ContactPage = lazy(
-  () =>
-    import('@/pages/ContactPage').then(
-      (module) => ({
-        default: module.ContactPage,
-      }),
-    ),
+const ContactPage = lazy(() =>
+  import('@/pages/ContactPage').then((module) => ({
+    default: module.ContactPage,
+  })),
 )
 
-const FAQPage = lazy(
-  () =>
-    import('@/pages/FAQPage').then(
-      (module) => ({
-        default: module.FAQPage,
-      }),
-    ),
+const FAQPage = lazy(() =>
+  import('@/pages/FAQPage').then((module) => ({
+    default: module.FAQPage,
+  })),
 )
 
-const LoginPage = lazy(
-  () =>
-    import('@/pages/LoginPage').then(
-      (module) => ({
-        default: module.LoginPage,
-      }),
-    ),
+const LoginPage = lazy(() =>
+  import('@/pages/LoginPage').then((module) => ({
+    default: module.LoginPage,
+  })),
 )
 
-const RegisterPage = lazy(
-  () =>
-    import('@/pages/RegisterPage').then(
-      (module) => ({
-        default: module.RegisterPage,
-      }),
-    ),
+const RegisterPage = lazy(() =>
+  import('@/pages/RegisterPage').then((module) => ({
+    default: module.RegisterPage,
+  })),
 )
 
 
-// ─── Portal Pages ─────────────────────────────────────────────────────────────
+// ─── Portal & Management Pages ────────────────────────────────────────────────
 
-const DashboardPage = lazy(
-  () =>
-    import('@/pages/DashboardPage').then(
-      (module) => ({
-        default: module.DashboardPage,
-      }),
-    ),
+const DashboardPage = lazy(() =>
+  import('@/pages/DashboardPage').then((module) => ({
+    default: module.DashboardPage,
+  })),
 )
 
-const ManageOverviewPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/ManageOverviewPage'
-    ).then(
-      (module) => ({
-        default:
-          module.ManageOverviewPage,
-      }),
-    ),
+const BookTrainerPage = lazy(() =>
+  import('@/pages/manage/BookTrainerPage').then((module) => ({
+    default: module.BookTrainerPage,
+  })),
 )
 
-const ManageMembersPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/ManageMembersPage'
-    ).then(
-      (module) => ({
-        default:
-          module.ManageMembersPage,
-      }),
-    ),
+const ManageOverviewPage = lazy(() =>
+  import('@/pages/manage/ManageOverviewPage').then((module) => ({
+    default: module.ManageOverviewPage,
+  })),
 )
 
-const MemberFormPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/MemberFormPage'
-    ).then(
-      (module) => ({
-        default:
-          module.MemberFormPage,
-      }),
-    ),
+const ManageMembersPage = lazy(() =>
+  import('@/pages/manage/ManageMembersPage').then((module) => ({
+    default: module.ManageMembersPage,
+  })),
 )
 
-const MemberDetailPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/MemberDetailPage'
-    ).then(
-      (module) => ({
-        default:
-          module.MemberDetailPage,
-      }),
-    ),
+const MemberFormPage = lazy(() =>
+  import('@/pages/manage/MemberFormPage').then((module) => ({
+    default: module.MemberFormPage,
+  })),
 )
 
-const ManagePlansPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/ManagePlansPage'
-    ).then(
-      (module) => ({
-        default:
-          module.ManagePlansPage,
-      }),
-    ),
+const MemberDetailPage = lazy(() =>
+  import('@/pages/manage/MemberDetailPage').then((module) => ({
+    default: module.MemberDetailPage,
+  })),
 )
 
-const ManageUsersPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/ManageUsersPage'
-    ).then(
-      (module) => ({
-        default:
-          module.ManageUsersPage,
-      }),
-    ),
+const ManagePlansPage = lazy(() =>
+  import('@/pages/manage/ManagePlansPage').then((module) => ({
+    default: module.ManagePlansPage,
+  })),
 )
 
-
-// ─── Finance Pages ────────────────────────────────────────────────────────────
-
-const ManageFinancePage = lazy(
-  () =>
-    import(
-      '@/pages/manage/ManageFinancePage'
-    ).then(
-      (module) => ({
-        default:
-          module.ManageFinancePage,
-      }),
-    ),
+const ManageUsersPage = lazy(() =>
+  import('@/pages/manage/ManageUsersPage').then((module) => ({
+    default: module.ManageUsersPage,
+  })),
 )
 
-const ManageExpensesPage = lazy(
-  () =>
-    import(
-      '@/pages/manage/ManageExpensesPage'
-    ).then(
-      (module) => ({
-        default:
-          module.ManageExpensesPage,
-      }),
-    ),
+const ManageVisitsPage = lazy(() =>
+  import('@/pages/manage/ManageVisitsPage').then((module) => ({
+    default: module.ManageVisitsPage,
+  })),
 )
 
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
+const ManageClassesPage = lazy(() =>
+  import('@/pages/manage/ManageClassesPage').then((module) => ({
+    default: module.ManageClassesPage,
+  })),
+)
+
+const ManagePTSessionsPage = lazy(() =>
+  import('@/pages/manage/ManagePTSessionsPage').then((module) => ({
+    default: module.ManagePTSessionsPage,
+  })),
+)
+
+const ManageFinancePage = lazy(() =>
+  import('@/pages/manage/ManageFinancePage').then((module) => ({
+    default: module.ManageFinancePage,
+  })),
+)
+
+const ManageExpensesPage = lazy(() =>
+  import('@/pages/manage/ManageExpensesPage').then((module) => ({
+    default: module.ManageExpensesPage,
+  })),
+)
+
 
 function PageFallback() {
   return (
@@ -232,93 +163,25 @@ function PageFallback() {
 }
 
 
-export default function App() {
+export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense
-          fallback={
-            <PageFallback />
-          }
-        >
+        <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Public Website */}
-            <Route
-              element={
-                <RootLayout />
-              }
-            >
-              <Route
-                path="/"
-                element={
-                  <HomePage />
-                }
-              />
-
-              <Route
-                path="/about"
-                element={
-                  <AboutPage />
-                }
-              />
-
-              <Route
-                path="/membership"
-                element={
-                  <MembershipPage />
-                }
-              />
-
-              <Route
-                path="/classes"
-                element={
-                  <ClassesPage />
-                }
-              />
-
-              <Route
-                path="/trainers"
-                element={
-                  <TrainersPage />
-                }
-              />
-
-              <Route
-                path="/contact"
-                element={
-                  <ContactPage />
-                }
-              />
-
-              <Route
-                path="/faq"
-                element={
-                  <FAQPage />
-                }
-              />
-
-              <Route
-                path="/login"
-                element={
-                  <LoginPage />
-                }
-              />
-
-              <Route
-                path="/register"
-                element={
-                  <RegisterPage />
-                }
-              />
-
-              <Route
-                path="*"
-                element={
-                  <NotFoundPage />
-                }
-              />
+            <Route element={<RootLayout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/membership" element={<MembershipPage />} />
+              <Route path="/classes" element={<ClassesPage />} />
+              <Route path="/trainers" element={<TrainersPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
-
 
             {/* Authenticated Portal */}
             <Route
@@ -328,162 +191,116 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-<<<<<<< HEAD
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/dashboard/book" element={<BookTrainerPage />} />
-=======
-              <Route
-                path="/dashboard"
-                element={
-                  <DashboardPage />
-                }
-              />
 
-
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
               <Route
                 path="/manage"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'staff',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
                     <ManageOverviewPage />
                   </ProtectedRoute>
                 }
               />
 
-
               <Route
                 path="/manage/members"
                 element={
                   <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'staff',
-                      'trainer',
-                    ]}
+                    allowedRoles={['admin', 'staff', 'trainer']}
                   >
                     <ManageMembersPage />
                   </ProtectedRoute>
                 }
               />
 
-
               <Route
                 path="/manage/members/new"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'staff',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
                     <MemberFormPage />
                   </ProtectedRoute>
                 }
               />
 
-
               <Route
                 path="/manage/members/:id"
                 element={
-<<<<<<< HEAD
-                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
-=======
                   <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'staff',
-                    ]}
+                    allowedRoles={['admin', 'staff', 'trainer']}
                   >
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
                     <MemberDetailPage />
                   </ProtectedRoute>
                 }
               />
 
-
               <Route
                 path="/manage/plans"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'staff',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
                     <ManagePlansPage />
                   </ProtectedRoute>
                 }
               />
 
-
               <Route
                 path="/manage/users"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageUsersPage />
                   </ProtectedRoute>
                 }
               />
-<<<<<<< HEAD
+
               <Route
                 path="/manage/visits"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
+                  <ProtectedRoute
+                    allowedRoles={['admin', 'staff', 'trainer']}
+                  >
                     <ManageVisitsPage />
                   </ProtectedRoute>
                 }
               />
+
               <Route
                 path="/manage/classes"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
+                  <ProtectedRoute
+                    allowedRoles={['admin', 'staff', 'trainer']}
+                  >
                     <ManageClassesPage />
                   </ProtectedRoute>
                 }
               />
+
               <Route
                 path="/manage/pt-sessions"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
+                  <ProtectedRoute
+                    allowedRoles={['admin', 'staff', 'trainer']}
+                  >
                     <ManagePTSessionsPage />
-=======
-
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Finance — Admin Only */}
               <Route
                 path="/manage/finance"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageFinancePage />
                   </ProtectedRoute>
                 }
               />
 
-
               {/* Expenses — Admin Only */}
               <Route
                 path="/manage/expenses"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageExpensesPage />
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
                   </ProtectedRoute>
                 }
               />
@@ -496,3 +313,4 @@ export default function App() {
     </BrowserRouter>
   )
 }
+export default App

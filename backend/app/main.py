@@ -10,13 +10,10 @@ from app.routers import (
     users_router,
     members_router,
     membership_plans_router,
-<<<<<<< HEAD
     visits_router,
     class_sessions_router,
     pt_sessions_router,
-=======
     finance_router,
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
 )
 from app.seed import seed_users
 from app.seed_plans import seed_plans
@@ -75,25 +72,13 @@ app.add_middleware(
 # =========================================================
 
 app.include_router(auth_router)
-
 app.include_router(users_router)
-
 app.include_router(members_router)
-<<<<<<< HEAD
 app.include_router(membership_plans_router)
 app.include_router(visits_router)
 app.include_router(class_sessions_router)
 app.include_router(pt_sessions_router)
-=======
-
-app.include_router(
-    membership_plans_router
-)
-
-app.include_router(
-    finance_router
-)
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
+app.include_router(finance_router)
 
 
 # =========================================================

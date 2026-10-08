@@ -171,8 +171,8 @@ export interface AssignMembershipCreate {
   notes?: string
 }
 
-<<<<<<< HEAD
-// ─── Phase 5 Types ────────────────────────────────────────────────────────────
+
+// ─── Visits, Classes & PT Types (Phase 5) ────────────────────────────────────
 
 export type VisitType = 'walk_in' | 'class' | 'pt_session' | 'open_gym'
 export type ClassType = 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'hiit' | 'other'
@@ -249,22 +249,10 @@ export interface PTSession {
   notes: string | null
   coach_notes: string | null
   rejection_reason?: string | null
-=======
-
-// ─── Finance Types ────────────────────────────────────────────────────────────
-
-export interface ExpenseCategory {
-  id: number
-  name: string
-  description: string | null
-  is_active: boolean
-  created_by_user_id: number | null
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
   created_at: string
-  updated_at: string
+  updated_at?: string
 }
 
-<<<<<<< HEAD
 export interface PTSessionCreate {
   member_id: number
   trainer_id?: number
@@ -290,20 +278,29 @@ export interface TrainerProfile {
   bio: string | null
 }
 
-=======
+
+// ─── Finance Types ────────────────────────────────────────────────────────────
+
+export interface ExpenseCategory {
+  id: number
+  name: string
+  description: string | null
+  is_active: boolean
+  created_by_user_id: number | null
+  created_at: string
+  updated_at: string
+}
 
 export interface ExpenseCategoryCreate {
   name: string
   description?: string
 }
 
-
 export interface ExpenseCategoryUpdate {
   name?: string
   description?: string
   is_active?: boolean
 }
-
 
 export interface Expense {
   id: number
@@ -320,7 +317,6 @@ export interface Expense {
   updated_at: string
 }
 
-
 export interface ExpenseCreate {
   category_id: number
   amount: number
@@ -328,7 +324,6 @@ export interface ExpenseCreate {
   description: string
   receipt_path?: string
 }
-
 
 export interface ExpenseUpdate {
   category_id?: number
@@ -338,13 +333,11 @@ export interface ExpenseUpdate {
   receipt_path?: string
 }
 
-
 export interface ExpenseCategoryTotal {
   category_id: number
   category_name: string
   total: string
 }
-
 
 export interface FinanceSummary {
   year: number
@@ -355,4 +348,3 @@ export interface FinanceSummary {
   expense_count: number
   expenses_by_category: ExpenseCategoryTotal[]
 }
->>>>>>> 3f977637153e8fbf2fee84c96b88811ebe479ecb
