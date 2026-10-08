@@ -1,12 +1,27 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
+
+from fastapi.staticfiles import (
+    StaticFiles,
+)
 
 from app.config import settings
-from app.database import AsyncSessionLocal, Base, engine
+
+from app.database import (
+    AsyncSessionLocal,
+    Base,
+    engine,
+)
+
 from app.routers import (
     auth_router,
+    account_router,
     users_router,
     members_router,
     membership_plans_router,
@@ -15,42 +30,124 @@ from app.routers import (
     pt_sessions_router,
     finance_router,
 )
-from app.seed import seed_users
-from app.seed_plans import seed_plans
-from app.seed_members import seed_members
-from app.seed_phase5 import seed_phase5
 
+from app.seed import seed_users
+
+from app.seed_plans import (
+    seed_plans,
+)
+
+from app.seed_members import (
+    seed_members,
+)
+
+from app.seed_phase5 import (
+    seed_phase5,
+)
+
+
+# =========================================================
+# UPLOAD DIRECTORY
+# =========================================================
+
+UPLOADS_DIR = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+    / "uploads"
+)
+
+
+UPLOADS_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+
+# =========================================================
+# APPLICATION LIFESPAN
+# =========================================================
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+    app: FastAPI,
+):
 
-    # Create database tables if they do not exist.
+    # Create any missing tables.
+    #
+    # This will create the new:
+    #
+    # user_profiles
+    #
+    # table without deleting your
+    # existing database tables.
     async with engine.begin() as conn:
+
         await conn.run_sync(
             Base.metadata.create_all
         )
 
+
     # Seed development data.
     async with AsyncSessionLocal() as session:
-        await seed_users(session)
-        await seed_plans(session)
-        await seed_members(session)
-        await seed_phase5(session)
+
+        await seed_users(
+            session
+        )
+
+        await seed_plans(
+            session
+        )
+
+        await seed_members(
+            session
+        )
+
+        await seed_phase5(
+            session
+        )
+
 
     yield
 
-    # Close database engine when server shuts down.
+
     await engine.dispose()
 
 
+# =========================================================
+# FASTAPI APP
+# =========================================================
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
+
     version=settings.VERSION,
+
     description=(
         "The DGym API — Authentication, "
-        "Management, Finance, and Analytics Platform"
+        "Management, Finance, "
+        "Member Services, and Analytics Platform"
     ),
+
     lifespan=lifespan,
+)
+
+
+# =========================================================
+# PROFILE PICTURE FILES
+# =========================================================
+
+app.mount(
+    "/api/uploads",
+
+    StaticFiles(
+        directory=str(
+            UPLOADS_DIR
+        )
+    ),
+
+    name="uploads",
 )
 
 
@@ -60,9 +157,15 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+
+    allow_origins=(
+        settings.CORS_ORIGINS
+    ),
+
     allow_credentials=True,
+
     allow_methods=["*"],
+
     allow_headers=["*"],
 )
 
@@ -71,14 +174,41 @@ app.add_middleware(
 # ROUTERS
 # =========================================================
 
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(members_router)
-app.include_router(membership_plans_router)
-app.include_router(visits_router)
-app.include_router(class_sessions_router)
-app.include_router(pt_sessions_router)
-app.include_router(finance_router)
+app.include_router(
+    auth_router
+)
+
+app.include_router(
+    account_router
+)
+
+app.include_router(
+    users_router
+)
+
+app.include_router(
+    members_router
+)
+
+app.include_router(
+    membership_plans_router
+)
+
+app.include_router(
+    visits_router
+)
+
+app.include_router(
+    class_sessions_router
+)
+
+app.include_router(
+    pt_sessions_router
+)
+
+app.include_router(
+    finance_router
+)
 
 
 # =========================================================
@@ -93,7 +223,16 @@ async def health_check():
 
     return {
         "status": "online",
-        "service": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
+
+        "service": (
+            settings.PROJECT_NAME
+        ),
+
+        "version": (
+            settings.VERSION
+        ),
+
+        "environment": (
+            settings.ENVIRONMENT
+        ),
     }

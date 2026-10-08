@@ -79,6 +79,12 @@ const DashboardPage = lazy(() =>
   })),
 )
 
+const MemberSettingsPage = lazy(() =>
+  import('@/pages/MemberSettingsPage').then((module) => ({
+    default: module.MemberSettingsPage,
+  })),
+)
+
 const BookTrainerPage = lazy(() =>
   import('@/pages/manage/BookTrainerPage').then((module) => ({
     default: module.BookTrainerPage,
@@ -191,9 +197,26 @@ export function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/dashboard/book" element={<BookTrainerPage />} />
+              <Route
+                  path="/dashboard"
+                  element={<DashboardPage />}
+                />
 
+              <Route
+                path="/dashboard/settings"
+                element={
+                  <ProtectedRoute
+                    allowedRoles={['member']}
+                  >
+                    <MemberSettingsPage />
+                  </ProtectedRoute>
+                }
+                />
+
+                <Route
+                  path="/dashboard/book"
+                  element={<BookTrainerPage />}
+                />
               <Route
                 path="/manage"
                 element={

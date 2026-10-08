@@ -35,9 +35,20 @@ export interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
-  login: (credentials: LoginCredentials) => Promise<User>
-  register: (credentials: RegisterCredentials) => Promise<User>
+
+  login: (
+    credentials: LoginCredentials,
+  ) => Promise<User>
+
+  register: (
+    credentials: RegisterCredentials,
+  ) => Promise<User>
+
   logout: () => Promise<void>
+
+  refreshUser:
+    () => Promise<User | null>
+
   clearError: () => void
 }
 
