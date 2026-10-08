@@ -4,10 +4,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import AsyncSessionLocal, Base, engine
-from app.routers import auth_router, users_router, members_router, membership_plans_router
+from app.routers import (
+    auth_router,
+    users_router,
+    members_router,
+    membership_plans_router,
+    visits_router,
+    class_sessions_router,
+    pt_sessions_router,
+)
 from app.seed import seed_users
 from app.seed_plans import seed_plans
 from app.seed_members import seed_members
+from app.seed_phase5 import seed_phase5
 
 
 @asynccontextmanager
@@ -20,6 +29,7 @@ async def lifespan(app: FastAPI):
         await seed_users(session)
         await seed_plans(session)
         await seed_members(session)
+        await seed_phase5(session)
 
     yield
 
@@ -48,6 +58,9 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(members_router)
 app.include_router(membership_plans_router)
+app.include_router(visits_router)
+app.include_router(class_sessions_router)
+app.include_router(pt_sessions_router)
 
 
 @app.get("/api/health", tags=["Health"])

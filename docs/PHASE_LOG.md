@@ -289,7 +289,57 @@ Build: clean, 6 lazy page chunks.
 
 ## PHASE 5 — Visits, Classes & Personal Training
 
-**Status:** ⏳ NOT STARTED
+**Status:** ✅ COMPLETE — AWAITING APPROVAL FOR PHASE 6  
+**Date:** 2026-10-08
+
+### Scope Delivered:
+1. **Database Models & Architecture:**
+   - `Visit` model (`backend/app/models/visit.py`): Tracks member gym entries, check-in timestamp, check-out timestamp, visit type (`walk_in`, `class`, `pt_session`, `open_gym`), desk notes, and staff audit log (`recorded_by_user_id`).
+   - `ClassSession` model (`backend/app/models/class_session.py`): Scheduled group sessions with coach FK (`User`), class type (`barbell_club`, `conditioning`, `open_gym`, `powerlifting`, `strength`, `hiit`, `other`), capacity management, location, notes, and session status (`scheduled`, `ongoing`, `completed`, `cancelled`).
+   - `ClassEnrollment` junction model (`backend/app/models/class_session.py`): Member enrollments per session with timestamp and roster notes.
+   - `PTSession` model (`backend/app/models/pt_session.py`): 1-on-1 personal training appointments between coaches and members with duration, scheduling, member-visible notes, and private internal coach notes.
+   - Updated `Member` model (`backend/app/models/member.py`) with bidirectional relationships (`visits`, `class_enrollments`, `pt_sessions`) configured with async `selectin` eager loading.
+
+2. **Backend API Endpoints (FastAPI + Pydantic v2):**
+   - **Visits (`/api/visits`):**
+     - `POST /api/visits`: Check in member by ID with visit type classification.
+     - `PATCH /api/visits/{id}/checkout`: Record member checkout and calculate dwell duration.
+     - `GET /api/visits`: Query visits with filters for member, date ranges, and pagination.
+     - `GET /api/visits/member/{id}`: Full check-in history for individual member.
+   - **Classes (`/api/classes`):**
+     - `GET /api/classes`: List group classes with status and class type filters.
+     - `POST /api/classes`: Create scheduled class session (Admin + Staff).
+     - `GET /api/classes/{id}`: Detailed class view with live attendee roster and capacity metrics.
+     - `PATCH /api/classes/{id}`: Modify class details, schedule, or status (Admin + Staff).
+     - `DELETE /api/classes/{id}`: Remove class session (Admin only).
+     - `POST /api/classes/{id}/enroll`: Register member into class with capacity check & duplicate prevention.
+     - `DELETE /api/classes/{id}/enroll/{member_id}`: Unenroll member from class.
+   - **Personal Training (`/api/pt-sessions`):**
+     - `GET /api/pt-sessions`: List PT sessions with trainer, member, and status filters.
+     - `POST /api/pt-sessions`: Schedule 1-on-1 PT session (Admin, Staff, Trainer).
+     - `GET /api/pt-sessions/{id}`: Session detail with coach remarks.
+     - `PATCH /api/pt-sessions/{id}`: Update session status (`completed`, `cancelled`, `no_show`) and coaching notes.
+     - `DELETE /api/pt-sessions/{id}`: Cancel/delete PT session (Admin + Staff).
+
+3. **Placeholder Seeding (`seed_phase5.py`):**
+   - 4 scheduled group classes: Barbell Club — Morning, Conditioning Circuit, Open Gym — Strength Day, and Powerlifting Meet Prep.
+   - 2 initial 1-on-1 personal training sessions seeded for Head Coach Mark with Member DGM-0001.
+
+4. **Member Self-Service Instructor Booking & Approval Workflow:**
+   - `GET /api/pt-sessions/trainers`: Endpoint listing certified coaches with bios and specialties for member browsing.
+   - `POST /api/pt-sessions/book`: Member self-service booking submission with date/time selection, automatic member record resolution, and `pending` status initialization.
+   - `GET /api/pt-sessions/my-bookings`: Member tracking endpoint for submitted booking requests and real-time status.
+   - `PATCH /api/pt-sessions/{id}/approve`: Coach or Admin approval endpoint updating status to `confirmed` with optional coaching notes.
+   - `PATCH /api/pt-sessions/{id}/reject`: Coach or Admin rejection endpoint updating status to `rejected` with custom explanation.
+   - `PATCH /api/pt-sessions/{id}/cancel`: Cancellation endpoint for members.
+   - Frontend `BookTrainerPage.tsx` (`/dashboard/book`): 3-step booking flow (Instructor Selection -> Date & Time Slot Picker -> Goals/Remarks) with an integrated "My Bookings" real-time status panel.
+   - Frontend `ManagePTSessionsPage.tsx`: Enhanced with a "Pending Requests" banner, count badge, and instant **Approve** and **Decline** action buttons.
+   - Frontend `DashboardPage.tsx`: Added "Book a Coach" quick CTA button.
+
+5. **Testing & Quality Assurance:**
+   - Automated integration suite `test_phase5.py`: **16/16 tests passed**.
+   - Automated workflow test suite `test_booking_workflow.py`: **14/14 tests passed** covering member booking, pending status verification, instructor approval, instructor rejection with reason, and cancellation.
+   - TypeScript build check (`tsc -b && vite build`): Succeeded in 318ms with zero errors.
 
 ---
 

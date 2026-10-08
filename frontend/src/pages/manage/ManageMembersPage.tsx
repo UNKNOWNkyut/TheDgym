@@ -5,6 +5,7 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import type { Member, MemberStatus } from '@/types/auth'
 
@@ -29,6 +30,8 @@ function getStatusBadgeVariant(status: MemberStatus) {
 
 export function ManageMembersPage() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
+  const canRegister = user?.role === 'admin' || user?.role === 'staff'
 
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
@@ -100,20 +103,13 @@ export function ManageMembersPage() {
               {loading ? 'Loading...' : `${members.length} members found`}
             </p>
           </div>
-          <Link to="/manage/members/new">
-            <Button variant="primary" size="md">
-              + Register Member
-            </Button>
-          </Link>
-        </div>
-        {/* Notice */}
-        <div className="mb-6 p-4 rounded-xl border border-yellow-400/20 bg-yellow-400/5 flex items-start gap-3">
-          <svg className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-xs text-yellow-400/90 leading-relaxed">
-            <strong>Placeholder for Member Details:</strong> Real official members details provided by gym management will replace them seamlessly.
-          </p>
+          {canRegister && (
+            <Link to="/manage/members/new">
+              <Button variant="primary" size="md">
+                + Register Member
+              </Button>
+            </Link>
+          )}
         </div>
         {/* Search + Filter */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -219,7 +215,7 @@ export function ManageMembersPage() {
                               View
                             </button>
                           </Link>
-                          {member.is_active && (
+                          {canRegister && member.is_active && (
                             <button
                               onClick={() => handleDeactivate(member.id)}
                               disabled={deleting === member.id}

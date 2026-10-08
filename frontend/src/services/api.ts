@@ -11,6 +11,14 @@ import type {
   MembershipPlanCreate,
   AssignMembershipCreate,
   MembershipSummary,
+  Visit,
+  VisitCreate,
+  ClassSession,
+  ClassSessionCreate,
+  PTSession,
+  PTSessionCreate,
+  PTSessionBookCreate,
+  TrainerProfile,
 } from '@/types/auth'
 
 const TOKEN_STORAGE_KEY = 'dgym_access_token'
@@ -191,4 +199,152 @@ export const api = {
       body: JSON.stringify(data),
     })
   },
+
+  // ─── Visits ────────────────────────────────────────────────────────────────
+  async checkInMember(data: VisitCreate): Promise<Visit> {
+    return request<Visit>('/api/visits', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async checkOutVisit(visitId: number): Promise<Visit> {
+    return request<Visit>(`/api/visits/${visitId}/checkout`, {
+      method: 'PATCH',
+      body: JSON.stringify({}),
+    })
+  },
+
+  async getVisits(params?: {
+    member_id?: number
+    date_from?: string
+    date_to?: string
+    skip?: number
+    limit?: number
+  }): Promise<Visit[]> {
+    const query = new URLSearchParams()
+    if (params?.member_id !== undefined) query.set('member_id', String(params.member_id))
+    if (params?.date_from) query.set('date_from', params.date_from)
+    if (params?.date_to) query.set('date_to', params.date_to)
+    if (params?.skip !== undefined) query.set('skip', String(params.skip))
+    if (params?.limit !== undefined) query.set('limit', String(params.limit))
+    const qs = query.toString()
+    return request<Visit[]>(`/api/visits${qs ? `?${qs}` : ''}`)
+  },
+
+  async getMemberVisits(memberId: number): Promise<Visit[]> {
+    return request<Visit[]>(`/api/visits/member/${memberId}`)
+  },
+
+  // ─── Class Sessions ─────────────────────────────────────────────────────────
+  async getClassSessions(params?: {
+    status?: string
+    class_type?: string
+    skip?: number
+    limit?: number
+  }): Promise<ClassSession[]> {
+    const query = new URLSearchParams()
+    if (params?.status) query.set('status', params.status)
+    if (params?.class_type) query.set('class_type', params.class_type)
+    if (params?.skip !== undefined) query.set('skip', String(params.skip))
+    if (params?.limit !== undefined) query.set('limit', String(params.limit))
+    const qs = query.toString()
+    return request<ClassSession[]>(`/api/classes${qs ? `?${qs}` : ''}`)
+  },
+
+  async createClassSession(data: ClassSessionCreate): Promise<ClassSession> {
+    return request<ClassSession>('/api/classes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updateClassSession(id: number, data: Partial<ClassSessionCreate> & { status?: string }): Promise<ClassSession> {
+    return request<ClassSession>(`/api/classes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async enrollMember(sessionId: number, memberId: number): Promise<void> {
+    return request<void>(`/api/classes/${sessionId}/enroll`, {
+      method: 'POST',
+      body: JSON.stringify({ member_id: memberId }),
+    })
+  },
+
+  async unenrollMember(sessionId: number, memberId: number): Promise<void> {
+    return request<void>(`/api/classes/${sessionId}/enroll/${memberId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // ─── PT Sessions ─────────────────────────────────────────────────────────────
+  async getPTSessions(params?: {
+    trainer_id?: number
+    member_id?: number
+    status?: string
+    skip?: number
+    limit?: number
+  }): Promise<PTSession[]> {
+    const query = new URLSearchParams()
+    if (params?.trainer_id !== undefined) query.set('trainer_id', String(params.trainer_id))
+    if (params?.member_id !== undefined) query.set('member_id', String(params.member_id))
+    if (params?.status) query.set('status', params.status)
+    if (params?.skip !== undefined) query.set('skip', String(params.skip))
+    if (params?.limit !== undefined) query.set('limit', String(params.limit))
+    const qs = query.toString()
+    return request<PTSession[]>(`/api/pt-sessions${qs ? `?${qs}` : ''}`)
+  },
+
+  async createPTSession(data: PTSessionCreate): Promise<PTSession> {
+    return request<PTSession>('/api/pt-sessions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updatePTSession(id: number, data: Partial<PTSessionCreate> & { status?: string }): Promise<PTSession> {
+    return request<PTSession>(`/api/pt-sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async getAvailableTrainers(): Promise<TrainerProfile[]> {
+    return request<TrainerProfile[]>('/api/pt-sessions/trainers')
+  },
+
+  async bookPTSession(data: PTSessionBookCreate): Promise<PTSession> {
+    return request<PTSession>('/api/pt-sessions/book', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async getMyBookings(): Promise<PTSession[]> {
+    return request<PTSession[]>('/api/pt-sessions/my-bookings')
+  },
+
+  async approvePTSession(sessionId: number, coachNotes?: string): Promise<PTSession> {
+    return request<PTSession>(`/api/pt-sessions/${sessionId}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ coach_notes: coachNotes }),
+    })
+  },
+
+  async rejectPTSession(sessionId: number, reason?: string): Promise<PTSession> {
+    return request<PTSession>(`/api/pt-sessions/${sessionId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    })
+  },
+
+  async cancelPTSession(sessionId: number): Promise<PTSession> {
+    return request<PTSession>(`/api/pt-sessions/${sessionId}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify({}),
+    })
+  },
 }
+

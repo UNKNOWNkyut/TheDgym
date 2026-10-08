@@ -63,8 +63,8 @@ It consists of:
 | **2** | Public Gym Website | ✅ COMPLETE |
 | **3** | Authentication + User Roles | ✅ COMPLETE |
 | **4** | Core Gym Management System | ✅ COMPLETE |
-| **5** | Visits, Classes & Personal Training | ⏳ Next Phase |
-| **6** | Analytics + Churn Prediction | ⏳ Pending |
+| **5** | Visits, Classes & Personal Training | ✅ COMPLETE |
+| **6** | Analytics + Churn Prediction | ⏳ Next Phase |
 | **7** | AI Retention Strategies | ⏳ Pending |
 | **8** | Security + Performance Hardening | ⏳ Pending |
 | **9** | Full QA + Integration Testing | ⏳ Pending |

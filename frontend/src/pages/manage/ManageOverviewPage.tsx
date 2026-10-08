@@ -153,7 +153,6 @@ export function ManageOverviewPage() {
                       <td className="py-3 px-4 text-white/60">{plan.duration_days} day{plan.duration_days !== 1 ? 's' : ''}</td>
                       <td className="py-3 px-4">
                         <span className="font-semibold text-white">₱{parseFloat(plan.price_php).toLocaleString()}</span>
-                        <span className="text-xs text-yellow-400/70 ml-2">[PLACEHOLDER]</span>
                       </td>
                       <td className="py-3 px-4">
                         {plan.is_active ? (
@@ -171,9 +170,6 @@ export function ManageOverviewPage() {
               </table>
             </div>
           </div>
-          <p className="text-xs text-yellow-400/60 mt-2">
-            ⚠ Pricing is placeholder data — update with real company pricing once gathered.
-          </p>
         </div>
       </div>
     </>

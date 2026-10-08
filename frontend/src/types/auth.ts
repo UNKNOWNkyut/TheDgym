@@ -141,3 +141,110 @@ export interface AssignMembershipCreate {
   payment_reference?: string
   notes?: string
 }
+
+// ─── Phase 5 Types ────────────────────────────────────────────────────────────
+
+export type VisitType = 'walk_in' | 'class' | 'pt_session' | 'open_gym'
+export type ClassType = 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'hiit' | 'other'
+export type ClassStatus = 'scheduled' | 'ongoing' | 'completed' | 'cancelled'
+export type PTSessionStatus = 'pending' | 'confirmed' | 'scheduled' | 'rejected' | 'completed' | 'cancelled' | 'no_show'
+
+export interface Visit {
+  id: number
+  member_id: number
+  member_code: string | null
+  member_name: string | null
+  visit_type: VisitType
+  checked_in_at: string
+  checked_out_at: string | null
+  notes: string | null
+  recorded_by_user_id: number | null
+  created_at: string
+}
+
+export interface VisitCreate {
+  member_id: number
+  visit_type?: VisitType
+  notes?: string
+}
+
+export interface ClassEnrollment {
+  id: number
+  member_id: number
+  member_code: string | null
+  member_name: string | null
+  enrolled_at: string
+}
+
+export interface ClassSession {
+  id: number
+  name: string
+  description: string | null
+  coach_id: number | null
+  coach_name: string | null
+  class_type: ClassType
+  scheduled_at: string
+  duration_minutes: number
+  max_capacity: number
+  enrolled_count: number
+  status: ClassStatus
+  location: string | null
+  notes: string | null
+  created_at: string
+  enrollments: ClassEnrollment[]
+}
+
+export interface ClassSessionCreate {
+  name: string
+  description?: string
+  coach_id?: number
+  class_type?: ClassType | string
+  scheduled_at: string
+  duration_minutes?: number
+  max_capacity?: number
+  location?: string
+  notes?: string
+}
+
+export interface PTSession {
+  id: number
+  trainer_id: number | null
+  trainer_name: string | null
+  member_id: number
+  member_code: string | null
+  member_name: string | null
+  scheduled_at: string
+  duration_minutes: number
+  status: PTSessionStatus
+  notes: string | null
+  coach_notes: string | null
+  rejection_reason?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PTSessionCreate {
+  member_id: number
+  trainer_id?: number
+  scheduled_at: string
+  duration_minutes?: number
+  notes?: string
+  coach_notes?: string
+}
+
+export interface PTSessionBookCreate {
+  trainer_id: number
+  scheduled_at: string
+  duration_minutes?: number
+  notes?: string
+}
+
+export interface TrainerProfile {
+  id: number
+  full_name: string
+  email: string
+  phone: string | null
+  specialties: string[]
+  bio: string | null
+}
+

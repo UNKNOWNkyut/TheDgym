@@ -62,7 +62,40 @@
   - GSAP animations: Entrances on management hub, member registry, registration forms, and modal popups.
   - Role protection: `/manage/*` routes protected by `<ProtectedRoute allowedRoles={['admin', 'staff']}>`.
 
-## PHASE 5 — PENDING
+## PHASE 5 — Visits, Classes & Personal Training
+- Backend Automated Integration Test Suite (`backend/test_phase5.py`):
+  - [PASS] 1. API Health Check verified (`GET /api/health` -> 200 OK)
+  - [PASS] 2. Logged in and authenticated across all roles (Admin, Trainer, Member)
+  - [PASS] 3. Seeded class sessions verified (`GET /api/classes` -> 4 sessions found)
+  - [PASS] 4. Seeded PT sessions verified (`GET /api/pt-sessions` -> 2 sessions found)
+  - [PASS] 5. Member check-in recorded (`POST /api/visits` -> 201 Created, active status)
+  - [PASS] 6. Query all visits with active entries (`GET /api/visits` -> 200 OK)
+  - [PASS] 7. Member checkout recorded (`PATCH /api/visits/{id}/checkout` -> 200 OK, timestamp recorded)
+  - [PASS] 8. Member individual visit history retrieval (`GET /api/visits/member/{id}` -> 200 OK)
+  - [PASS] 9. Admin created new class session (`POST /api/classes` -> 201 Created)
+  - [PASS] 10. Enrolled member into class session (`POST /api/classes/{id}/enroll` -> 201 Created)
+  - [PASS] 11. Class capacity and real-time enrolled counter verified (`GET /api/classes/{id}` -> 200 OK)
+  - [PASS] 12. Unenrolled member and capacity counter reset verified (`DELETE /api/classes/{id}/enroll/{member_id}` -> 204 No Content)
+  - [PASS] 13. Class status transition updated to ongoing (`PATCH /api/classes/{id}` -> 200 OK)
+  - [PASS] 14. Scheduled 1-on-1 PT session (`POST /api/pt-sessions` -> 201 Created)
+  - [PASS] 15. Trainer updated PT session status to completed and appended coach notes (`PATCH /api/pt-sessions/{id}` -> 200 OK)
+  - [PASS] 16. RBAC enforcement verified: Member role blocked with 403 Forbidden on visits recording, class session creation, and PT scheduling
+- Member Instructor Booking & Approval Workflow Test Suite (`backend/test_booking_workflow.py`):
+  - [PASS] 1. Member authentication (Alex Cruz)
+  - [PASS] 2. Available instructors retrieval (`GET /api/pt-sessions/trainers` -> verified bios and specialties)
+  - [PASS] 3-5. Member self-service booking submitted (`POST /api/pt-sessions/book` -> initial status `pending`)
+  - [PASS] 6. Member 'My Bookings' status tracking verified (`GET /api/pt-sessions/my-bookings` -> pending badge)
+  - [PASS] 7. Instructor authentication (Head Coach Mark)
+  - [PASS] 8-9. Instructor approved booking (`PATCH /api/pt-sessions/{id}/approve` -> status transitioned to `confirmed`)
+  - [PASS] 10. Member second booking request submitted
+  - [PASS] 11-12. Instructor rejected second booking (`PATCH /api/pt-sessions/{id}/reject` -> status `rejected` with explanation)
+  - [PASS] 13-14. Member cancelled booking (`PATCH /api/pt-sessions/{id}/cancel` -> status `cancelled`)
+- Frontend Verification:
+  - TypeScript compiler (`tsc -b`): 0 errors, 0 warnings.
+  - Production build: Clean build in 318ms.
+  - Code splitting verified: Dedicated chunks emitted for `ManageVisitsPage`, `ManageClassesPage`, `ManagePTSessionsPage`, and `BookTrainerPage`.
+  - Sidebar navigation updated with role-filtered links for `Visits`, `Classes`, `PT Sessions`, and `Book a Coach`.
+  - Phase naming sanitized across all portal headers and pages.
 
 ## PHASE 6 — PENDING
 

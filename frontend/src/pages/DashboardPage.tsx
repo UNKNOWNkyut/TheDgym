@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
@@ -168,20 +168,42 @@ export function DashboardPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-6 rounded-xl border border-white/8 bg-surface">
-                <h3 className="font-display text-lg font-bold uppercase text-white mb-2">
-                  Group Conditioning
-                </h3>
-                <p className="text-sm text-white/50">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-display text-lg font-bold uppercase text-white">
+                    Group Conditioning
+                  </h3>
+                  <span className="text-xs uppercase tracking-widest text-red font-mono font-semibold">Active</span>
+                </div>
+                <p className="text-sm text-white/50 mb-3">
                   Strength, conditioning, and barbell turf sessions available daily. Inquire with staff at front desk.
                 </p>
+                <div className="text-xs text-white/40 space-y-1 font-mono">
+                  <p>• Barbell Club: Mon/Wed/Fri 6:00 AM</p>
+                  <p>• Conditioning Circuit: Tue/Thu 5:00 PM</p>
+                  <p>• Powerlifting Clinic: Saturdays 8:00 AM</p>
+                </div>
               </div>
               <div className="p-6 rounded-xl border border-white/8 bg-surface">
-                <h3 className="font-display text-lg font-bold uppercase text-white mb-2">
-                  Personal Coaching
-                </h3>
-                <p className="text-sm text-white/50">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-display text-lg font-bold uppercase text-white">
+                    Personal Coaching
+                  </h3>
+                  <span className="text-xs uppercase tracking-widest text-green-400 font-mono font-semibold">Available</span>
+                </div>
+                <p className="text-sm text-white/50 mb-3">
                   Work directly with DGym certified coaches for tailored programming and technique refinement.
                 </p>
+                <div className="text-xs text-white/40 space-y-1 font-mono">
+                  <p>• Powerlifting & Strength Assessment</p>
+                  <p>• Form & Velocity Optimization</p>
+                  <p>• Custom Block Periodization</p>
+                </div>
+                <Link
+                  to="/dashboard/book"
+                  className="inline-block mt-4 text-xs font-semibold bg-red text-white px-4 py-2 rounded-lg hover:bg-red/80 transition-colors uppercase tracking-wider font-mono"
+                >
+                  Book a Coach →
+                </Link>
               </div>
             </div>
           </div>

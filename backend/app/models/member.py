@@ -74,6 +74,9 @@ class Member(Base):
 
     # Relationships
     memberships = relationship("MemberMembership", back_populates="member", lazy="selectin")
+    visits = relationship("Visit", back_populates="member", lazy="selectin")
+    class_enrollments = relationship("ClassEnrollment", back_populates="member", lazy="selectin")
+    pt_sessions = relationship("PTSession", back_populates="member", lazy="selectin")
 
     @property
     def full_name(self) -> str:

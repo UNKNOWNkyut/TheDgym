@@ -27,6 +27,10 @@ const MemberFormPage      = lazy(() => import('@/pages/manage/MemberFormPage').t
 const MemberDetailPage    = lazy(() => import('@/pages/manage/MemberDetailPage').then(m => ({ default: m.MemberDetailPage })))
 const ManagePlansPage     = lazy(() => import('@/pages/manage/ManagePlansPage').then(m => ({ default: m.ManagePlansPage })))
 const ManageUsersPage     = lazy(() => import('@/pages/manage/ManageUsersPage').then(m => ({ default: m.ManageUsersPage })))
+const ManageVisitsPage    = lazy(() => import('@/pages/manage/ManageVisitsPage').then(m => ({ default: m.ManageVisitsPage })))
+const ManageClassesPage   = lazy(() => import('@/pages/manage/ManageClassesPage').then(m => ({ default: m.ManageClassesPage })))
+const ManagePTSessionsPage = lazy(() => import('@/pages/manage/ManagePTSessionsPage').then(m => ({ default: m.ManagePTSessionsPage })))
+const BookTrainerPage     = lazy(() => import('@/pages/manage/BookTrainerPage').then(m => ({ default: m.BookTrainerPage })))
 
 // Page-level loading fallback
 function PageFallback() {
@@ -68,6 +72,7 @@ export default function App() {
               }
             >
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard/book" element={<BookTrainerPage />} />
               <Route
                 path="/manage"
                 element={
@@ -95,7 +100,7 @@ export default function App() {
               <Route
                 path="/manage/members/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
                     <MemberDetailPage />
                   </ProtectedRoute>
                 }
@@ -113,6 +118,30 @@ export default function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <ManageUsersPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manage/visits"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
+                    <ManageVisitsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manage/classes"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
+                    <ManageClassesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manage/pt-sessions"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'staff', 'trainer']}>
+                    <ManagePTSessionsPage />
                   </ProtectedRoute>
                 }
               />

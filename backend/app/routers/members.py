@@ -74,13 +74,13 @@ def _member_to_response(member: Member) -> MemberResponse:
 @router.get("", response_model=List[MemberResponse])
 async def list_members(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
     search: Optional[str] = Query(None, description="Search by name, email, phone, or member code"),
     status_filter: Optional[MemberStatus] = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):
-    """List all gym members with optional search and status filter. Admin and Staff only."""
+    """List all gym members with optional search and status filter. Admin, Staff, and Trainers."""
     stmt = (
         select(Member)
         .options(selectinload(Member.memberships).selectinload(MemberMembership.plan))
@@ -110,7 +110,7 @@ async def list_members(
 @router.get("/stats", tags=["Members"])
 async def get_member_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
     """Return aggregate member statistics for the admin dashboard."""
     total = await db.execute(select(func.count()).select_from(Member))
@@ -132,9 +132,9 @@ async def get_member_stats(
 async def get_member(
     member_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
-    """Get a single member by ID. Admin and Staff only."""
+    """Get a single member by ID. Admin, Staff, and Trainers."""
     stmt = (
         select(Member)
         .where(Member.id == member_id)
