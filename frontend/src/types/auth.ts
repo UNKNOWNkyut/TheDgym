@@ -41,12 +41,34 @@ export interface AuthContextType {
   clearError: () => void
 }
 
-// ─── Gym Management Types ─────────────────────────────────────────────────────
 
-export type MemberStatus = 'active' | 'inactive' | 'suspended' | 'expired'
-export type Gender = 'male' | 'female' | 'other' | 'prefer_not_to_say'
-export type MembershipStatus = 'active' | 'expired' | 'cancelled' | 'pending'
-export type PaymentMethod = 'cash' | 'gcash' | 'maya' | 'bank_transfer' | 'other'
+// ─── Gym Management Types ────────────────────────────────────────────────────
+
+export type MemberStatus =
+  | 'active'
+  | 'inactive'
+  | 'suspended'
+  | 'expired'
+
+export type Gender =
+  | 'male'
+  | 'female'
+  | 'other'
+  | 'prefer_not_to_say'
+
+export type MembershipStatus =
+  | 'active'
+  | 'expired'
+  | 'cancelled'
+  | 'pending'
+
+export type PaymentMethod =
+  | 'cash'
+  | 'gcash'
+  | 'maya'
+  | 'bank_transfer'
+  | 'other'
+
 
 export interface MembershipSummary {
   id: number
@@ -61,6 +83,7 @@ export interface MembershipSummary {
   notes: string | null
   created_at: string
 }
+
 
 export interface Member {
   id: number
@@ -84,6 +107,7 @@ export interface Member {
   memberships: MembershipSummary[]
 }
 
+
 export interface MemberCreate {
   first_name: string
   last_name: string
@@ -97,10 +121,12 @@ export interface MemberCreate {
   notes?: string
 }
 
+
 export interface MemberUpdate extends Partial<MemberCreate> {
   status?: MemberStatus
   is_active?: boolean
 }
+
 
 export interface MemberStats {
   total: number
@@ -109,6 +135,7 @@ export interface MemberStats {
   inactive: number
   suspended: number
 }
+
 
 export interface MembershipPlan {
   id: number
@@ -122,6 +149,7 @@ export interface MembershipPlan {
   created_at: string
 }
 
+
 export interface MembershipPlanCreate {
   name: string
   slug: string
@@ -132,6 +160,7 @@ export interface MembershipPlanCreate {
   sort_order?: number
 }
 
+
 export interface AssignMembershipCreate {
   member_id: number
   plan_id: number
@@ -140,4 +169,82 @@ export interface AssignMembershipCreate {
   payment_method?: PaymentMethod
   payment_reference?: string
   notes?: string
+}
+
+
+// ─── Finance Types ────────────────────────────────────────────────────────────
+
+export interface ExpenseCategory {
+  id: number
+  name: string
+  description: string | null
+  is_active: boolean
+  created_by_user_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+
+export interface ExpenseCategoryCreate {
+  name: string
+  description?: string
+}
+
+
+export interface ExpenseCategoryUpdate {
+  name?: string
+  description?: string
+  is_active?: boolean
+}
+
+
+export interface Expense {
+  id: number
+  category_id: number
+  category_name: string
+  amount: string
+  expense_date: string
+  description: string
+  receipt_path: string | null
+  recorded_by_user_id: number | null
+  recorded_by_name: string | null
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+
+export interface ExpenseCreate {
+  category_id: number
+  amount: number
+  expense_date: string
+  description: string
+  receipt_path?: string
+}
+
+
+export interface ExpenseUpdate {
+  category_id?: number
+  amount?: number
+  expense_date?: string
+  description?: string
+  receipt_path?: string
+}
+
+
+export interface ExpenseCategoryTotal {
+  category_id: number
+  category_name: string
+  total: string
+}
+
+
+export interface FinanceSummary {
+  year: number
+  month: number | null
+  membership_revenue: string
+  total_expenses: string
+  profit: string
+  expense_count: number
+  expenses_by_category: ExpenseCategoryTotal[]
 }
