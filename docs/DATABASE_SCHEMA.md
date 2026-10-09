@@ -1,394 +1,207 @@
-# DATABASE_SCHEMA.md — THE DGYM Database Architecture & Entity Relationship
+# DATABASE_SCHEMA.md — THE DGYM Full Database Architecture & ERD
 
 > **Project:** THE DGYM — Rosario, Batangas Gym Management & AI Analytics Platform  
-> **Database Engine:** SQLite (Local Dev) / PostgreSQL (Production Async Engine via SQLAlchemy 2.0)  
-> **Schema Version:** 1.2.0 (Phase 0–5 + Finance Module)  
+> **Database Engine:** PostgreSQL 16 (Production) / SQLite 3 (Local Development via async SQLAlchemy 2.0)  
+> **Architecture Compliance:** Fully aligned with `docs/ARCHITECTURE.md` and the System Architectural Diagram.  
 > **Last Updated:** October 2026  
 
 ---
 
-## 1. Executive Summary
+## 1. System Architecture Alignment
 
-The database architecture for **THE DGYM** is designed using 3rd Normal Form (3NF) principles to support high-throughput front-desk operations, role-based access control (RBAC), subscription lifecycle management, attendance tracking, scheduling, and fiscal accounting.
+The database architecture for **THE DGYM** consists of two interconnected layers:
 
-### Core Functional Modules:
-1. **Identity & Access Management (IAM):** Role-segregated accounts (`admin`, `staff`, `trainer`, `member`).
-2. **Member & Subscriptions:** Member profiles (`DGM-XXXX` format), tier catalog, and payment transaction logs.
-3. **Gym Operations & Attendance:** Dwell time check-in/out records, group classes with capacity constraints, and 1-on-1 personal training requests.
-4. **Finance & Overhead Accounting:** Operating expense categorization and cash disbursement tracking for gym profitability analysis.
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 THE DGYM UNIFIED DATABASE ARCHITECTURE                               │
+│                                                                                                      │
+│  [ LAYER 1: OPERATIONAL GYM MANAGEMENT (OLTP - Phases 3–5) ]                                        │
+│  users ─── members ─── membership_plans ─── member_memberships ─── visits ─── classes ─── expenses   │
+│                                           │                                                          │
+│                                           ▼ ETL & Ingestion                                          │
+│  [ LAYER 2: DATA INTELLIGENCE & AI PIPELINE (OLAP / ML - Phases 6–7) ]                              │
+│                                                                                                      │
+│       ┌──────────────────┐    customer_id    ┌───────────────────────┐                               │
+│       │ raw_transactions │ ────────────────► │  processed_customers  │                               │
+│       └──────────────────┘                   └───────────────────────┘                               │
+│                                                          │                                           │
+│                                              customer_id │                                           │
+│                                                          ▼                                           │
+│       ┌──────────────────────┐  prediction_id ┌──────────────────────┐                               │
+│       │ retention_strategies │ ◄───────────── │     predictions      │                               │
+│       └──────────────────────┘                └──────────────────────┘                               │
+│                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Layer 1: Operational Management Subsystem (Live Operations)**
+   - Powers the web app, staff dashboard, desk check-in, group classes, 1-on-1 coach booking, and accounting ledger.
+   - Tables: `users`, `members`, `membership_plans`, `member_memberships`, `visits`, `class_sessions`, `class_enrollments`, `pt_sessions`, `expense_categories`, `expenses`.
+
+2. **Layer 2: Data Intelligence & AI Retention Subsystem (Architectural Diagram Focus)**
+   - Powers the machine learning feature store, XGBoost churn classification, and OpenAI GPT-4o-mini personalized retention generation.
+   - Tables: `raw_transactions`, `processed_customers`, `predictions`, `retention_strategies`.
 
 ---
 
-## 2. Entity Relationship Diagram (ERD)
+## 2. Entity Relationship Diagram (ERD) — Data Intelligence & AI Subsystem
+
+Directly models the relationship specified in the **Database Architecture Diagram**:
 
 ```mermaid
 erDiagram
-    USERS ||--o{ CLASS_SESSIONS : "coaches"
-    USERS ||--o{ PT_SESSIONS : "conducts"
-    USERS ||--o{ VISITS : "desk logs"
-    USERS ||--o{ MEMBER_MEMBERSHIPS : "processes"
-    USERS ||--o{ EXPENSES : "records"
-    USERS ||--o{ EXPENSE_CATEGORIES : "creates"
-    
-    MEMBERS ||--o{ MEMBER_MEMBERSHIPS : "subscribes"
-    MEMBERSHIP_PLANS ||--o{ MEMBER_MEMBERSHIPS : "defines"
-    
-    MEMBERS ||--o{ VISITS : "checks in"
-    MEMBERS ||--o{ CLASS_ENROLLMENTS : "enrolls"
-    CLASS_SESSIONS ||--o{ CLASS_ENROLLMENTS : "has roster"
-    
-    MEMBERS ||--o{ PT_SESSIONS : "books"
-    
-    EXPENSE_CATEGORIES ||--o{ EXPENSES : "classifies"
+    RAW_TRANSACTIONS ||--o{ PROCESSED_CUSTOMERS : "aggregated into (customer_id)"
+    PROCESSED_CUSTOMERS ||--o{ PREDICTIONS : "scored by ML (customer_id)"
+    PREDICTIONS ||--o{ RETENTION_STRATEGIES : "generates AI action (prediction_id)"
 
-    USERS {
+    RAW_TRANSACTIONS {
         int id PK
-        string email UK
-        string hashed_password
-        string full_name
-        string phone
-        string role "admin | staff | trainer | member"
-        boolean is_active
-        datetime created_at
-        datetime updated_at
-    }
-
-    MEMBERS {
-        int id PK
-        string member_code UK "DGM-XXXX"
-        string first_name
-        string last_name
-        string email
-        string phone
-        date date_of_birth
-        string gender "male | female | other"
-        text address
-        string emergency_contact_name
-        string emergency_contact_phone
-        string status "active | inactive | suspended | expired"
-        boolean is_active
-        text notes
-        datetime joined_at
-        datetime created_at
-        datetime updated_at
-    }
-
-    MEMBERSHIP_PLANS {
-        int id PK
-        string name
-        string slug UK
-        text description
-        int duration_days
-        decimal price_php
-        boolean is_active
-        int sort_order
-        datetime created_at
-        datetime updated_at
-    }
-
-    MEMBER_MEMBERSHIPS {
-        int id PK
-        int member_id FK
-        int plan_id FK
-        datetime start_date
-        datetime end_date
-        string status "active | expired | cancelled | pending"
-        decimal paid_amount
-        string payment_method "cash | gcash | maya | bank_transfer"
-        string payment_reference
-        int created_by_user_id FK
-        text notes
-        datetime created_at
-        datetime updated_at
-    }
-
-    VISITS {
-        int id PK
-        int member_id FK
-        int recorded_by_user_id FK
-        datetime checked_in_at
-        datetime checked_out_at
-        string visit_type "walk_in | class | pt_session | open_gym"
-        text notes
-        datetime created_at
-    }
-
-    CLASS_SESSIONS {
-        int id PK
-        string name
-        text description
-        int coach_id FK
-        string class_type "barbell_club | conditioning | powerlifting | ..."
-        datetime scheduled_at
-        int duration_minutes
-        int max_capacity
-        string status "scheduled | ongoing | completed | cancelled"
-        string location
-        text notes
-        datetime created_at
-        datetime updated_at
-    }
-
-    CLASS_ENROLLMENTS {
-        int id PK
-        int member_id FK
-        int class_session_id FK
-        datetime enrolled_at
-        text notes
-    }
-
-    PT_SESSIONS {
-        int id PK
-        int trainer_id FK
-        int member_id FK
-        datetime scheduled_at
-        int duration_minutes
-        string status "pending | confirmed | scheduled | rejected | completed"
-        text notes
-        text coach_notes
-        text rejection_reason
-        datetime created_at
-        datetime updated_at
-    }
-
-    EXPENSE_CATEGORIES {
-        int id PK
-        string name
-        text description
-        boolean is_active
-        int created_by_user_id FK
-        datetime created_at
-        datetime updated_at
-    }
-
-    EXPENSES {
-        int id PK
-        int category_id FK
+        int customer_id FK "Links to members(id)"
+        string transaction_type "visit | payment | class_booking | pt_session"
+        datetime transaction_date
         decimal amount
-        date expense_date
-        text description
-        string receipt_path
-        int recorded_by_user_id FK
-        boolean is_archived
+        string reference_code
+        text metadata_json
         datetime created_at
+    }
+
+    PROCESSED_CUSTOMERS {
+        int id PK
+        int customer_id UK "Unique member identifier"
+        float visit_frequency_weekly
+        int days_since_last_checkin
+        int total_visits_30d
+        int total_class_bookings
+        int total_pt_sessions
+        int membership_tenure_days
+        decimal total_revenue_lifetime
+        float recent_activity_score
+        datetime feature_calculated_at
+    }
+
+    PREDICTIONS {
+        int id PK
+        int customer_id FK "Links to processed_customers"
+        float churn_probability "0.00 to 1.00"
+        string risk_tier "HIGH (>0.70) | MEDIUM (0.40-0.70) | LOW (<=0.40)"
+        string top_risk_factor_1
+        string top_risk_factor_2
+        string top_risk_factor_3
+        string model_version "xgboost_v1.0"
+        datetime predicted_at
+    }
+
+    RETENTION_STRATEGIES {
+        int id PK
+        int prediction_id FK "Links to predictions(id)"
+        int customer_id FK "Links to members(id)"
+        string strategy_title
+        text ai_analysis "OpenAI GPT-4o-mini insight"
+        text action_plan
+        string recommended_incentive "Discount | Free PT | Class Pass"
+        string communication_channel "SMS | Email | WhatsApp | Call"
+        string execution_status "pending | approved | dispatched | converted"
+        datetime generated_at
         datetime updated_at
     }
 ```
 
 ---
 
-## 3. Data Dictionary & Table Specifications
+## 3. Data Dictionary: Data Intelligence & AI Tables
 
-### 3.1. `users` Table
-Stores user accounts for authentication and role-based permissions across the application.
-
-| Column | Data Type | Constraints | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique internal system user ID |
-| `email` | `VARCHAR(255)` | `NOT NULL`, `UNIQUE`, Indexed | User's login email address |
-| `hashed_password` | `VARCHAR(255)` | `NOT NULL` | Argon2id encrypted password hash |
-| `full_name` | `VARCHAR(255)` | `NOT NULL` | Full display name |
-| `phone` | `VARCHAR(50)` | `NULL` | Contact phone number |
-| `role` | `VARCHAR(20)` | `NOT NULL` | Role enum: `'admin'`, `'staff'`, `'trainer'`, `'member'` |
-| `is_active` | `BOOLEAN` | `NOT NULL`, Default `TRUE` | Account active state |
-| `created_at` | `DATETIME` | `NOT NULL` | Account registration timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Last profile update timestamp |
-
----
-
-### 3.2. `members` Table
-Stores the primary demographic and athlete profile for gym members.
+### 3.1. `raw_transactions` Table
+Stores raw and ingested operational records (visits, fees, payments, bookings) before feature transformations.
 
 | Column | Data Type | Constraints | Description |
 |---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Internal unique ID |
-| `member_code` | `VARCHAR(20)` | `NOT NULL`, `UNIQUE`, Indexed | Human-readable identifier (e.g., `DGM-0001`) |
-| `first_name` | `VARCHAR(100)` | `NOT NULL` | Member's given name |
-| `last_name` | `VARCHAR(100)` | `NOT NULL` | Member's family name |
-| `email` | `VARCHAR(255)` | `NULL` | Member contact email |
-| `phone` | `VARCHAR(50)` | `NULL` | Member mobile number |
-| `date_of_birth` | `DATE` | `NULL` | Birth date for age analytics |
-| `gender` | `VARCHAR(20)` | `NULL` | `'male'`, `'female'`, `'other'`, `'prefer_not_to_say'` |
-| `address` | `TEXT` | `NULL` | Residential address |
-| `emergency_contact_name` | `VARCHAR(255)` | `NULL` | In-case-of-emergency contact name |
-| `emergency_contact_phone` | `VARCHAR(50)` | `NULL` | Emergency contact telephone |
-| `status` | `VARCHAR(20)` | `NOT NULL`, Default `'active'` | Status enum: `'active'`, `'inactive'`, `'suspended'`, `'expired'` |
-| `is_active` | `BOOLEAN` | `NOT NULL`, Default `TRUE` | Active membership flag |
-| `notes` | `TEXT` | `NULL` | Health conditions, goals, or staff remarks |
-| `joined_at` | `DATETIME` | `NOT NULL` | Member registration date |
-| `created_at` | `DATETIME` | `NOT NULL` | Record creation timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Last update timestamp |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique transaction record ID |
+| `customer_id` | `INTEGER` | `NOT NULL`, `FK -> members(id)`, Indexed | Associated member ID |
+| `transaction_type` | `VARCHAR(50)` | `NOT NULL` | `'visit'`, `'payment'`, `'class_booking'`, `'pt_session'` |
+| `transaction_date` | `DATETIME` | `NOT NULL`, Indexed | Timestamp of the event |
+| `amount` | `NUMERIC(10, 2)` | `NULL`, Default `0.00` | Monetary value (for payments/purchases) |
+| `reference_code` | `VARCHAR(100)` | `NULL` | External transaction or session reference |
+| `metadata_json` | `TEXT` | `NULL` | Raw JSON payload / attributes |
+| `created_at` | `DATETIME` | `NOT NULL` | Ingestion timestamp |
 
 ---
 
-### 3.3. `membership_plans` Table
-Defines available gym membership packages, duration, and baseline pricing.
+### 3.2. `processed_customers` Table
+The ML Feature Store containing aggregated, normalized behavioral indicators engineered from raw transactions.
 
 | Column | Data Type | Constraints | Description |
 |---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Internal unique plan ID |
-| `name` | `VARCHAR(100)` | `NOT NULL` | Plan display name (e.g. `'Monthly Pass'`) |
-| `slug` | `VARCHAR(100)` | `NOT NULL`, `UNIQUE`, Indexed | URL/identifier slug (e.g. `'monthly-pass'`) |
-| `description` | `TEXT` | `NULL` | Plan benefits and inclusions |
-| `duration_days` | `INTEGER` | `NOT NULL` | Validity length in days (e.g. 1, 30, 90, 365) |
-| `price_php` | `NUMERIC(10, 2)` | `NOT NULL` | Baseline price in Philippine Pesos (PHP) |
-| `is_active` | `BOOLEAN` | `NOT NULL`, Default `TRUE` | Plan availability for enrollment |
-| `sort_order` | `INTEGER` | `NOT NULL`, Default `0` | UI display ordering sequence |
-| `created_at` | `DATETIME` | `NOT NULL` | Record creation timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Last update timestamp |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Feature vector row ID |
+| `customer_id` | `INTEGER` | `NOT NULL`, `UNIQUE`, Indexed | Member ID identifier |
+| `visit_frequency_weekly` | `FLOAT` | `NOT NULL`, Default `0.0` | Average check-ins per week (last 4 weeks) |
+| `days_since_last_checkin`| `INTEGER` | `NOT NULL` | Recency indicator (days since last entry) |
+| `total_visits_30d` | `INTEGER` | `NOT NULL`, Default `0` | Check-in volume in past 30 days |
+| `total_class_bookings` | `INTEGER` | `NOT NULL`, Default `0` | Lifetime group class attendance count |
+| `total_pt_sessions` | `INTEGER` | `NOT NULL`, Default `0` | Lifetime 1-on-1 PT sessions count |
+| `membership_tenure_days`| `INTEGER` | `NOT NULL` | Days since initial member registration |
+| `total_revenue_lifetime`| `NUMERIC(12, 2)` | `NOT NULL` | Total PHP spent on memberships and passes |
+| `recent_activity_score` | `FLOAT` | `NOT NULL` | Weighted momentum index (0.0 to 1.0) |
+| `feature_calculated_at` | `DATETIME` | `NOT NULL` | Feature calculation timestamp |
 
 ---
 
-### 3.4. `member_memberships` Table
-Represents active subscriptions, renewal histories, and financial transactions per member.
+### 3.3. `predictions` Table
+Stores inference outputs generated by the XGBoost Churn Classification pipeline.
 
 | Column | Data Type | Constraints | Description |
 |---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Internal subscription ID |
-| `member_id` | `INTEGER` | `NOT NULL`, `FK -> members(id)` | Associated gym member |
-| `plan_id` | `INTEGER` | `NOT NULL`, `FK -> membership_plans(id)` | Purchased plan tier |
-| `start_date` | `DATETIME` | `NOT NULL` | Membership validity start date |
-| `end_date` | `DATETIME` | `NOT NULL` | Membership expiration date |
-| `status` | `VARCHAR(20)` | `NOT NULL` | `'active'`, `'expired'`, `'cancelled'`, `'pending'` |
-| `paid_amount` | `NUMERIC(10, 2)` | `NULL` | Actual amount paid in PHP |
-| `payment_method` | `VARCHAR(20)` | `NULL` | `'cash'`, `'gcash'`, `'maya'`, `'bank_transfer'`, `'other'` |
-| `payment_reference` | `VARCHAR(100)` | `NULL` | Transaction ID or receipt number |
-| `created_by_user_id`| `INTEGER` | `NULL`, `FK -> users(id)` | Staff who recorded the transaction |
-| `notes` | `TEXT` | `NULL` | Promotional notes or discounts applied |
-| `created_at` | `DATETIME` | `NOT NULL` | Transaction recorded timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Subscription updated timestamp |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Prediction ID |
+| `customer_id` | `INTEGER` | `NOT NULL`, `FK -> processed_customers(customer_id)`, Indexed | Evaluated customer |
+| `churn_probability` | `FLOAT` | `NOT NULL` | Model confidence score between `0.00` and `1.00` |
+| `risk_tier` | `VARCHAR(20)` | `NOT NULL`, Indexed | `'HIGH'` (>0.70), `'MEDIUM'` (0.40–0.70), `'LOW'` (≤0.40) |
+| `top_risk_factor_1` | `VARCHAR(150)` | `NULL` | Primary churn indicator (e.g., `'Zero visits in 21 days'`) |
+| `top_risk_factor_2` | `VARCHAR(150)` | `NULL` | Secondary risk factor (e.g., `'Expiring within 7 days'`) |
+| `top_risk_factor_3` | `VARCHAR(150)` | `NULL` | Tertiary risk factor (e.g., `'Declining weekly attendance'`) |
+| `model_version` | `VARCHAR(50)` | `NOT NULL` | ML artifact version (e.g. `'xgboost_v1.0'`) |
+| `predicted_at` | `DATETIME` | `NOT NULL` | Prediction generation timestamp |
 
 ---
 
-### 3.5. `visits` Table
-Front-desk physical entry and exit audit log, calculating dwell time and peak hours.
+### 3.4. `retention_strategies` Table
+Stores personalized member retention campaigns generated by OpenAI GPT-4o-mini based on prediction risk factors.
 
 | Column | Data Type | Constraints | Description |
 |---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique visit record ID |
-| `member_id` | `INTEGER` | `NOT NULL`, `FK -> members(id)` | Checked-in member |
-| `recorded_by_user_id`| `INTEGER`| `NULL`, `FK -> users(id)` | Front-desk staff on duty |
-| `checked_in_at` | `DATETIME` | `NOT NULL`, Indexed | Time of gym entry |
-| `checked_out_at` | `DATETIME` | `NULL` | Time of gym departure |
-| `visit_type` | `VARCHAR(20)` | `NOT NULL` | `'walk_in'`, `'class'`, `'pt_session'`, `'open_gym'` |
-| `notes` | `TEXT` | `NULL` | Desk notes (e.g. locker #, gear loaned) |
-| `created_at` | `DATETIME` | `NOT NULL` | Log creation timestamp |
+| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Strategy ID |
+| `prediction_id` | `INTEGER` | `NOT NULL`, `FK -> predictions(id)`, Indexed | Linked churn prediction |
+| `customer_id` | `INTEGER` | `NOT NULL`, `FK -> members(id)`, Indexed | Target member |
+| `strategy_title` | `VARCHAR(200)` | `NOT NULL` | Campaign title (e.g. `'VIP Comeback Offer'`) |
+| `ai_analysis` | `TEXT` | `NOT NULL` | GPT-4o-mini churn root-cause synthesis |
+| `action_plan` | `TEXT` | `NOT NULL` | Step-by-step coaching/staff engagement playbook |
+| `recommended_incentive`| `VARCHAR(150)` | `NULL` | Specific discount, free PT, or perk offered |
+| `communication_channel`| `VARCHAR(50)` | `NOT NULL` | `'SMS'`, `'Email'`, `'WhatsApp'`, `'In-Person'` |
+| `execution_status` | `VARCHAR(20)` | `NOT NULL`, Default `'pending'` | `'pending'`, `'approved'`, `'dispatched'`, `'converted'` |
+| `generated_at` | `DATETIME` | `NOT NULL` | AI strategy generation timestamp |
+| `updated_at` | `DATETIME` | `NOT NULL` | Campaign status update timestamp |
 
 ---
 
-### 3.6. `class_sessions` Table
-Group fitness schedule, coaching assignments, and session capacities.
+## 4. Operational Tables (OLTP Subsystem — Live Gym Operations)
 
-| Column | Data Type | Constraints | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique class session ID |
-| `name` | `VARCHAR(150)` | `NOT NULL` | Class title (e.g. `'Barbell Club - Morning'`) |
-| `description` | `TEXT` | `NULL` | Session curriculum or objectives |
-| `coach_id` | `INTEGER` | `NULL`, `FK -> users(id)` | Assigned instructor |
-| `class_type` | `VARCHAR(20)` | `NOT NULL` | `'barbell_club'`, `'conditioning'`, `'powerlifting'`, `'strength'`, `'hiit'`, `'open_gym'`, `'other'` |
-| `scheduled_at` | `DATETIME` | `NOT NULL`, Indexed | Class date and time |
-| `duration_minutes` | `INTEGER` | `NOT NULL`, Default `60` | Class duration in minutes |
-| `max_capacity` | `INTEGER` | `NOT NULL`, Default `15` | Maximum allowed participants |
-| `status` | `VARCHAR(20)` | `NOT NULL` | `'scheduled'`, `'ongoing'`, `'completed'`, `'cancelled'` |
-| `location` | `VARCHAR(100)`| `NULL` | Facility zone (e.g. `'Main Turf'`, `'Platform 1'`) |
-| `notes` | `TEXT` | `NULL` | Equipment needed or prerequisites |
-| `created_at` | `DATETIME` | `NOT NULL` | Record creation timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Last update timestamp |
+These tables run the day-to-day gym workflows:
+
+1. **`users`**: System login accounts with Argon2id passwords and RBAC roles (`admin`, `staff`, `trainer`, `member`).
+2. **`members`**: Member directory with unique codes (`DGM-XXXX`), demographics, contact, and health notes.
+3. **`membership_plans`**: Plan pricing tiers (Day Pass, Monthly, Quarterly, Annual, Student).
+4. **`member_memberships`**: Active subscription assignments and payment receipts.
+5. **`visits`**: Front-desk check-in/out logs with dwell time calculations.
+6. **`class_sessions`**: Group class schedules (Powerlifting, Barbell Club, Conditioning) with capacity limits.
+7. **`class_enrollments`**: Member registration junction roster per class session.
+8. **`pt_sessions`**: 1-on-1 personal training requests, coach approvals, and workout programming logs.
+9. **`expense_categories`**: Financial taxonomy for overhead costs (Equipment, Utilities, Maintenance, Rent).
+10. **`expenses`**: Cash disbursement ledger tracking gym expenditures.
 
 ---
 
-### 3.7. `class_enrollments` Table
-Junction roster linking members to scheduled group fitness classes.
+## 5. Summary for Professor Presentation
 
-| Column | Data Type | Constraints | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique enrollment ID |
-| `member_id` | `INTEGER` | `NOT NULL`, `FK -> members(id)` | Registered member |
-| `class_session_id` | `INTEGER` | `NOT NULL`, `FK -> class_sessions(id)` | Associated class session |
-| `enrolled_at` | `DATETIME` | `NOT NULL` | Registration timestamp |
-| `notes` | `TEXT` | `NULL` | Attendee notes or gear requests |
+Kung tatanungin ka ng Prof kung paano nagtutugma ang dalawang parte:
 
----
-
-### 3.8. `pt_sessions` Table
-1-on-1 personal training requests, coach approvals, and workout completion logs.
-
-| Column | Data Type | Constraints | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique PT session ID |
-| `trainer_id` | `INTEGER` | `NULL`, `FK -> users(id)` | Assigned trainer / instructor |
-| `member_id` | `INTEGER` | `NOT NULL`, `FK -> members(id)` | Trained member |
-| `scheduled_at` | `DATETIME` | `NOT NULL`, Indexed | Appointment start time |
-| `duration_minutes` | `INTEGER` | `NOT NULL`, Default `60` | Session duration |
-| `status` | `VARCHAR(20)` | `NOT NULL` | `'pending'`, `'confirmed'`, `'scheduled'`, `'rejected'`, `'completed'`, `'cancelled'`, `'no_show'` |
-| `notes` | `TEXT` | `NULL` | Member fitness goals or request notes |
-| `coach_notes` | `TEXT` | `NULL` | Private coaching programming remarks |
-| `rejection_reason` | `TEXT` | `NULL` | Explanation if coach declines request |
-| `created_at` | `DATETIME` | `NOT NULL` | Booking creation timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Status update timestamp |
-
----
-
-### 3.9. `expense_categories` Table
-Categorization taxonomy for recurring overhead and operational gym expenditures.
-
-| Column | Data Type | Constraints | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique category ID |
-| `name` | `VARCHAR(100)` | `NOT NULL`, Indexed | Category name (e.g. `'Equipment'`, `'Utilities'`) |
-| `description` | `TEXT` | `NULL` | Category explanation |
-| `is_active` | `BOOLEAN` | `NOT NULL`, Default `TRUE` | Category active flag |
-| `created_by_user_id`| `INTEGER`| `NULL`, `FK -> users(id)` | Admin who created category |
-| `created_at` | `DATETIME` | `NOT NULL` | Creation timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Last update timestamp |
-
----
-
-### 3.10. `expenses` Table
-Ledger of expenses, bills, maintenance, and equipment purchases.
-
-| Column | Data Type | Constraints | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | `PRIMARY KEY`, Auto Increment | Unique expense record ID |
-| `category_id` | `INTEGER` | `NOT NULL`, `FK -> expense_categories(id)` | Linked expense category |
-| `amount` | `NUMERIC(12, 2)`| `NOT NULL` | Monetary amount spent in PHP |
-| `expense_date` | `DATE` | `NOT NULL`, Indexed | Date of invoice/disbursement |
-| `description` | `TEXT` | `NOT NULL` | Line-item description / payee |
-| `receipt_path` | `VARCHAR(500)`| `NULL` | Receipt file upload storage path |
-| `recorded_by_user_id`| `INTEGER`| `NULL`, `FK -> users(id)` | Admin user logging the expense |
-| `is_archived` | `BOOLEAN` | `NOT NULL`, Default `FALSE` | Soft-delete / archive flag |
-| `created_at` | `DATETIME` | `NOT NULL` | Record creation timestamp |
-| `updated_at` | `DATETIME` | `NOT NULL` | Last update timestamp |
-
----
-
-## 4. Key Relationships & Cardinality Summary
-
-1. **One-to-Many (`1:N`) Users to Operations:**
-   - One `User` (Trainer) can lead **many** `class_sessions`.
-   - One `User` (Trainer) can conduct **many** `pt_sessions`.
-   - One `User` (Staff) can record **many** `visits`, `member_memberships`, and `expenses`.
-
-2. **One-to-Many (`1:N`) Members to Transactions & Attendance:**
-   - One `Member` can hold **many** historical `member_memberships`.
-   - One `Member` can log **many** `visits` over their membership tenure.
-   - One `Member` can request **many** `pt_sessions`.
-
-3. **Many-to-Many (`M:N`) Members to Classes via Junction:**
-   - `members` $\leftrightarrow$ `class_enrollments` $\leftrightarrow$ `class_sessions`.
-   - A member can enroll in multiple class sessions; a class session contains many enrolled members.
-
-4. **One-to-Many (`1:N`) Finance Ledger:**
-   - One `expense_category` groups **many** `expenses`.
-   - Enables monthly aggregation for net profit calculation (`Profit = Membership Revenue - Total Expenses`).
-
----
-
-## 5. Machine Learning (ML) & Analytics Readability
-
-This schema directly powers the **Phase 6 Member Retention & Churn Prediction Pipeline**:
-- **Visit Velocity:** Derived from count of `visits` grouped by `member_id` over 7, 30, and 90-day intervals.
-- **Dwell Time:** `strftime('%s', checked_out_at) - strftime('%s', checked_in_at)`.
-- **Recency (Days Since Last Check-in):** `julianday('now') - julianday(MAX(checked_in_at))`.
-- **Tenure:** `julianday('now') - julianday(joined_at)`.
-- **Engagement Breadth:** Ratio of personal training (`pt_sessions`) and classes (`class_enrollments`) attended versus open gym walk-ins.
+> **"Sir/Ma'am, our system is divided into two synchronized layers:**
+> 1. **Operational Layer (OLTP):** Nangangalap ng live gym records — check-ins ng members (`visits`), class enrollments, subscriptions, at trainer sessions.
+> 2. **Intelligence & AI Layer (OLAP):** Ang nasa architectural diagram natin kung saan ang raw activity records (`raw_transactions`) ay kinukuha ng data pipeline, ginagawang customer behavioral features (`processed_customers`), pinapadaan sa **XGBoost Machine Learning model** para mag-produce ng churn predictions (`predictions`), at kung high-risk ang member, gumagawa si **OpenAI GPT-4o-mini** ng automated personalized retention strategy (`retention_strategies`)."
