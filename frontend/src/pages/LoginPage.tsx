@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useGSAP } from '@gsap/react'
@@ -6,6 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { QuarterRing } from '@/components/ui/quarter-ring'
 
 const DEMO_ACCOUNTS = [
   { role: 'Admin', email: 'admin@thedgym.com', pass: 'admin12345', badge: 'Full Access' },
@@ -18,6 +20,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [showLoading, setShowLoading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
 
   const { login, isLoading, error, clearError } = useAuth()
@@ -51,12 +54,23 @@ export function LoginPage() {
       return
     }
 
+    // Show loading screen
+    setShowLoading(true)
+
     try {
-      const loggedInUser = await login({ email, password })
+      // Keep the loading screen visible for at least 1.2 seconds
+      const [loggedInUser] = await Promise.all([
+        login({ email, password }),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ])
+
       const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : '/dashboard'
       const dest = (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login')) ? from : defaultDest
+
       navigate(dest, { replace: true })
     } catch {
+      // Hide loading screen if login fails
+      setShowLoading(false)
       // Error is stored in context and displayed
     }
   }
@@ -75,6 +89,34 @@ export function LoginPage() {
         description="Sign in to The DGym member and staff portal."
         canonical="https://thedgym.com/login"
       />
+
+      {/* Loading Screen - added without changing the original login design */}
+      <div
+        className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#090909] transition-opacity duration-300 ${
+          showLoading
+            ? 'visible opacity-100'
+            : 'invisible pointer-events-none opacity-0'
+        }`}
+        aria-hidden={!showLoading}
+        role="status"
+        aria-label="Signing in"
+      >
+        <img
+          src="/assets/logos/thedgym.png"
+          alt="The DGym"
+          className="mb-10 h-auto w-40 object-contain"
+        />
+
+        <QuarterRing className="h-16 w-16 text-red-500" />
+
+        <p className="mt-6 text-sm uppercase tracking-[0.3em] text-white/60">
+          Signing You In
+        </p>
+
+        <p className="mt-2 text-xs text-white/30">
+          Please wait...
+        </p>
+      </div>
 
       <div className="min-h-[85vh] flex items-center justify-center py-16 px-4">
         {/* Ambient background glow */}
@@ -150,6 +192,7 @@ export function LoginPage() {
               type="submit"
               size="lg"
               loading={isLoading}
+              disabled={isLoading || showLoading}
               className="w-full mt-2"
             >
               {isLoading ? 'Authenticating...' : 'Sign In'}
@@ -178,7 +221,8 @@ export function LoginPage() {
                   key={acc.role}
                   type="button"
                   onClick={() => fillDemo(acc.email, acc.pass)}
-                  className="p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group"
+                  disabled={isLoading || showLoading}
+                  className="p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group disabled:opacity-50"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-white group-hover:text-red transition-colors">

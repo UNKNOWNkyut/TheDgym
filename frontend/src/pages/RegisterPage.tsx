@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useGSAP } from '@gsap/react'
@@ -6,6 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { QuarterRing } from '@/components/ui/quarter-ring'
 
 export function RegisterPage() {
   const [fullName, setFullName] = useState('')
@@ -14,6 +16,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [showLoading, setShowLoading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
 
   const { register, isLoading, error, clearError } = useAuth()
@@ -50,15 +53,25 @@ export function RegisterPage() {
       return
     }
 
+    // Show loading screen
+    setShowLoading(true)
+
     try {
-      await register({
-        full_name: fullName.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        password,
-      })
+      // Keep the loading screen visible for at least 3 seconds
+      await Promise.all([
+        register({
+          full_name: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+          password,
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ])
+
       navigate('/dashboard', { replace: true })
     } catch {
+      // Hide loading screen if registration fails
+      setShowLoading(false)
       // Error is set in context
     }
   }
@@ -70,6 +83,34 @@ export function RegisterPage() {
         description="Register for a DGym member account in Rosario, Batangas."
         canonical="https://thedgym.com/register"
       />
+
+      {/* Loading Screen - added without changing the original design */}
+      <div
+        className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#090909] transition-opacity duration-300 ${
+          showLoading
+            ? 'visible opacity-100'
+            : 'invisible pointer-events-none opacity-0'
+        }`}
+        aria-hidden={!showLoading}
+        role="status"
+        aria-label="Creating your account"
+      >
+        <img
+          src="/assets/logos/thedgym.png"
+          alt="The DGym"
+          className="mb-10 h-auto w-40 object-contain"
+        />
+
+        <QuarterRing className="h-16 w-16 text-red-500" />
+
+        <p className="mt-6 text-sm uppercase tracking-[0.3em] text-white/60">
+          Creating Your Account
+        </p>
+
+        <p className="mt-2 text-xs text-white/30">
+          Please wait...
+        </p>
+      </div>
 
       <div className="min-h-[85vh] flex items-center justify-center py-16 px-4">
         {/* Glow */}
@@ -106,7 +147,7 @@ export function RegisterPage() {
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red shrink-0 mt-0.5">
                 <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
               <span>{validationError || error}</span>
@@ -168,6 +209,7 @@ export function RegisterPage() {
               type="submit"
               size="lg"
               loading={isLoading}
+              disabled={isLoading || showLoading}
               className="w-full mt-4"
             >
               {isLoading ? 'Creating Account...' : 'Register'}

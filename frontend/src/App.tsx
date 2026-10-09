@@ -1,6 +1,8 @@
 import {
   lazy,
   Suspense,
+  useEffect,
+  useState,
 } from 'react'
 
 import {
@@ -15,7 +17,7 @@ import { RootLayout } from '@/components/layout/RootLayout'
 import { ManagementLayout } from '@/components/layout/ManagementLayout'
 import { CookieBanner } from '@/components/ui/CookieBanner'
 import { Skeleton } from '@/components/ui/Skeleton'
-
+import { QuarterRing } from '@/components/ui/quarter-ring'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
@@ -63,6 +65,7 @@ const LoginPage = lazy(() =>
     default: module.LoginPage,
   })),
 )
+
 
 const RegisterPage = lazy(() =>
   import('@/pages/RegisterPage').then((module) => ({
@@ -173,6 +176,56 @@ function PageFallback() {
     </div>
   )
 }
+
+
+
+function IntroLoader() {
+  const [visible, setVisible] = useState(true)
+  const [fading, setFading] = useState(false)
+
+  useEffect(() => {
+    const fadeTimer = window.setTimeout(() => {
+      setFading(true)
+    }, 1500)
+
+    const removeTimer = window.setTimeout(() => {
+      setVisible(false)
+    }, 2000)
+
+    return () => {
+      window.clearTimeout(fadeTimer)
+      window.clearTimeout(removeTimer)
+    }
+  }, [])
+
+  if (!visible) return null
+
+  return (
+    <div
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black text-white transition-opacity duration-500 ${
+        fading
+          ? "opacity-0 pointer-events-none"
+          : "opacity-100"
+      }`}
+      role="status"
+      aria-label="Loading DGym"
+    >
+      <img
+        src="/assets/logos/thedgym.png"
+        alt="The DGym"
+        className="mb-8 h-32 w-auto object-contain"
+      />
+
+      <QuarterRing className="size-12 text-red-600" />
+
+      <p className="mt-5 text-sm tracking-widest text-gray-400">
+        LOADING...
+      </p>
+    </div>
+  )
+}
+
+
 
 
 export function App() {
@@ -475,6 +528,7 @@ export function App() {
           </Routes>
         </Suspense>
 
+        <IntroLoader />
 
         <CookieBanner />
 
