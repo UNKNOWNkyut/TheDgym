@@ -64,8 +64,8 @@ It consists of:
 | **3** | Authentication + User Roles | ✅ COMPLETE |
 | **4** | Core Gym Management System | ✅ COMPLETE |
 | **5** | Visits, Classes & Personal Training | ✅ COMPLETE |
-| **6** | Analytics + Churn Prediction | ⏳ Next Phase |
-| **7** | AI Retention Strategies | ⏳ Pending |
+| **6** | Analytics + Churn Prediction | ✅ COMPLETE |
+| **7** | AI Retention Strategies | ⏳ Next Phase |
 | **8** | Security + Performance Hardening | ⏳ Pending |
 | **9** | Full QA + Integration Testing | ⏳ Pending |
 | **10** | Deployment + Documentation | ⏳ Pending |

@@ -26,6 +26,10 @@ import type {
   ExpenseCreate,
   ExpenseUpdate,
   FinanceSummary,
+  AnalyticsOverview,
+  ChurnOverview,
+  AtRiskMemberItem,
+  MemberChurnDetail,
 } from '@/types/auth'
 
 
@@ -572,4 +576,45 @@ export const api = {
       `/api/finance/summary?${query.toString()}`,
     )
   },
+
+  // ─── Analytics & Churn Prediction (Phase 6) ──────────────────────────────
+
+  async getAnalyticsOverview(): Promise<AnalyticsOverview> {
+    return request<AnalyticsOverview>('/api/analytics/overview')
+  },
+
+  async getChurnOverview(): Promise<ChurnOverview> {
+    return request<ChurnOverview>('/api/churn/overview')
+  },
+
+  async getChurnMembers(params?: {
+    risk_tier?: string
+    search?: string
+    skip?: number
+    limit?: number
+  }): Promise<AtRiskMemberItem[]> {
+    const query = new URLSearchParams()
+    if (params?.risk_tier) query.set('risk_tier', params.risk_tier)
+    if (params?.search) query.set('search', params.search)
+    if (params?.skip !== undefined) query.set('skip', String(params.skip))
+    if (params?.limit !== undefined) query.set('limit', String(params.limit))
+    const qs = query.toString()
+    return request<AtRiskMemberItem[]>(`/api/churn/members${qs ? `?${qs}` : ''}`)
+  },
+
+  async getMemberChurnDetail(memberId: number): Promise<MemberChurnDetail> {
+    return request<MemberChurnDetail>(`/api/churn/member/${memberId}`)
+  },
+
+  async retrainChurnPipeline(): Promise<{
+    status: string
+    message: string
+    model_accuracy: number
+    total_members_updated: number
+  }> {
+    return request('/api/churn/retrain', {
+      method: 'POST',
+    })
+  },
 }
+

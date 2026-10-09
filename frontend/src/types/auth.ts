@@ -359,3 +359,65 @@ export interface FinanceSummary {
   expense_count: number
   expenses_by_category: ExpenseCategoryTotal[]
 }
+
+
+// ─── Analytics & Churn Types (Phase 6) ──────────────────────────────────────
+
+export interface HourlyCheckinStat {
+  hour: number
+  hour_label: string
+  count: number
+}
+
+export interface ClassPopularityStat {
+  name: string
+  class_type: string
+  total_enrollments: number
+}
+
+export interface AnalyticsOverview {
+  total_visits_this_month: number
+  attendance_growth_pct: number
+  active_members_count: number
+  average_dwell_minutes: number
+  peak_hour: string
+  hourly_distribution: HourlyCheckinStat[]
+  popular_classes: ClassPopularityStat[]
+}
+
+export interface ChurnOverview {
+  total_members_assessed: number
+  high_risk_count: number
+  medium_risk_count: number
+  low_risk_count: number
+  overall_retention_rate_pct: number
+}
+
+export interface AtRiskMemberItem {
+  member_id: number
+  member_code: string
+  full_name: string
+  email: string | null
+  phone: string | null
+  active_plan_name: string | null
+  days_since_last_checkin: number
+  visit_frequency_weekly: number
+  churn_probability: number
+  risk_tier: 'HIGH' | 'MEDIUM' | 'LOW'
+  top_risk_factors: string[]
+  predicted_at: string
+}
+
+export interface MemberChurnDetail {
+  member_id: number
+  member_code: string
+  full_name: string
+  email: string | null
+  phone: string | null
+  status: string
+  churn_probability: number
+  risk_tier: 'HIGH' | 'MEDIUM' | 'LOW'
+  top_risk_factors: string[]
+  features: Record<string, any>
+  predicted_at: string
+}

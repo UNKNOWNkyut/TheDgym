@@ -157,6 +157,12 @@ const ManageExpensesPage = lazy(() =>
   })),
 )
 
+const ManageAnalyticsPage = lazy(() =>
+  import('@/pages/manage/ManageAnalyticsPage').then((module) => ({
+    default: module.ManageAnalyticsPage,
+  })),
+)
+
 
 function PageFallback() {
   return (
@@ -442,6 +448,24 @@ export function App() {
                     ]}
                   >
                     <ManageExpensesPage />
+                  </ProtectedRoute>
+                }
+              />
+
+
+              {/* Analytics & Churn Prediction — Admin, Staff, Trainer */}
+
+              <Route
+                path="/manage/analytics"
+                element={
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
+                  >
+                    <ManageAnalyticsPage />
                   </ProtectedRoute>
                 }
               />

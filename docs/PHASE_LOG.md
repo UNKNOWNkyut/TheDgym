@@ -345,13 +345,56 @@ Build: clean, 6 lazy page chunks.
 
 ## PHASE 6 — Analytics + Churn Prediction
 
-**Status:** ⏳ NOT STARTED
+**Status:** ✅ COMPLETE  
+**Delivered Date:** 2026-10-09
+
+### Summary of Completed Deliverables:
+1. **Machine Learning Architecture & Feature Engineering Pipeline:**
+   - **Raw Transaction Log Model (`RawTransaction`):** Captures high-frequency operational signals including check-in visits, membership dues & walk-in payments, class enrollments, and PT sessions.
+   - **Processed Customer Feature Store (`ProcessedCustomer`):** Aggregates 8 core behavioral features:
+     - `visit_frequency_weekly` (weekly check-in velocity)
+     - `days_since_last_checkin` (inactivity recency)
+     - `total_visits_30d` (rolling 30-day attendance count)
+     - `total_class_bookings` (group engagement index)
+     - `total_pt_sessions` (high-touch coaching commitment)
+     - `membership_tenure_days` (lifter lifecycle stage)
+     - `total_revenue_lifetime` (cumulative commercial value)
+     - `recent_activity_score` (exponential moving average momentum)
+   - **XGBoost Retention Classifier (`churn_ml.py`):**
+     - Supervised binary classification model trained with Scikit-Learn `StandardScaler` pipeline.
+     - Persistent artifact storage at `backend/app/ml/churn_model.pkl`.
+     - Risk tier classification thresholding (`HIGH > 0.70`, `MEDIUM 0.40–0.70`, `LOW ≤ 0.40`).
+     - Dynamic signal diagnosis: extracts the top 3 contributing human-readable churn signals per lifter.
+   - **Batch Aggregator & Persona Seeder (`churn_pipeline.py`):**
+     - Full DB sync routine `refresh_all_predictions()`.
+     - Seeded 14 realistic Batangas lifter personas (spanning habitual lifters, casual weekenders, and fading members).
+
+2. **REST Endpoints (`backend/app/routers/analytics.py`):**
+   - `GET /api/analytics/overview`: Operational intelligence (monthly visits, % growth, daily average, average dwell duration, 24h hourly distribution, top classes).
+   - `GET /api/churn/overview`: Executive retention breakdown (total assessed, high/medium/low risk counts, predicted retention rate, average risk probability).
+   - `GET /api/churn/members`: Filterable at-risk member roster by risk tier (`HIGH`, `MEDIUM`, `LOW`, `ALL`) and search query.
+   - `GET /api/churn/member/{id}`: Deep-dive diagnostic profile with raw feature vector and top 3 contributing churn factors.
+   - `POST /api/churn/retrain`: Admin-only pipeline retrain trigger and model update.
+
+3. **Frontend Intelligence Dashboard (`/manage/analytics`):**
+   - Built with **React 19**, **Tailwind CSS**, and **GSAP** (`useGSAP()`).
+   - Adheres to Vercel dark minimalist aesthetic (deep black background, `#E5201A` accents, `border-white/10`, uppercase tracked labels).
+   - **KPI Metric Strip:** Monthly attendance with MoM delta, active members, predicted retention health, average session dwell time.
+   - **Interactive Peak Hour Density Chart:** 24h gym visitation distribution bar graph with animated fill and tooltips.
+   - **XGBoost Risk Breakdown Bar:** Visual risk spectrum displaying High, Medium, and Low risk distributions.
+   - **At-Risk Member Roster:** Searchable and tier-filterable table with real-time risk scores and color-coded tier badges.
+   - **Member Diagnostic Modal:** Deep-dive modal revealing contributing signals and raw feature ingestion metrics.
+   - **Admin Retrain Pipeline Trigger:** Instant model retraining with real-time feedback notifications.
+
+4. **Integration & Build Verification:**
+   - Automated integration suite `test_phase6.py`: **9/9 tests passed**.
+   - TypeScript build check (`tsc -b && vite build`): Succeeded with **0 errors**.
 
 ---
 
 ## PHASE 7 — AI Retention Strategies
 
-**Status:** ⏳ NOT STARTED
+**Status:** ⏳ Next Phase
 
 ---
 
