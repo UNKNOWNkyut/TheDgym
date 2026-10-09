@@ -13,6 +13,10 @@ import {
 import { useAuth } from '@/context/AuthContext'
 import { Badge } from '@/components/ui/Badge'
 
+import {
+  MemberAccountMenu,
+} from '@/components/layout/MemberAccountMenu'
+
 import type {
   UserRole,
 } from '@/types/auth'
@@ -450,56 +454,136 @@ export function ManagementLayout() {
 
 
         {user && (
-          <div className="p-4 border-t border-white/8 bg-surface-2/40">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 rounded-full bg-red text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 shadow-sm">
-                {user.full_name.slice(
-                  0,
-                  2,
-                )}
-              </div>
+          user.role === 'member'
+            ? (
+              <MemberAccountMenu
+                user={user}
+                onLogout={handleLogout}
+              />
+            )
+            : (
+              <div className="p-4 border-t border-white/8 bg-surface-2/40">
 
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate leading-tight">
-                  {user.full_name}
-                </p>
+                <div className="flex items-center gap-3 mb-3">
 
-                <div className="mt-1">
-                  <Badge
-                    variant={
-                      getRoleBadgeVariant(
-                        user.role,
-                      )
-                    }
+                  <div
+                    className="
+                      w-9
+                      h-9
+                      rounded-full
+                      bg-red
+                      text-white
+                      flex
+                      items-center
+                      justify-center
+                      font-bold
+                      text-xs
+                      uppercase
+                      shrink-0
+                      shadow-sm
+                    "
                   >
-                    {user.role}
-                  </Badge>
+                    {user.full_name.slice(
+                      0,
+                      2,
+                    )}
+                  </div>
+
+
+                  <div className="flex-1 min-w-0">
+
+                    <p
+                      className="
+                        text-sm
+                        font-semibold
+                        text-white
+                        truncate
+                        leading-tight
+                      "
+                    >
+                      {user.full_name}
+                    </p>
+
+
+                    <div className="mt-1">
+
+                      <Badge
+                        variant={
+                          getRoleBadgeVariant(
+                            user.role,
+                          )
+                        }
+                      >
+                        {user.role}
+                      </Badge>
+
+                    </div>
+
+                  </div>
+
                 </div>
+
+
+                <button
+                  onClick={handleLogout}
+
+                  className="
+                    w-full
+                    text-left
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                    font-medium
+                    text-white/60
+                    hover:text-red
+                    hover:bg-white/5
+                    transition-colors
+                    flex
+                    items-center
+                    gap-2
+                    border
+                    border-white/5
+                  "
+                >
+
+                  <svg
+                    className="w-4 h-4"
+
+                    fill="none"
+
+                    stroke="currentColor"
+
+                    viewBox="0 0 24 24"
+                  >
+
+                    <path
+                      strokeLinecap="round"
+
+                      strokeLinejoin="round"
+
+                      strokeWidth={1.5}
+
+                      d="
+                        M17 16l4-4
+                        m0 0l-4-4
+                        m4 4H7
+                        m6 4v1
+                        a3 3 0 01-3 3H6
+                        a3 3 0 01-3-3V7
+                        a3 3 0 013-3h4
+                        a3 3 0 013 3v1
+                      "
+                    />
+
+                  </svg>
+
+                  Sign Out
+
+                </button>
+
               </div>
-            </div>
-
-
-            <button
-              onClick={handleLogout}
-              className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white/60 hover:text-red hover:bg-white/5 transition-colors flex items-center gap-2 border border-white/5"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                />
-              </svg>
-
-              Sign Out
-            </button>
-          </div>
+            )
         )}
       </aside>
 

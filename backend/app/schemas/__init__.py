@@ -1,3 +1,11 @@
+from app.schemas.account import (
+    AccountProfileResponse,
+    AccountProfileUpdate,
+    ChangePasswordRequest,
+    MessageResponse,
+    ProfilePictureResponse,
+)
+
 from app.schemas.auth import (
     TokenResponse,
     UserCreateAdmin,
@@ -6,6 +14,7 @@ from app.schemas.auth import (
     UserResponse,
     UserUpdate,
 )
+
 from app.schemas.gym import (
     MemberCreate,
     MemberUpdate,
@@ -18,7 +27,15 @@ from app.schemas.gym import (
     MembershipResponse,
 )
 
+
 __all__ = [
+    # Account Settings
+    "AccountProfileResponse",
+    "AccountProfileUpdate",
+    "ChangePasswordRequest",
+    "MessageResponse",
+    "ProfilePictureResponse",
+
     # Auth
     "UserRegister",
     "UserLogin",
@@ -26,6 +43,7 @@ __all__ = [
     "UserUpdate",
     "UserResponse",
     "TokenResponse",
+
     # Gym Management
     "MemberCreate",
     "MemberUpdate",
