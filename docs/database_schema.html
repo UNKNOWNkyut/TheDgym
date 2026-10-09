@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The DGym — Database Schema & ERD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      er: {
+        useMaxWidth: true,
+        entityPadding: 15,
+        fontSize: 12
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #09090b;
+      --card: #121215;
+      --border: rgba(255, 255, 255, 0.1);
+      --red: #e5201a;
+      --red-glow: rgba(229, 32, 26, 0.25);
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.6;
+      padding: 40px 24px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 28px;
+      margin-bottom: 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .brand-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.8rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: #fff;
+    }
+    .brand-title span {
+      color: var(--red);
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-top: 4px;
+    }
+    .meta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(229, 32, 26, 0.1);
+      border: 1px solid rgba(229, 32, 26, 0.3);
+      color: #ff6b67;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #fff;
+      margin: 40px 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 24px;
+      background: var(--red);
+      border-radius: 2px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .mermaid-card {
+      background: #0d0d10;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px 16px;
+      overflow-x: auto;
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.88rem;
+    }
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #d4d4d8;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .col-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #fff;
+    }
+    .type-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: #93c5fd;
+    }
+    .key-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-block;
+    }
+    .pk {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .fk {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .uk {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 20px;
+    }
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .table-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .table-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .print-btn {
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .print-btn:hover {
+      background: #e4e4e7;
+    }
+    @media print {
+      body {
+        background: #fff;
+        color: #000;
+        padding: 0;
+      }
+      .card {
+        border: 1px solid #ccc;
+        box-shadow: none;
+        background: #fff;
+        page-break-inside: avoid;
+      }
+      th {
+        background: #f4f4f5;
+        color: #333;
+      }
+      td {
+        color: #111;
+        border-bottom: 1px solid #e4e4e7;
+      }
+      .col-name { color: #000; }
+      .brand-title { color: #000; }
+      .print-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1 class="brand-title">THE D<span>GYM</span></h1>
+        <p class="subtitle">Rosario, Batangas &bull; Relational Database Architecture & Entity Relationship</p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span class="meta-badge">SQLAlchemy 2.0 &bull; 10 Tables &bull; 3NF</span>
+        <button class="print-btn" onclick="window.print()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Print / PDF
+        </button>
+      </div>
+    </header>
+
+    <h2 class="section-title">Visual Entity Relationship Diagram (ERD)</h2>
+    <div class="mermaid-card">
+      <div class="mermaid">
+erDiagram
+    USERS ||--o{ CLASS_SESSIONS : "coaches"
+    USERS ||--o{ PT_SESSIONS : "conducts"
+    USERS ||--o{ VISITS : "desk logs"
+    USERS ||--o{ MEMBER_MEMBERSHIPS : "processes"
+    USERS ||--o{ EXPENSES : "records"
+    USERS ||--o{ EXPENSE_CATEGORIES : "creates"
+    
+    MEMBERS ||--o{ MEMBER_MEMBERSHIPS : "subscribes"
+    MEMBERSHIP_PLANS ||--o{ MEMBER_MEMBERSHIPS : "defines"
+    
+    MEMBERS ||--o{ VISITS : "checks in"
+    MEMBERS ||--o{ CLASS_ENROLLMENTS : "enrolls"
+    CLASS_SESSIONS ||--o{ CLASS_ENROLLMENTS : "has roster"
+    
+    MEMBERS ||--o{ PT_SESSIONS : "books"
+    
+    EXPENSE_CATEGORIES ||--o{ EXPENSES : "classifies"
+
+    USERS {
+        int id PK
+        string email UK
+        string full_name
+        string role
+        boolean is_active
+    }
+
+    MEMBERS {
+        int id PK
+        string member_code UK
+        string first_name
+        string last_name
+        string status
+        boolean is_active
+    }
+
+    MEMBERSHIP_PLANS {
+        int id PK
+        string name
+        int duration_days
+        decimal price_php
+    }
+
+    MEMBER_MEMBERSHIPS {
+        int id PK
+        int member_id FK
+        int plan_id FK
+        datetime start_date
+        datetime end_date
+        string status
+        decimal paid_amount
+    }
+
+    VISITS {
+        int id PK
+        int member_id FK
+        datetime checked_in_at
+        datetime checked_out_at
+        string visit_type
+    }
+
+    CLASS_SESSIONS {
+        int id PK
+        string name
+        int coach_id FK
+        string class_type
+        datetime scheduled_at
+        int max_capacity
+        string status
+    }
+
+    CLASS_ENROLLMENTS {
+        int id PK
+        int member_id FK
+        int class_session_id FK
+        datetime enrolled_at
+    }
+
+    PT_SESSIONS {
+        int id PK
+        int trainer_id FK
+        int member_id FK
+        datetime scheduled_at
+        string status
+    }
+
+    EXPENSE_CATEGORIES {
+        int id PK
+        string name
+        boolean is_active
+    }
+
+    EXPENSES {
+        int id PK
+        int category_id FK
+        decimal amount
+        date expense_date
+        string description
+    }
+      </div>
+    </div>
+
+    <h2 class="section-title">Table Specifications & Schemas</h2>
+
+    <div class="grid-2">
+      <!-- USERS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">users</span>
+          <span class="key-badge pk">Auth & IAM</span>
+        </div>
+        <p class="table-desc">System accounts with role-based access control (RBAC).</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Unique User ID</td></tr>
+            <tr><td class="col-name">email</td><td><span class="type-badge">VARCHAR(255)</span></td><td><span class="key-badge uk">UK</span></td><td>Login email (Unique)</td></tr>
+            <tr><td class="col-name">hashed_password</td><td><span class="type-badge">VARCHAR(255)</span></td><td></td><td>Argon2id password hash</td></tr>
+            <tr><td class="col-name">full_name</td><td><span class="type-badge">VARCHAR(255)</span></td><td></td><td>Full name</td></tr>
+            <tr><td class="col-name">phone</td><td><span class="type-badge">VARCHAR(50)</span></td><td></td><td>Contact phone number</td></tr>
+            <tr><td class="col-name">role</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>admin | staff | trainer | member</td></tr>
+            <tr><td class="col-name">is_active</td><td><span class="type-badge">BOOLEAN</span></td><td></td><td>Account active state</td></tr>
+            <tr><td class="col-name">created_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Creation timestamp</td></tr>
+            <tr><td class="col-name">updated_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Last update timestamp</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- MEMBERS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">members</span>
+          <span class="key-badge pk">Athletes Roster</span>
+        </div>
+        <p class="table-desc">Gym athlete demographics, membership code, and contact profiles.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Unique Member ID</td></tr>
+            <tr><td class="col-name">member_code</td><td><span class="type-badge">VARCHAR(20)</span></td><td><span class="key-badge uk">UK</span></td><td>Identifier (e.g. DGM-0001)</td></tr>
+            <tr><td class="col-name">first_name</td><td><span class="type-badge">VARCHAR(100)</span></td><td></td><td>First name</td></tr>
+            <tr><td class="col-name">last_name</td><td><span class="type-badge">VARCHAR(100)</span></td><td></td><td>Last name</td></tr>
+            <tr><td class="col-name">email</td><td><span class="type-badge">VARCHAR(255)</span></td><td></td><td>Email contact</td></tr>
+            <tr><td class="col-name">phone</td><td><span class="type-badge">VARCHAR(50)</span></td><td></td><td>Mobile phone</td></tr>
+            <tr><td class="col-name">date_of_birth</td><td><span class="type-badge">DATE</span></td><td></td><td>Birth date</td></tr>
+            <tr><td class="col-name">gender</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>male | female | other</td></tr>
+            <tr><td class="col-name">address</td><td><span class="type-badge">TEXT</span></td><td></td><td>Home address</td></tr>
+            <tr><td class="col-name">emergency_contact_name</td><td><span class="type-badge">VARCHAR(255)</span></td><td></td><td>Emergency contact name</td></tr>
+            <tr><td class="col-name">emergency_contact_phone</td><td><span class="type-badge">VARCHAR(50)</span></td><td></td><td>Emergency phone</td></tr>
+            <tr><td class="col-name">status</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>active | inactive | suspended | expired</td></tr>
+            <tr><td class="col-name">is_active</td><td><span class="type-badge">BOOLEAN</span></td><td></td><td>Active flag</td></tr>
+            <tr><td class="col-name">notes</td><td><span class="type-badge">TEXT</span></td><td></td><td>Health notes / goals</td></tr>
+            <tr><td class="col-name">joined_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Registration date</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- MEMBERSHIP PLANS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">membership_plans</span>
+          <span class="key-badge pk">Tier Catalog</span>
+        </div>
+        <p class="table-desc">Pricing catalog and validity duration for gym subscriptions.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Unique Plan ID</td></tr>
+            <tr><td class="col-name">name</td><td><span class="type-badge">VARCHAR(100)</span></td><td></td><td>Plan name (e.g. Monthly)</td></tr>
+            <tr><td class="col-name">slug</td><td><span class="type-badge">VARCHAR(100)</span></td><td><span class="key-badge uk">UK</span></td><td>URL identifier</td></tr>
+            <tr><td class="col-name">duration_days</td><td><span class="type-badge">INTEGER</span></td><td></td><td>Validity in days (1, 30, 365)</td></tr>
+            <tr><td class="col-name">price_php</td><td><span class="type-badge">NUMERIC(10,2)</span></td><td></td><td>Price in Philippine Pesos</td></tr>
+            <tr><td class="col-name">is_active</td><td><span class="type-badge">BOOLEAN</span></td><td></td><td>Available for enrollment</td></tr>
+            <tr><td class="col-name">sort_order</td><td><span class="type-badge">INTEGER</span></td><td></td><td>Display ordering priority</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- MEMBER MEMBERSHIPS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">member_memberships</span>
+          <span class="key-badge fk">Subscriptions</span>
+        </div>
+        <p class="table-desc">Transaction records connecting members to plan subscriptions.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Subscription ID</td></tr>
+            <tr><td class="col-name">member_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> members(id)</td></tr>
+            <tr><td class="col-name">plan_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> membership_plans(id)</td></tr>
+            <tr><td class="col-name">start_date</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Start validity</td></tr>
+            <tr><td class="col-name">end_date</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Expiration date</td></tr>
+            <tr><td class="col-name">status</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>active | expired | cancelled</td></tr>
+            <tr><td class="col-name">paid_amount</td><td><span class="type-badge">NUMERIC(10,2)</span></td><td></td><td>Amount paid (PHP)</td></tr>
+            <tr><td class="col-name">payment_method</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>cash | gcash | maya | bank</td></tr>
+            <tr><td class="col-name">payment_reference</td><td><span class="type-badge">VARCHAR(100)</span></td><td></td><td>OR # / Reference code</td></tr>
+            <tr><td class="col-name">created_by_user_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> users(id) Staff recorder</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- VISITS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">visits</span>
+          <span class="key-badge fk">Front Desk</span>
+        </div>
+        <p class="table-desc">Attendance logs, dwell times, and physical entry tracking.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Unique Visit ID</td></tr>
+            <tr><td class="col-name">member_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> members(id)</td></tr>
+            <tr><td class="col-name">checked_in_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Entry timestamp</td></tr>
+            <tr><td class="col-name">checked_out_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Exit timestamp</td></tr>
+            <tr><td class="col-name">visit_type</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>walk_in | class | pt_session | open_gym</td></tr>
+            <tr><td class="col-name">recorded_by_user_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> users(id) Staff on duty</td></tr>
+            <tr><td class="col-name">notes</td><td><span class="type-badge">TEXT</span></td><td></td><td>Front-desk remarks</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- CLASS SESSIONS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">class_sessions</span>
+          <span class="key-badge fk">Group Classes</span>
+        </div>
+        <p class="table-desc">Class schedules, coach assignments, and participant limits.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Class Session ID</td></tr>
+            <tr><td class="col-name">name</td><td><span class="type-badge">VARCHAR(150)</span></td><td></td><td>Class title</td></tr>
+            <tr><td class="col-name">coach_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> users(id) Coach</td></tr>
+            <tr><td class="col-name">class_type</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>barbell_club | conditioning | powerlifting...</td></tr>
+            <tr><td class="col-name">scheduled_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Scheduled date and time</td></tr>
+            <tr><td class="col-name">duration_minutes</td><td><span class="type-badge">INTEGER</span></td><td></td><td>Length in minutes (e.g. 60)</td></tr>
+            <tr><td class="col-name">max_capacity</td><td><span class="type-badge">INTEGER</span></td><td></td><td>Capacity limit (e.g. 15)</td></tr>
+            <tr><td class="col-name">status</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>scheduled | ongoing | completed | cancelled</td></tr>
+            <tr><td class="col-name">location</td><td><span class="type-badge">VARCHAR(100)</span></td><td></td><td>Turf, Platform 1, etc.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- CLASS ENROLLMENTS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">class_enrollments</span>
+          <span class="key-badge fk">Junction Roster</span>
+        </div>
+        <p class="table-desc">Participant enrollment roster connecting members to group classes.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Enrollment ID</td></tr>
+            <tr><td class="col-name">member_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> members(id)</td></tr>
+            <tr><td class="col-name">class_session_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> class_sessions(id)</td></tr>
+            <tr><td class="col-name">enrolled_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Registration timestamp</td></tr>
+            <tr><td class="col-name">notes</td><td><span class="type-badge">TEXT</span></td><td></td><td>Member notes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PT SESSIONS -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">pt_sessions</span>
+          <span class="key-badge fk">Personal Training</span>
+        </div>
+        <p class="table-desc">1-on-1 personal training requests, coach approvals, and completion.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>PT Session ID</td></tr>
+            <tr><td class="col-name">trainer_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> users(id) Assigned Coach</td></tr>
+            <tr><td class="col-name">member_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> members(id) Athlete</td></tr>
+            <tr><td class="col-name">scheduled_at</td><td><span class="type-badge">DATETIME</span></td><td></td><td>Session schedule</td></tr>
+            <tr><td class="col-name">duration_minutes</td><td><span class="type-badge">INTEGER</span></td><td></td><td>Duration (min)</td></tr>
+            <tr><td class="col-name">status</td><td><span class="type-badge">VARCHAR(20)</span></td><td></td><td>pending | confirmed | scheduled | rejected | completed</td></tr>
+            <tr><td class="col-name">notes</td><td><span class="type-badge">TEXT</span></td><td></td><td>Member goals / requests</td></tr>
+            <tr><td class="col-name">coach_notes</td><td><span class="type-badge">TEXT</span></td><td></td><td>Coach's programming notes</td></tr>
+            <tr><td class="col-name">rejection_reason</td><td><span class="type-badge">TEXT</span></td><td></td><td>Declined reason if rejected</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- EXPENSE CATEGORIES -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">expense_categories</span>
+          <span class="key-badge pk">Accounting</span>
+        </div>
+        <p class="table-desc">Overhead classifications (Equipment, Rent, Utilities, Maintenance).</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Category ID</td></tr>
+            <tr><td class="col-name">name</td><td><span class="type-badge">VARCHAR(100)</span></td><td></td><td>Category Title</td></tr>
+            <tr><td class="col-name">description</td><td><span class="type-badge">TEXT</span></td><td></td><td>Taxonomy notes</td></tr>
+            <tr><td class="col-name">is_active</td><td><span class="type-badge">BOOLEAN</span></td><td></td><td>Active flag</td></tr>
+            <tr><td class="col-name">created_by_user_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> users(id) Admin</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- EXPENSES -->
+      <div class="card">
+        <div class="table-header">
+          <span class="table-name">expenses</span>
+          <span class="key-badge fk">Disbursements</span>
+        </div>
+        <p class="table-desc">Ledger of financial disbursements and operational gym costs.</p>
+        <table>
+          <thead><tr><th>Column</th><th>Type</th><th>Key</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="col-name">id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge pk">PK</span></td><td>Expense ID</td></tr>
+            <tr><td class="col-name">category_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> expense_categories(id)</td></tr>
+            <tr><td class="col-name">amount</td><td><span class="type-badge">NUMERIC(12,2)</span></td><td></td><td>Amount spent (PHP)</td></tr>
+            <tr><td class="col-name">expense_date</td><td><span class="type-badge">DATE</span></td><td></td><td>Invoice / disbursement date</td></tr>
+            <tr><td class="col-name">description</td><td><span class="type-badge">TEXT</span></td><td></td><td>Item description / Payee</td></tr>
+            <tr><td class="col-name">receipt_path</td><td><span class="type-badge">VARCHAR(500)</span></td><td></td><td>Receipt file upload path</td></tr>
+            <tr><td class="col-name">recorded_by_user_id</td><td><span class="type-badge">INTEGER</span></td><td><span class="key-badge fk">FK</span></td><td>-> users(id) Admin</td></tr>
+            <tr><td class="col-name">is_archived</td><td><span class="type-badge">BOOLEAN</span></td><td></td><td>Archived / soft-deleted</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
