@@ -81,11 +81,19 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${token}`)
   }
 
-  const response = await fetch(endpoint, {
-    ...options,
-    headers,
-    credentials: 'include',
-  })
+  let response: Response
+  try {
+    response = await fetch(endpoint, {
+      ...options,
+      headers,
+      credentials: 'include',
+    })
+  } catch {
+    throw new ApiError(
+      'Unable to connect to the server. Please ensure the backend is running.',
+      0,
+    )
+  }
 
   if (response.status === 204) {
     return undefined as unknown as T
@@ -110,6 +118,8 @@ async function request<T>(
           .map((err: any) => err.msg || JSON.stringify(err))
           .join(', ')
       }
+    } else if (response.status === 502 || response.status === 503 || response.status === 504) {
+      message = 'Backend server is temporarily unreachable. Please ensure port 8000 is active.'
     }
 
     throw new ApiError(message, response.status)
