@@ -175,21 +175,87 @@ export function App() {
       <AuthProvider>
         <Suspense fallback={<PageFallback />}>
           <Routes>
-            {/* Public Website */}
+
+            {/* ============================================================
+                STANDALONE MEMBER SETTINGS
+                No ManagementLayout = no left sidebar
+            ============================================================ */}
+
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute
+                  allowedRoles={['member']}
+                >
+                  <MemberSettingsPage />
+                </ProtectedRoute>
+              }
+            />
+
+
+            {/* ============================================================
+                PUBLIC WEBSITE
+            ============================================================ */}
+
             <Route element={<RootLayout />}>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="/membership" element={<MembershipPage />} />
-              <Route path="/classes" element={<ClassesPage />} />
-              <Route path="/trainers" element={<TrainersPage />} />
-              <Route path="/contact" element={<ContactPage />} />
-              <Route path="/faq" element={<FAQPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="*" element={<NotFoundPage />} />
+
+              <Route
+                path="/"
+                element={<HomePage />}
+              />
+
+              <Route
+                path="/about"
+                element={<AboutPage />}
+              />
+
+              <Route
+                path="/membership"
+                element={<MembershipPage />}
+              />
+
+              <Route
+                path="/classes"
+                element={<ClassesPage />}
+              />
+
+              <Route
+                path="/trainers"
+                element={<TrainersPage />}
+              />
+
+              <Route
+                path="/contact"
+                element={<ContactPage />}
+              />
+
+              <Route
+                path="/faq"
+                element={<FAQPage />}
+              />
+
+              <Route
+                path="/login"
+                element={<LoginPage />}
+              />
+
+              <Route
+                path="/register"
+                element={<RegisterPage />}
+              />
+
+              <Route
+                path="*"
+                element={<NotFoundPage />}
+              />
+
             </Route>
 
-            {/* Authenticated Portal */}
+
+            {/* ============================================================
+                AUTHENTICATED DASHBOARD / MANAGEMENT PORTAL
+            ============================================================ */}
+
             <Route
               element={
                 <ProtectedRoute>
@@ -197,143 +263,201 @@ export function App() {
                 </ProtectedRoute>
               }
             >
-              <Route
-                  path="/dashboard"
-                  element={<DashboardPage />}
-                />
 
               <Route
-                path="/dashboard/settings"
-                element={
-                  <ProtectedRoute
-                    allowedRoles={['member']}
-                  >
-                    <MemberSettingsPage />
-                  </ProtectedRoute>
-                }
-                />
+                path="/dashboard"
+                element={<DashboardPage />}
+              />
 
-                <Route
-                  path="/dashboard/book"
-                  element={<BookTrainerPage />}
-                />
+
+              <Route
+                path="/dashboard/book"
+                element={<BookTrainerPage />}
+              />
+
+
               <Route
                 path="/manage"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                    ]}
+                  >
                     <ManageOverviewPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/members"
                 element={
                   <ProtectedRoute
-                    allowedRoles={['admin', 'staff', 'trainer']}
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
                   >
                     <ManageMembersPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/members/new"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                    ]}
+                  >
                     <MemberFormPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/members/:id"
                 element={
                   <ProtectedRoute
-                    allowedRoles={['admin', 'staff', 'trainer']}
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
                   >
                     <MemberDetailPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/plans"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                    ]}
+                  >
                     <ManagePlansPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/users"
                 element={
-                  <ProtectedRoute allowedRoles={['admin']}>
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                    ]}
+                  >
                     <ManageUsersPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/visits"
                 element={
                   <ProtectedRoute
-                    allowedRoles={['admin', 'staff', 'trainer']}
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
                   >
                     <ManageVisitsPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/classes"
                 element={
                   <ProtectedRoute
-                    allowedRoles={['admin', 'staff', 'trainer']}
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
                   >
                     <ManageClassesPage />
                   </ProtectedRoute>
                 }
               />
 
+
               <Route
                 path="/manage/pt-sessions"
                 element={
                   <ProtectedRoute
-                    allowedRoles={['admin', 'staff', 'trainer']}
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
                   >
                     <ManagePTSessionsPage />
                   </ProtectedRoute>
                 }
               />
 
+
               {/* Finance — Admin Only */}
+
               <Route
                 path="/manage/finance"
                 element={
-                  <ProtectedRoute allowedRoles={['admin']}>
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                    ]}
+                  >
                     <ManageFinancePage />
                   </ProtectedRoute>
                 }
               />
 
+
               {/* Expenses — Admin Only */}
+
               <Route
                 path="/manage/expenses"
                 element={
-                  <ProtectedRoute allowedRoles={['admin']}>
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                    ]}
+                  >
                     <ManageExpensesPage />
                   </ProtectedRoute>
                 }
               />
+
             </Route>
+
           </Routes>
         </Suspense>
 
+
         <CookieBanner />
+
       </AuthProvider>
     </BrowserRouter>
   )
 }
+
+
 export default App

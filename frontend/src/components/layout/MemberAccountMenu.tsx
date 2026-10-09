@@ -34,7 +34,7 @@ interface MemberAccountMenuProps {
 }
 
 
-function initials(
+function getInitials(
   name: string,
 ) {
   return name
@@ -58,6 +58,7 @@ export function MemberAccountMenu({
   const location =
     useLocation()
 
+
   const menuRef =
     useRef<
       HTMLDivElement | null
@@ -79,6 +80,10 @@ export function MemberAccountMenu({
       AccountProfile | null
     >(null)
 
+
+  // ======================================================
+  // LOAD MEMBER PROFILE
+  // ======================================================
 
   useEffect(() => {
     let active = true
@@ -116,9 +121,13 @@ export function MemberAccountMenu({
   ])
 
 
+  // ======================================================
+  // REFRESH SIDEBAR PROFILE
+  // ======================================================
+
   useEffect(() => {
 
-    const refreshPicture =
+    const refreshProfile =
       () => {
 
         accountApi
@@ -135,7 +144,13 @@ export function MemberAccountMenu({
 
     window.addEventListener(
       'dgym-profile-picture-updated',
-      refreshPicture,
+      refreshProfile,
+    )
+
+
+    window.addEventListener(
+      'dgym-profile-updated',
+      refreshProfile,
     )
 
 
@@ -143,12 +158,22 @@ export function MemberAccountMenu({
 
       window.removeEventListener(
         'dgym-profile-picture-updated',
-        refreshPicture,
+        refreshProfile,
+      )
+
+
+      window.removeEventListener(
+        'dgym-profile-updated',
+        refreshProfile,
       )
     }
 
   }, [])
 
+
+  // ======================================================
+  // CLOSE MENU WHEN CLICKING OUTSIDE
+  // ======================================================
 
   useEffect(() => {
 
@@ -159,10 +184,9 @@ export function MemberAccountMenu({
 
         if (
           menuRef.current &&
-          !menuRef.current
-            .contains(
-              event.target as Node,
-            )
+          !menuRef.current.contains(
+            event.target as Node,
+          )
         ) {
           setOpen(false)
         }
@@ -200,6 +224,7 @@ export function MemberAccountMenu({
   return (
     <div
       ref={menuRef}
+
       className="
         relative
         p-4
@@ -208,6 +233,10 @@ export function MemberAccountMenu({
         bg-surface-2/40
       "
     >
+
+      {/* ==================================================
+          SETTINGS DROPDOWN
+      ================================================== */}
 
       {open && (
 
@@ -252,8 +281,10 @@ export function MemberAccountMenu({
           </div>
 
 
+          {/* ACCOUNT SETTINGS */}
+
           <Link
-            to="/dashboard/settings"
+            to="/settings"
 
             onClick={() =>
               setOpen(false)
@@ -286,6 +317,7 @@ export function MemberAccountMenu({
 
               viewBox="0 0 24 24"
             >
+
               <path
                 strokeLinecap="round"
 
@@ -312,9 +344,12 @@ export function MemberAccountMenu({
                   c-1.756-.426-1.756-2.924 0-3.35
                   a1.724 1.724 0 001.066-2.573
                   c-.94-1.543.826-3.31 2.37-2.37
-                  .996.608 2.296.07 2.572-1.065z
+                  .996.608
+                  2.296.07
+                  2.572-1.065z
                 "
               />
+
 
               <path
                 strokeLinecap="round"
@@ -329,6 +364,7 @@ export function MemberAccountMenu({
                   3 3 0 016 0z
                 "
               />
+
             </svg>
 
 
@@ -343,6 +379,8 @@ export function MemberAccountMenu({
 
           </Link>
 
+
+          {/* SIGN OUT */}
 
           <button
             type="button"
@@ -405,6 +443,7 @@ export function MemberAccountMenu({
 
             </svg>
 
+
             Sign Out
 
           </button>
@@ -413,6 +452,10 @@ export function MemberAccountMenu({
       )}
 
 
+      {/* ==================================================
+          MEMBER DISPLAY
+      ================================================== */}
+
       <div
         className="
           flex
@@ -420,6 +463,8 @@ export function MemberAccountMenu({
           gap-3
         "
       >
+
+        {/* AVATAR */}
 
         <div
           className="
@@ -466,14 +511,18 @@ export function MemberAccountMenu({
                 uppercase
               "
             >
-              {initials(
+
+              {getInitials(
                 displayName,
               )}
+
             </div>
           )}
 
         </div>
 
+
+        {/* NAME + SETTINGS */}
 
         <div
           className="
@@ -501,9 +550,13 @@ export function MemberAccountMenu({
                 text-white
               "
             >
+
               {displayName}
+
             </p>
 
+
+            {/* GEAR ICON */}
 
             <button
               type="button"
@@ -593,6 +646,7 @@ export function MemberAccountMenu({
                     2.572-1.065z
                   "
                 />
+
 
                 <path
                   strokeLinecap="round"

@@ -44,25 +44,27 @@ import type {
 } from '@/types/account'
 
 
+// ======================================================
+// HELPERS
+// ======================================================
+
 function formatDate(
   value: string,
 ) {
-  return new Intl
-    .DateTimeFormat(
-      'en-PH',
-      {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      },
-    )
-    .format(
-      new Date(value),
-    )
+  return new Intl.DateTimeFormat(
+    'en-PH',
+    {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    },
+  ).format(
+    new Date(value),
+  )
 }
 
 
-function initials(
+function getInitials(
   name: string,
 ) {
   return name
@@ -78,6 +80,10 @@ function initials(
     .join('')
 }
 
+
+// ======================================================
+// PAGE
+// ======================================================
 
 export function MemberSettingsPage() {
   const {
@@ -96,6 +102,10 @@ export function MemberSettingsPage() {
       HTMLInputElement | null
     >(null)
 
+
+  // ======================================================
+  // PROFILE
+  // ======================================================
 
   const [
     profile,
@@ -121,7 +131,18 @@ export function MemberSettingsPage() {
 
 
   // ======================================================
-  // PROFILE INFORMATION
+  // EDIT MODE
+  // ======================================================
+
+  const [
+    isEditing,
+    setIsEditing,
+  ] =
+    useState(false)
+
+
+  // ======================================================
+  // PROFILE FIELDS
   // ======================================================
 
   const [
@@ -199,8 +220,15 @@ export function MemberSettingsPage() {
 
 
   // ======================================================
-  // PASSWORD
+  // CHANGE PASSWORD MODAL
   // ======================================================
+
+  const [
+    passwordModalOpen,
+    setPasswordModalOpen,
+  ] =
+    useState(false)
+
 
   const [
     currentPassword,
@@ -221,6 +249,27 @@ export function MemberSettingsPage() {
     setConfirmPassword,
   ] =
     useState('')
+
+
+  const [
+    showCurrentPassword,
+    setShowCurrentPassword,
+  ] =
+    useState(false)
+
+
+  const [
+    showNewPassword,
+    setShowNewPassword,
+  ] =
+    useState(false)
+
+
+  const [
+    showConfirmPassword,
+    setShowConfirmPassword,
+  ] =
+    useState(false)
 
 
   const [
@@ -269,20 +318,15 @@ export function MemberSettingsPage() {
         }
 
 
-        setProfile(
-          data,
-        )
-
+        setProfile(data)
 
         setFullName(
           data.full_name,
         )
 
-
         setEmail(
           data.email,
         )
-
 
         setPhone(
           data.phone ?? '',
@@ -321,7 +365,50 @@ export function MemberSettingsPage() {
 
 
   // ======================================================
-  // CHECK IF EMAIL CHANGED
+  // ESC CLOSE PASSWORD MODAL
+  // ======================================================
+
+  useEffect(() => {
+
+    if (!passwordModalOpen) {
+      return
+    }
+
+
+    const handleKeyDown =
+      (
+        event: KeyboardEvent,
+      ) => {
+
+        if (
+          event.key === 'Escape'
+        ) {
+          closePasswordModal()
+        }
+      }
+
+
+    window.addEventListener(
+      'keydown',
+      handleKeyDown,
+    )
+
+
+    return () => {
+
+      window.removeEventListener(
+        'keydown',
+        handleKeyDown,
+      )
+    }
+
+  }, [
+    passwordModalOpen,
+  ])
+
+
+  // ======================================================
+  // EMAIL CHANGED?
   // ======================================================
 
   const emailChanged =
@@ -338,7 +425,8 @@ export function MemberSettingsPage() {
             .trim()
             .toLowerCase()
           !==
-          profile.email
+          profile
+            .email
             .toLowerCase()
         )
 
@@ -348,6 +436,83 @@ export function MemberSettingsPage() {
         profile,
       ],
     )
+
+
+  // ======================================================
+  // START EDITING
+  // ======================================================
+
+  const startEditing =
+    () => {
+
+      if (!profile) {
+        return
+      }
+
+
+      setFullName(
+        profile.full_name,
+      )
+
+      setEmail(
+        profile.email,
+      )
+
+      setPhone(
+        profile.phone ?? '',
+      )
+
+      setEmailPassword('')
+
+      setProfileMessage('')
+
+      setProfileError('')
+
+      setPictureMessage('')
+
+      setPictureError('')
+
+      setIsEditing(true)
+    }
+
+
+  // ======================================================
+  // CANCEL EDITING
+  // ======================================================
+
+  const cancelEditing =
+    () => {
+
+      if (profile) {
+
+        setFullName(
+          profile.full_name,
+        )
+
+        setEmail(
+          profile.email,
+        )
+
+        setPhone(
+          profile.phone ?? '',
+        )
+      }
+
+
+      setEmailPassword('')
+
+      setProfileMessage('')
+
+      setProfileError('')
+
+      setPictureMessage('')
+
+      setPictureError('')
+
+      setPasswordModalOpen(false)
+
+      setIsEditing(false)
+    }
 
 
   // ======================================================
@@ -369,6 +534,7 @@ export function MemberSettingsPage() {
 
 
       if (!fullName.trim()) {
+
         setProfileError(
           'Full name is required.',
         )
@@ -378,6 +544,7 @@ export function MemberSettingsPage() {
 
 
       if (!email.trim()) {
+
         setProfileError(
           'Email address is required.',
         )
@@ -390,6 +557,7 @@ export function MemberSettingsPage() {
         emailChanged &&
         !emailPassword
       ) {
+
         setProfileError(
           'Enter your current password to change your email address.',
         )
@@ -402,6 +570,7 @@ export function MemberSettingsPage() {
 
 
       try {
+
         const updated =
           await accountApi
             .updateProfile({
@@ -425,27 +594,31 @@ export function MemberSettingsPage() {
             })
 
 
-        setProfile(
-          updated,
-        )
-
+        setProfile(updated)
 
         setFullName(
           updated.full_name,
         )
 
-
         setEmail(
           updated.email,
         )
-
 
         setPhone(
           updated.phone ?? '',
         )
 
-
         setEmailPassword('')
+
+
+        await refreshUser()
+
+
+        window.dispatchEvent(
+          new Event(
+            'dgym-profile-updated',
+          ),
+        )
 
 
         setProfileMessage(
@@ -453,7 +626,7 @@ export function MemberSettingsPage() {
         )
 
 
-        await refreshUser()
+        setIsEditing(false)
 
       } catch (err) {
 
@@ -471,7 +644,28 @@ export function MemberSettingsPage() {
 
 
   // ======================================================
-  // UPLOAD PROFILE PICTURE
+  // AVATAR CLICK
+  // ======================================================
+
+  const handleAvatarClick =
+    () => {
+
+      if (
+        !isEditing ||
+        pictureUploading
+      ) {
+        return
+      }
+
+
+      fileInputRef
+        .current
+        ?.click()
+    }
+
+
+  // ======================================================
+  // PROFILE PICTURE UPLOAD
   // ======================================================
 
   const handlePictureSelect =
@@ -497,7 +691,6 @@ export function MemberSettingsPage() {
       const validTypes = [
         'image/jpeg',
         'image/png',
-        'image/webp',
       ]
 
 
@@ -506,8 +699,9 @@ export function MemberSettingsPage() {
           file.type,
         )
       ) {
+
         setPictureError(
-          'Use a JPG, PNG, or WEBP image.',
+          'Profile picture must be PNG, JPG, or JPEG.',
         )
 
         event.target.value = ''
@@ -520,6 +714,7 @@ export function MemberSettingsPage() {
         file.size >
         5 * 1024 * 1024
       ) {
+
         setPictureError(
           'Profile picture must be 5 MB or smaller.',
         )
@@ -534,6 +729,7 @@ export function MemberSettingsPage() {
 
 
       try {
+
         const result =
           await accountApi
             .uploadProfilePicture(
@@ -556,7 +752,7 @@ export function MemberSettingsPage() {
 
 
         setPictureMessage(
-          'Profile picture updated successfully.',
+          'Profile picture updated.',
         )
 
 
@@ -584,60 +780,57 @@ export function MemberSettingsPage() {
 
 
   // ======================================================
-  // REMOVE PROFILE PICTURE
+  // PASSWORD MODAL
   // ======================================================
 
-  const handleRemovePicture =
-    async () => {
+  const openPasswordModal =
+    () => {
 
-      setPictureMessage('')
+      setCurrentPassword('')
 
-      setPictureError('')
+      setNewPassword('')
 
-      setPictureUploading(true)
+      setConfirmPassword('')
 
+      setPasswordMessage('')
 
-      try {
-        await accountApi
-          .removeProfilePicture()
+      setPasswordError('')
 
+      setShowCurrentPassword(false)
 
-        setProfile(
-          (current) =>
-            current
-              ? {
-                  ...current,
+      setShowNewPassword(false)
 
-                  profile_picture_url:
-                    null,
-                }
-              : current,
-        )
+      setShowConfirmPassword(false)
+
+      setPasswordModalOpen(true)
+    }
 
 
-        setPictureMessage(
-          'Profile picture removed.',
-        )
+  const closePasswordModal =
+    () => {
 
-
-        window.dispatchEvent(
-          new Event(
-            'dgym-profile-picture-updated',
-          ),
-        )
-
-      } catch (err) {
-
-        setPictureError(
-          err instanceof Error
-            ? err.message
-            : 'Unable to remove profile picture.',
-        )
-
-      } finally {
-
-        setPictureUploading(false)
+      if (passwordSaving) {
+        return
       }
+
+
+      setPasswordModalOpen(false)
+
+      setCurrentPassword('')
+
+      setNewPassword('')
+
+      setConfirmPassword('')
+
+      setPasswordMessage('')
+
+      setPasswordError('')
+
+      setShowCurrentPassword(false)
+
+      setShowNewPassword(false)
+
+      setShowConfirmPassword(false)
     }
 
 
@@ -664,6 +857,7 @@ export function MemberSettingsPage() {
         !newPassword ||
         !confirmPassword
       ) {
+
         setPasswordError(
           'Complete all password fields.',
         )
@@ -675,6 +869,7 @@ export function MemberSettingsPage() {
       if (
         newPassword.length < 8
       ) {
+
         setPasswordError(
           'New password must be at least 8 characters.',
         )
@@ -684,9 +879,10 @@ export function MemberSettingsPage() {
 
 
       if (
-        newPassword
-        !== confirmPassword
+        newPassword !==
+        confirmPassword
       ) {
+
         setPasswordError(
           'New passwords do not match.',
         )
@@ -699,6 +895,7 @@ export function MemberSettingsPage() {
 
 
       try {
+
         const response =
           await accountApi
             .changePassword({
@@ -740,7 +937,7 @@ export function MemberSettingsPage() {
 
 
   // ======================================================
-  // WAIT FOR USER
+  // AUTH
   // ======================================================
 
   if (!user) {
@@ -754,50 +951,156 @@ export function MemberSettingsPage() {
         title="Account Settings"
 
         description="
-          Manage your DGYM member profile,
-          profile picture,
-          password,
-          and account status.
+          Manage your DGYM member profile.
         "
       />
 
 
       <div
         className="
-          p-6
-          md:p-8
-          max-w-5xl
-          mx-auto
+          min-h-screen
+          bg-black
+          text-white
         "
       >
 
-        {/* PAGE HEADER */}
+        {/* ==================================================
+            TOP HEADER
+        ================================================== */}
 
-        <div
+        <header
           className="
-            flex
-            flex-col
-            gap-5
             border-b
             border-white/8
-            pb-7
-            mb-8
-            md:flex-row
-            md:items-end
-            md:justify-between
+            bg-surface/95
+            backdrop-blur
           "
         >
 
-          <div>
+          <div
+            className="
+              mx-auto
+              flex
+              max-w-6xl
+              items-center
+              justify-between
+              gap-4
+              px-4
+              py-4
+              md:px-8
+            "
+          >
+
+            <button
+              type="button"
+
+              onClick={() =>
+                navigate(
+                  '/dashboard',
+                )
+              }
+
+              aria-label="
+                Back to dashboard
+              "
+            >
+
+              <img
+                src="/assets/logos/thedgym.png"
+
+                alt="The DGym"
+
+                className="
+                  h-9
+                  w-auto
+                  object-contain
+                  md:h-10
+                "
+              />
+
+            </button>
+
+
+            <Button
+              type="button"
+
+              variant="secondary"
+
+              size="sm"
+
+              onClick={() =>
+                navigate(
+                  '/dashboard',
+                )
+              }
+            >
+
+              <svg
+                className="
+                  h-4
+                  w-4
+                "
+
+                fill="none"
+
+                stroke="currentColor"
+
+                viewBox="0 0 24 24"
+              >
+
+                <path
+                  strokeLinecap="round"
+
+                  strokeLinejoin="round"
+
+                  strokeWidth={1.8}
+
+                  d="
+                    M15 19
+                    l-7-7
+                    7-7
+                  "
+                />
+
+              </svg>
+
+
+              Back to Dashboard
+
+            </Button>
+
+          </div>
+
+        </header>
+
+
+        {/* ==================================================
+            PAGE CONTENT
+        ================================================== */}
+
+        <main
+          className="
+            mx-auto
+            max-w-5xl
+            px-4
+            py-8
+            md:px-8
+            md:py-12
+          "
+        >
+
+          {/* TITLE */}
+
+          <div className="mb-8">
 
             <p
               className="
+                mb-2
+                font-mono
                 text-xs
                 uppercase
                 tracking-[0.2em]
                 text-white/35
-                font-mono
-                mb-2
               "
             >
               Member Account
@@ -807,12 +1110,11 @@ export function MemberSettingsPage() {
             <h1
               className="
                 font-display
-                text-3xl
-                md:text-5xl
+                text-4xl
                 font-black
                 uppercase
                 tracking-tight
-                text-white
+                md:text-5xl
               "
             >
               Account Settings
@@ -821,130 +1123,299 @@ export function MemberSettingsPage() {
 
             <p
               className="
+                mt-2
                 text-sm
                 text-white/50
-                mt-2
-                max-w-2xl
               "
             >
-              Manage your personal information,
-              profile photo,
-              password,
-              and account status.
+              View and manage your
+              profile information.
             </p>
 
           </div>
 
 
-          <Button
-            variant="secondary"
+          {/* PAGE ERROR */}
 
-            onClick={() =>
-              navigate(
-                '/dashboard',
-              )
-            }
-          >
-            Back to Dashboard
-          </Button>
-
-        </div>
-
-
-        {/* PAGE ERROR */}
-
-        {pageError && (
-
-          <div
-            className="
-              mb-6
-              rounded-xl
-              border
-              border-danger/25
-              bg-danger/10
-              px-4
-              py-3
-              text-sm
-              text-danger
-            "
-          >
-            {pageError}
-          </div>
-
-        )}
-
-
-        {/* LOADING */}
-
-        {loading ? (
-
-          <div className="grid gap-6">
+          {pageError && (
 
             <div
               className="
-                h-64
+                mb-6
+                rounded-xl
+                border
+                border-danger/25
+                bg-danger/10
+                px-4
+                py-3
+                text-sm
+                text-danger
+              "
+            >
+              {pageError}
+            </div>
+
+          )}
+
+
+          {/* ==================================================
+              LOADING
+          ================================================== */}
+
+          {loading ? (
+
+            <div
+              className="
+                h-[430px]
                 animate-pulse
-                rounded-2xl
+                rounded-xl
                 border
                 border-white/8
                 bg-surface
               "
             />
 
-            <div
+          ) : profile ? (
+
+            /* ==================================================
+                PROFILE CARD
+            ================================================== */
+
+            <Card
               className="
-                h-72
-                animate-pulse
-                rounded-2xl
-                border
-                border-white/8
-                bg-surface
+                relative
+                p-6
+                md:p-8
               "
-            />
+            >
 
-          </div>
-
-        ) : profile ? (
-
-          <div className="space-y-6">
-
-            {/* ==================================================
-                PROFILE PICTURE
-            ================================================== */}
-
-            <Card className="p-6 md:p-8">
+              {/* CARD HEADER */}
 
               <div
                 className="
+                  mb-7
                   flex
-                  flex-col
-                  gap-6
-                  md:flex-row
-                  md:items-center
-                  md:justify-between
+                  items-start
+                  justify-between
+                  gap-4
                 "
               >
 
-                <div
-                  className="
-                    flex
-                    items-center
-                    gap-5
-                  "
-                >
+                <div>
 
-                  <div
+                  <p
                     className="
-                      relative
-                      h-24
-                      w-24
+                      mb-1
+                      font-mono
+                      text-xs
+                      uppercase
+                      tracking-widest
+                      text-red
+                    "
+                  >
+                    Profile
+                  </p>
+
+
+                  <h2
+                    className="
+                      font-display
+                      text-2xl
+                      font-black
+                      uppercase
+                    "
+                  >
+                    Profile Information
+                  </h2>
+
+
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      text-white/45
+                    "
+                  >
+
+                    {isEditing
+                      ? 'You can now edit your profile information.'
+                      : 'Your account information.'}
+
+                  </p>
+
+                </div>
+
+
+                {/* PENCIL */}
+
+                {!isEditing && (
+
+                  <button
+                    type="button"
+
+                    onClick={
+                      startEditing
+                    }
+
+                    title="
+                      Edit Profile
+                    "
+
+                    aria-label="
+                      Edit Profile
+                    "
+
+                    className="
+                      flex
+                      h-10
+                      w-10
                       shrink-0
-                      overflow-hidden
-                      rounded-2xl
+                      items-center
+                      justify-center
+                      rounded-lg
                       border
                       border-white/10
-                      bg-red/15
+                      bg-white/[0.03]
+                      text-white/50
+                      transition
+                      hover:border-red/40
+                      hover:bg-red/10
+                      hover:text-red
                     "
+                  >
+
+                    <svg
+                      className="
+                        h-5
+                        w-5
+                      "
+
+                      fill="none"
+
+                      stroke="currentColor"
+
+                      viewBox="0 0 24 24"
+                    >
+
+                      <path
+                        strokeLinecap="round"
+
+                        strokeLinejoin="round"
+
+                        strokeWidth={1.7}
+
+                        d="
+                          M16.862 3.487
+                          a2.121 2.121 0 013 3
+                          L8.75 17.598
+                          4 19
+                          l1.402-4.75
+                          L16.862 3.487z
+                        "
+                      />
+
+
+                      <path
+                        strokeLinecap="round"
+
+                        strokeLinejoin="round"
+
+                        strokeWidth={1.7}
+
+                        d="
+                          M15.5 5
+                          l3 3
+                        "
+                      />
+
+                    </svg>
+
+                  </button>
+
+                )}
+
+              </div>
+
+
+              {/* ==================================================
+                  PROFILE GRID
+              ================================================== */}
+
+              <div
+                className="
+                  grid
+                  gap-8
+                  lg:grid-cols-[220px_minmax(0,1fr)]
+                "
+              >
+
+                {/* ==================================================
+                    AVATAR
+                ================================================== */}
+
+                <div>
+
+                  <input
+                    ref={
+                      fileInputRef
+                    }
+
+                    type="file"
+
+                    accept="
+                      image/png,
+                      image/jpeg,
+                      .png,
+                      .jpg,
+                      .jpeg
+                    "
+
+                    onChange={
+                      handlePictureSelect
+                    }
+
+                    className="hidden"
+                  />
+
+
+                  <button
+                    type="button"
+
+                    onClick={
+                      handleAvatarClick
+                    }
+
+                    disabled={
+                      !isEditing ||
+                      pictureUploading
+                    }
+
+                    className={`
+                      relative
+                      mx-auto
+                      block
+                      h-44
+                      w-44
+                      overflow-hidden
+                      rounded-full
+                      border
+                      bg-surface-2
+                      transition
+                      lg:mx-0
+
+                      ${
+                        isEditing
+                          ? `
+                            cursor-pointer
+                            border-red/35
+                            hover:border-red/60
+                          `
+                          : `
+                            cursor-default
+                            border-white/10
+                          `
+                      }
+                    `}
                   >
 
                     {profile
@@ -977,160 +1448,703 @@ export function MemberSettingsPage() {
                           w-full
                           items-center
                           justify-center
+                          bg-red/10
                           font-display
-                          text-3xl
+                          text-5xl
                           font-black
                           text-red
                         "
                       >
-                        {initials(
+
+                        {getInitials(
                           profile.full_name,
                         )}
+
                       </div>
 
                     )}
 
-                  </div>
 
+                    {/* UPLOAD OVERLAY */}
 
-                  <div>
+                    {isEditing && (
 
-                    <div
-                      className="
-                        flex
-                        flex-wrap
-                        items-center
-                        gap-2
-                        mb-1
-                      "
-                    >
-
-                      <h2
+                      <div
                         className="
-                          font-display
-                          text-2xl
-                          font-black
-                          uppercase
+                          absolute
+                          inset-0
+                          flex
+                          flex-col
+                          items-center
+                          justify-center
+                          gap-2
+                          bg-black/60
                           text-white
+                          opacity-80
+                          transition
+                          hover:opacity-100
                         "
                       >
-                        {profile.full_name}
-                      </h2>
+
+                        {pictureUploading ? (
+
+                          <span
+                            className="
+                              h-7
+                              w-7
+                              animate-spin
+                              rounded-full
+                              border-2
+                              border-white/30
+                              border-t-white
+                            "
+                          />
+
+                        ) : (
+
+                          <>
+
+                            <svg
+                              className="
+                                h-8
+                                w-8
+                              "
+
+                              fill="none"
+
+                              stroke="currentColor"
+
+                              viewBox="0 0 24 24"
+                            >
+
+                              <path
+                                strokeLinecap="round"
+
+                                strokeLinejoin="round"
+
+                                strokeWidth={1.7}
+
+                                d="
+                                  M4 16v2
+                                  a2 2 0 002 2h12
+                                  a2 2 0 002-2v-2
+                                  M12 4v11
+                                  m0-11l-4 4
+                                  m4-4l4 4
+                                "
+                              />
+
+                            </svg>
 
 
-                      <Badge
-                        variant={
-                          profile.is_active
-                            ? 'success'
-                            : 'danger'
-                        }
+                            <span
+                              className="
+                                text-[11px]
+                                font-semibold
+                                uppercase
+                                tracking-wider
+                              "
+                            >
+                              Change Photo
+                            </span>
 
-                        dot
+                          </>
+
+                        )}
+
+                      </div>
+
+                    )}
+
+                  </button>
+
+
+                  <div
+                    className="
+                      mt-4
+                      text-center
+                      lg:text-left
+                    "
+                  >
+
+                    {isEditing && (
+
+                      <p
+                        className="
+                          text-xs
+                          text-white/35
+                        "
                       >
-                        {profile.is_active
-                          ? 'ACTIVE'
-                          : 'INACTIVE'}
-                      </Badge>
+                        PNG, JPG or JPEG.
+                        Maximum 5 MB.
+                      </p>
 
-                    </div>
-
-
-                    <p
-                      className="
-                        text-sm
-                        text-white/50
-                      "
-                    >
-                      {profile.email}
-                    </p>
+                    )}
 
 
-                    <p
-                      className="
-                        mt-2
-                        text-xs
-                        uppercase
-                        tracking-widest
-                        text-white/30
-                        font-mono
-                      "
-                    >
-                      Member since{' '}
-                      {formatDate(
-                        profile.created_at,
-                      )}
-                    </p>
+                    {pictureMessage && (
+
+                      <p
+                        className="
+                          mt-2
+                          text-xs
+                          text-success
+                        "
+                      >
+                        {pictureMessage}
+                      </p>
+
+                    )}
+
+
+                    {pictureError && (
+
+                      <p
+                        className="
+                          mt-2
+                          text-xs
+                          text-danger
+                        "
+                      >
+                        {pictureError}
+                      </p>
+
+                    )}
 
                   </div>
 
                 </div>
 
 
-                <div
-                  className="
-                    flex
-                    flex-wrap
-                    gap-2
-                  "
-                >
+                {/* ==================================================
+                    PROFILE DETAILS
+                ================================================== */}
 
-                  <input
-                    ref={fileInputRef}
+                <div className="min-w-0">
 
-                    type="file"
+                  {profileMessage && (
 
-                    accept="
-                      image/jpeg,
-                      image/png,
-                      image/webp
-                    "
-
-                    onChange={
-                      handlePictureSelect
-                    }
-
-                    className="hidden"
-                  />
-
-
-                  <Button
-                    type="button"
-
-                    variant="secondary"
-
-                    loading={
-                      pictureUploading
-                    }
-
-                    onClick={() =>
-                      fileInputRef
-                        .current
-                        ?.click()
-                    }
-                  >
-                    Upload Photo
-                  </Button>
-
-
-                  {profile
-                    .profile_picture_url
-                  && (
-
-                    <Button
-                      type="button"
-
-                      variant="ghost"
-
-                      disabled={
-                        pictureUploading
-                      }
-
-                      onClick={
-                        handleRemovePicture
-                      }
+                    <div
+                      className="
+                        mb-5
+                        rounded-lg
+                        border
+                        border-success/20
+                        bg-success/10
+                        px-4
+                        py-3
+                        text-sm
+                        text-success
+                      "
                     >
-                      Remove
-                    </Button>
+                      {profileMessage}
+                    </div>
+
+                  )}
+
+
+                  {profileError && (
+
+                    <div
+                      className="
+                        mb-5
+                        rounded-lg
+                        border
+                        border-danger/20
+                        bg-danger/10
+                        px-4
+                        py-3
+                        text-sm
+                        text-danger
+                      "
+                    >
+                      {profileError}
+                    </div>
+
+                  )}
+
+
+                  {/* ==================================================
+                      EDIT MODE
+                  ================================================== */}
+
+                  {isEditing ? (
+
+                    <form
+                      onSubmit={
+                        handleProfileSave
+                      }
+
+                      className="
+                        space-y-5
+                      "
+                    >
+
+                      <div
+                        className="
+                          grid
+                          gap-5
+                          md:grid-cols-2
+                        "
+                      >
+
+                        <Input
+                          label="
+                            Full Name
+                          "
+
+                          value={
+                            fullName
+                          }
+
+                          onChange={
+                            (event) =>
+                              setFullName(
+                                event
+                                  .target
+                                  .value,
+                              )
+                          }
+
+                          required
+                        />
+
+
+                        <Input
+                          label="
+                            Phone Number
+                          "
+
+                          value={
+                            phone
+                          }
+
+                          onChange={
+                            (event) =>
+                              setPhone(
+                                event
+                                  .target
+                                  .value,
+                              )
+                          }
+
+                          placeholder="
+                            +63 9XX XXX XXXX
+                          "
+                        />
+
+                      </div>
+
+
+                      <Input
+                        label="
+                          Email Address
+                        "
+
+                        type="email"
+
+                        value={
+                          email
+                        }
+
+                        onChange={
+                          (event) =>
+                            setEmail(
+                              event
+                                .target
+                                .value,
+                            )
+                        }
+
+                        required
+                      />
+
+
+                      {/* EMAIL PASSWORD */}
+
+                      {emailChanged && (
+
+                        <Input
+                          label="
+                            Current Password
+                          "
+
+                          type="password"
+
+                          value={
+                            emailPassword
+                          }
+
+                          onChange={
+                            (event) =>
+                              setEmailPassword(
+                                event
+                                  .target
+                                  .value,
+                              )
+                          }
+
+                          hint="
+                            Required to change your login email.
+                          "
+
+                          required
+                        />
+
+                      )}
+
+
+                      {/* ==================================================
+                          CHANGE PASSWORD INSIDE EDIT MODE
+                      ================================================== */}
+
+                      <div
+                        className="
+                          rounded-xl
+                          border
+                          border-white/8
+                          bg-white/[0.02]
+                          p-4
+                        "
+                      >
+
+                        <div
+                          className="
+                            flex
+                            items-center
+                            justify-between
+                            gap-4
+                          "
+                        >
+
+                          <div>
+
+                            <p
+                              className="
+                                text-sm
+                                font-semibold
+                                text-white
+                              "
+                            >
+                              Password
+                            </p>
+
+
+                            <p
+                              className="
+                                mt-1
+                                text-xs
+                                text-white/40
+                              "
+                            >
+                              Update your
+                              account password.
+                            </p>
+
+                          </div>
+
+
+                          <button
+                            type="button"
+
+                            onClick={
+                              openPasswordModal
+                            }
+
+                            className="
+                              rounded-lg
+                              border
+                              border-white/10
+                              bg-white/[0.03]
+                              px-4
+                              py-2
+                              text-xs
+                              font-semibold
+                              text-white/70
+                              transition
+                              hover:border-red/35
+                              hover:bg-red/10
+                              hover:text-red
+                            "
+                          >
+                            Change Password
+                          </button>
+
+                        </div>
+
+                      </div>
+
+
+                      {/* CANCEL / SAVE */}
+
+                      <div
+                        className="
+                          flex
+                          flex-col-reverse
+                          gap-3
+                          border-t
+                          border-white/8
+                          pt-5
+                          sm:flex-row
+                          sm:justify-end
+                        "
+                      >
+
+                        <Button
+                          type="button"
+
+                          variant="secondary"
+
+                          onClick={
+                            cancelEditing
+                          }
+
+                          disabled={
+                            profileSaving
+                          }
+                        >
+                          Cancel
+                        </Button>
+
+
+                        <Button
+                          type="submit"
+
+                          loading={
+                            profileSaving
+                          }
+                        >
+                          Save Changes
+                        </Button>
+
+                      </div>
+
+                    </form>
+
+                  ) : (
+
+                    /* ==================================================
+                        READ ONLY MODE
+                    ================================================== */
+
+                    <div className="space-y-1">
+
+                      {/* FULL NAME */}
+
+                      <div
+                        className="
+                          grid
+                          gap-3
+                          border-b
+                          border-white/8
+                          py-4
+                          sm:grid-cols-[170px_minmax(0,1fr)]
+                          sm:items-center
+                        "
+                      >
+
+                        <p
+                          className="
+                            text-xs
+                            font-medium
+                            uppercase
+                            tracking-wider
+                            text-white/35
+                          "
+                        >
+                          Full Name
+                        </p>
+
+
+                        <p
+                          className="
+                            break-words
+                            text-sm
+                            font-medium
+                            text-white
+                          "
+                        >
+                          {profile.full_name}
+                        </p>
+
+                      </div>
+
+
+                      {/* EMAIL */}
+
+                      <div
+                        className="
+                          grid
+                          gap-3
+                          border-b
+                          border-white/8
+                          py-4
+                          sm:grid-cols-[170px_minmax(0,1fr)]
+                          sm:items-center
+                        "
+                      >
+
+                        <p
+                          className="
+                            text-xs
+                            font-medium
+                            uppercase
+                            tracking-wider
+                            text-white/35
+                          "
+                        >
+                          Email Address
+                        </p>
+
+
+                        <p
+                          className="
+                            break-words
+                            text-sm
+                            font-medium
+                            text-white
+                          "
+                        >
+                          {profile.email}
+                        </p>
+
+                      </div>
+
+
+                      {/* PHONE */}
+
+                      <div
+                        className="
+                          grid
+                          gap-3
+                          border-b
+                          border-white/8
+                          py-4
+                          sm:grid-cols-[170px_minmax(0,1fr)]
+                          sm:items-center
+                        "
+                      >
+
+                        <p
+                          className="
+                            text-xs
+                            font-medium
+                            uppercase
+                            tracking-wider
+                            text-white/35
+                          "
+                        >
+                          Phone Number
+                        </p>
+
+
+                        <p
+                          className="
+                            break-words
+                            text-sm
+                            font-medium
+                            text-white
+                          "
+                        >
+
+                          {profile.phone
+                            || 'Not provided'}
+
+                        </p>
+
+                      </div>
+
+
+                      {/* ACCOUNT STATUS */}
+
+                      <div
+                        className="
+                          grid
+                          gap-3
+                          border-b
+                          border-white/8
+                          py-4
+                          sm:grid-cols-[170px_minmax(0,1fr)]
+                          sm:items-center
+                        "
+                      >
+
+                        <p
+                          className="
+                            text-xs
+                            font-medium
+                            uppercase
+                            tracking-wider
+                            text-white/35
+                          "
+                        >
+                          Account Status
+                        </p>
+
+
+                        <div>
+
+                          <Badge
+                            variant={
+                              profile.is_active
+                                ? 'success'
+                                : 'danger'
+                            }
+
+                            dot
+                          >
+
+                            {profile.is_active
+                              ? 'ACTIVE'
+                              : 'INACTIVE'}
+
+                          </Badge>
+
+                        </div>
+
+                      </div>
+
+
+                      {/* MEMBER SINCE */}
+
+                      <div
+                        className="
+                          grid
+                          gap-3
+                          py-4
+                          sm:grid-cols-[170px_minmax(0,1fr)]
+                          sm:items-center
+                        "
+                      >
+
+                        <p
+                          className="
+                            text-xs
+                            font-medium
+                            uppercase
+                            tracking-wider
+                            text-white/35
+                          "
+                        >
+                          Member Since
+                        </p>
+
+
+                        <p
+                          className="
+                            text-sm
+                            font-medium
+                            text-white
+                          "
+                        >
+                          {formatDate(
+                            profile.created_at,
+                          )}
+                        </p>
+
+                      </div>
+
+                    </div>
 
                   )}
 
@@ -1138,347 +2152,183 @@ export function MemberSettingsPage() {
 
               </div>
 
-
-              <div className="mt-5">
-
-                {pictureMessage && (
-
-                  <p
-                    className="
-                      text-sm
-                      text-success
-                    "
-                  >
-                    {pictureMessage}
-                  </p>
-
-                )}
-
-
-                {pictureError && (
-
-                  <p
-                    className="
-                      text-sm
-                      text-danger
-                    "
-                  >
-                    {pictureError}
-                  </p>
-
-                )}
-
-
-                <p
-                  className="
-                    mt-2
-                    text-xs
-                    text-white/30
-                  "
-                >
-                  JPG, PNG, or WEBP.
-                  Maximum file size:
-                  5 MB.
-                </p>
-
-              </div>
-
             </Card>
 
+          ) : null}
 
-            {/* ==================================================
-                PERSONAL INFORMATION
-            ================================================== */}
-
-            <Card className="p-6 md:p-8">
-
-              <div className="mb-6">
-
-                <p
-                  className="
-                    text-xs
-                    uppercase
-                    tracking-widest
-                    text-red
-                    font-mono
-                    mb-1
-                  "
-                >
-                  Profile
-                </p>
+        </main>
 
 
-                <h2
-                  className="
-                    font-display
-                    text-2xl
-                    font-black
-                    uppercase
-                    text-white
-                  "
-                >
-                  Personal Information
-                </h2>
+        {/* ==================================================
+            FLOATING CHANGE PASSWORD MODAL
+        ================================================== */}
 
+        {passwordModalOpen && (
 
-                <p
-                  className="
-                    text-sm
-                    text-white/45
-                    mt-1
-                  "
-                >
-                  Update the information
-                  connected to your
-                  member login.
-                </p>
+          <div
+            className="
+              fixed
+              inset-0
+              z-[100]
+              flex
+              items-center
+              justify-center
+              bg-black/75
+              px-4
+              py-8
+              backdrop-blur-sm
+            "
 
-              </div>
+            onMouseDown={
+              (event) => {
 
-
-              <form
-                onSubmit={
-                  handleProfileSave
+                if (
+                  event.target ===
+                  event.currentTarget
+                ) {
+                  closePasswordModal()
                 }
+              }
+            }
+          >
 
+            <div
+              className="
+                w-full
+                max-w-lg
+                overflow-hidden
+                rounded-2xl
+                border
+                border-white/10
+                bg-surface
+                shadow-2xl
+                shadow-black/70
+              "
+            >
+
+              {/* MODAL HEADER */}
+
+              <div
                 className="
-                  space-y-5
+                  flex
+                  items-start
+                  justify-between
+                  gap-4
+                  border-b
+                  border-white/8
+                  px-6
+                  py-5
                 "
               >
 
-                {profileMessage && (
+                <div>
 
-                  <div
+                  <p
                     className="
-                      rounded-lg
-                      border
-                      border-success/20
-                      bg-success/10
-                      px-4
-                      py-3
-                      text-sm
-                      text-success
+                      mb-1
+                      font-mono
+                      text-[10px]
+                      uppercase
+                      tracking-[0.2em]
+                      text-red
                     "
                   >
-                    {profileMessage}
-                  </div>
-
-                )}
+                    Security
+                  </p>
 
 
-                {profileError && (
-
-                  <div
+                  <h2
                     className="
-                      rounded-lg
-                      border
-                      border-danger/20
-                      bg-danger/10
-                      px-4
-                      py-3
-                      text-sm
-                      text-danger
+                      font-display
+                      text-2xl
+                      font-black
+                      uppercase
+                      text-white
                     "
                   >
-                    {profileError}
-                  </div>
-
-                )}
+                    Change Password
+                  </h2>
 
 
-                <div
-                  className="
-                    grid
-                    gap-5
-                    md:grid-cols-2
-                  "
-                >
-
-                  <Input
-                    label="Full Name"
-
-                    value={
-                      fullName
-                    }
-
-                    onChange={
-                      (event) =>
-                        setFullName(
-                          event
-                            .target
-                            .value,
-                        )
-                    }
-
-                    placeholder="
-                      Your full name
+                  <p
+                    className="
+                      mt-1
+                      text-xs
+                      text-white/40
                     "
-
-                    required
-                  />
-
-
-                  <Input
-                    label="
-                      Phone Number
-                    "
-
-                    value={
-                      phone
-                    }
-
-                    onChange={
-                      (event) =>
-                        setPhone(
-                          event
-                            .target
-                            .value,
-                        )
-                    }
-
-                    placeholder="
-                      +63 9XX XXX XXXX
-                    "
-                  />
+                  >
+                    Enter your current
+                    password before
+                    creating a new one.
+                  </p>
 
                 </div>
 
 
-                <Input
-                  label="Email Address"
+                <button
+                  type="button"
 
-                  type="email"
-
-                  value={email}
-
-                  onChange={
-                    (event) =>
-                      setEmail(
-                        event
-                          .target
-                          .value,
-                      )
+                  onClick={
+                    closePasswordModal
                   }
 
-                  required
-                />
+                  disabled={
+                    passwordSaving
+                  }
 
-
-                {emailChanged && (
-
-                  <Input
-                    label="
-                      Current Password
-                    "
-
-                    type="password"
-
-                    value={
-                      emailPassword
-                    }
-
-                    onChange={
-                      (event) =>
-                        setEmailPassword(
-                          event
-                            .target
-                            .value,
-                        )
-                    }
-
-                    hint="
-                      Required because
-                      you are changing
-                      your email address.
-                    "
-
-                    autoComplete="
-                      current-password
-                    "
-
-                    required
-                  />
-
-                )}
-
-
-                <div
                   className="
                     flex
-                    justify-end
-                    border-t
-                    border-white/8
-                    pt-5
+                    h-9
+                    w-9
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-lg
+                    border
+                    border-white/10
+                    text-white/40
+                    transition
+                    hover:bg-white/5
+                    hover:text-white
                   "
                 >
 
-                  <Button
-                    type="submit"
+                  <svg
+                    className="
+                      h-5
+                      w-5
+                    "
 
-                    loading={
-                      profileSaving
-                    }
+                    fill="none"
+
+                    stroke="currentColor"
+
+                    viewBox="0 0 24 24"
                   >
-                    Save Profile
-                  </Button>
 
-                </div>
+                    <path
+                      strokeLinecap="round"
 
-              </form>
+                      strokeLinejoin="round"
 
-            </Card>
+                      strokeWidth={1.8}
 
+                      d="
+                        M6 18
+                        L18 6
+                        M6 6
+                        l12 12
+                      "
+                    />
 
-            {/* ==================================================
-                CHANGE PASSWORD
-            ================================================== */}
+                  </svg>
 
-            <Card className="p-6 md:p-8">
-
-              <div className="mb-6">
-
-                <p
-                  className="
-                    text-xs
-                    uppercase
-                    tracking-widest
-                    text-red
-                    font-mono
-                    mb-1
-                  "
-                >
-                  Security
-                </p>
-
-
-                <h2
-                  className="
-                    font-display
-                    text-2xl
-                    font-black
-                    uppercase
-                    text-white
-                  "
-                >
-                  Change Password
-                </h2>
-
-
-                <p
-                  className="
-                    text-sm
-                    text-white/45
-                    mt-1
-                  "
-                >
-                  Enter your current
-                  password and choose
-                  a new password with
-                  at least 8 characters.
-                </p>
+                </button>
 
               </div>
 
+
+              {/* MODAL BODY */}
 
               <form
                 onSubmit={
@@ -1487,6 +2337,7 @@ export function MemberSettingsPage() {
 
                 className="
                   space-y-5
+                  p-6
                 "
               >
 
@@ -1530,109 +2381,140 @@ export function MemberSettingsPage() {
                 )}
 
 
-                <Input
-                  label="
-                    Current Password
-                  "
+                {/* CURRENT PASSWORD */}
 
-                  type="password"
+                <PasswordField
+                  label="Current Password"
 
                   value={
                     currentPassword
                   }
 
                   onChange={
-                    (event) =>
-                      setCurrentPassword(
-                        event
-                          .target
-                          .value,
-                      )
+                    setCurrentPassword
+                  }
+
+                  visible={
+                    showCurrentPassword
+                  }
+
+                  onToggleVisibility={() =>
+                    setShowCurrentPassword(
+                      (current) =>
+                        !current,
+                    )
                   }
 
                   autoComplete="
                     current-password
                   "
-
-                  required
                 />
 
 
-                <div
+                {/* NEW PASSWORD */}
+
+                <PasswordField
+                  label="New Password"
+
+                  value={
+                    newPassword
+                  }
+
+                  onChange={
+                    setNewPassword
+                  }
+
+                  visible={
+                    showNewPassword
+                  }
+
+                  onToggleVisibility={() =>
+                    setShowNewPassword(
+                      (current) =>
+                        !current,
+                    )
+                  }
+
+                  autoComplete="
+                    new-password
+                  "
+                />
+
+
+                {/* CONFIRM PASSWORD */}
+
+                <PasswordField
+                  label="
+                    Confirm New Password
+                  "
+
+                  value={
+                    confirmPassword
+                  }
+
+                  onChange={
+                    setConfirmPassword
+                  }
+
+                  visible={
+                    showConfirmPassword
+                  }
+
+                  onToggleVisibility={() =>
+                    setShowConfirmPassword(
+                      (current) =>
+                        !current,
+                    )
+                  }
+
+                  autoComplete="
+                    new-password
+                  "
+                />
+
+
+                <p
                   className="
-                    grid
-                    gap-5
-                    md:grid-cols-2
+                    text-xs
+                    text-white/35
                   "
                 >
-
-                  <Input
-                    label="
-                      New Password
-                    "
-
-                    type="password"
-
-                    value={
-                      newPassword
-                    }
-
-                    onChange={
-                      (event) =>
-                        setNewPassword(
-                          event
-                            .target
-                            .value,
-                        )
-                    }
-
-                    autoComplete="
-                      new-password
-                    "
-
-                    required
-                  />
+                  Password must contain
+                  at least 8 characters.
+                </p>
 
 
-                  <Input
-                    label="
-                      Confirm New Password
-                    "
-
-                    type="password"
-
-                    value={
-                      confirmPassword
-                    }
-
-                    onChange={
-                      (event) =>
-                        setConfirmPassword(
-                          event
-                            .target
-                            .value,
-                        )
-                    }
-
-                    autoComplete="
-                      new-password
-                    "
-
-                    required
-                  />
-
-                </div>
-
+                {/* MODAL BUTTONS */}
 
                 <div
                   className="
                     flex
-                    justify-end
+                    flex-col-reverse
+                    gap-3
                     border-t
                     border-white/8
                     pt-5
+                    sm:flex-row
+                    sm:justify-end
                   "
                 >
+
+                  <Button
+                    type="button"
+
+                    variant="secondary"
+
+                    onClick={
+                      closePasswordModal
+                    }
+
+                    disabled={
+                      passwordSaving
+                    }
+                  >
+                    Cancel
+                  </Button>
+
 
                   <Button
                     type="submit"
@@ -1648,96 +2530,251 @@ export function MemberSettingsPage() {
 
               </form>
 
-            </Card>
-
-
-            {/* ==================================================
-                ACCOUNT STATUS - READ ONLY
-            ================================================== */}
-
-            <Card className="p-6 md:p-8">
-
-              <div
-                className="
-                  flex
-                  flex-col
-                  gap-4
-                  md:flex-row
-                  md:items-center
-                  md:justify-between
-                "
-              >
-
-                <div>
-
-                  <p
-                    className="
-                      text-xs
-                      uppercase
-                      tracking-widest
-                      text-red
-                      font-mono
-                      mb-1
-                    "
-                  >
-                    Account Status
-                  </p>
-
-
-                  <h2
-                    className="
-                      font-display
-                      text-2xl
-                      font-black
-                      uppercase
-                      text-white
-                    "
-                  >
-                    Member Account
-                  </h2>
-
-
-                  <p
-                    className="
-                      text-sm
-                      text-white/45
-                      mt-1
-                      max-w-2xl
-                    "
-                  >
-                    Your account status
-                    is managed by
-                    The DGym administration.
-                  </p>
-
-                </div>
-
-
-                <Badge
-                  variant={
-                    profile.is_active
-                      ? 'success'
-                      : 'danger'
-                  }
-
-                  dot
-
-                  size="md"
-                >
-                  {profile.is_active
-                    ? 'ACTIVE'
-                    : 'INACTIVE'}
-                </Badge>
-
-              </div>
-
-            </Card>
+            </div>
 
           </div>
 
-        ) : null}
+        )}
 
       </div>
     </>
+  )
+}
+
+
+// ======================================================
+// PASSWORD INPUT WITH EYE ICON
+// ======================================================
+
+interface PasswordFieldProps {
+  label: string
+
+  value: string
+
+  onChange:
+    (
+      value: string,
+    ) => void
+
+  visible: boolean
+
+  onToggleVisibility:
+    () => void
+
+  autoComplete?: string
+}
+
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggleVisibility,
+  autoComplete,
+}: PasswordFieldProps) {
+  return (
+    <div>
+
+      <label
+        className="
+          mb-2
+          block
+          text-xs
+          font-medium
+          uppercase
+          tracking-wider
+          text-white/45
+        "
+      >
+        {label}
+      </label>
+
+
+      <div className="relative">
+
+        <input
+          type={
+            visible
+              ? 'text'
+              : 'password'
+          }
+
+          value={
+            value
+          }
+
+          onChange={
+            (event) =>
+              onChange(
+                event
+                  .target
+                  .value,
+              )
+          }
+
+          autoComplete={
+            autoComplete
+          }
+
+          required
+
+          className="
+            w-full
+            rounded-lg
+            border
+            border-white/10
+            bg-black/30
+            px-4
+            py-3
+            pr-12
+            text-sm
+            text-white
+            outline-none
+            transition
+            placeholder:text-white/20
+            focus:border-red/50
+            focus:ring-1
+            focus:ring-red/25
+          "
+        />
+
+
+        {/* EYE ICON */}
+
+        <button
+          type="button"
+
+          onClick={
+            onToggleVisibility
+          }
+
+          aria-label={
+            visible
+              ? `Hide ${label}`
+              : `Show ${label}`
+          }
+
+          title={
+            visible
+              ? 'Hide password'
+              : 'Show password'
+          }
+
+          className="
+            absolute
+            right-3
+            top-1/2
+            flex
+            h-8
+            w-8
+            -translate-y-1/2
+            items-center
+            justify-center
+            rounded-md
+            text-white/35
+            transition
+            hover:bg-white/5
+            hover:text-white
+          "
+        >
+
+          {visible ? (
+
+            /* EYE OFF */
+
+            <svg
+              className="
+                h-5
+                w-5
+              "
+
+              fill="none"
+
+              stroke="currentColor"
+
+              viewBox="0 0 24 24"
+            >
+
+              <path
+                strokeLinecap="round"
+
+                strokeLinejoin="round"
+
+                strokeWidth={1.6}
+
+                d="
+                  M3 3
+                  l18 18
+                  M10.6 10.6
+                  a2 2 0 002.8 2.8
+                  M9.9 4.24
+                  A10.94 10.94 0 0112 4
+                  c5 0 9 4 10 8
+                  a11.4 11.4 0 01-2.3 4.2
+                  M6.6 6.6
+                  A11.2 11.2 0 002 12
+                  c1 4 5 8 10 8
+                  a10.8 10.8 0 004.1-.8
+                "
+              />
+
+            </svg>
+
+          ) : (
+
+            /* EYE */
+
+            <svg
+              className="
+                h-5
+                w-5
+              "
+
+              fill="none"
+
+              stroke="currentColor"
+
+              viewBox="0 0 24 24"
+            >
+
+              <path
+                strokeLinecap="round"
+
+                strokeLinejoin="round"
+
+                strokeWidth={1.6}
+
+                d="
+                  M2 12
+                  s3.5-7
+                  10-7
+                  10 7
+                  10 7
+                  -3.5 7
+                  -10 7
+                  S2 12
+                  2 12z
+                "
+              />
+
+
+              <circle
+                cx="12"
+                cy="12"
+                r="3"
+
+                strokeWidth={1.6}
+              />
+
+            </svg>
+
+          )}
+
+        </button>
+
+      </div>
+
+    </div>
   )
 }
