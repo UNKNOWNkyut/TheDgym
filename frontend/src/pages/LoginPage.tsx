@@ -58,10 +58,10 @@ export function LoginPage() {
     setShowLoading(true)
 
     try {
-      // Keep the loading screen visible for at least 1.2 seconds
+      // Keep loading ring visible for a snappy, polished transition
       const [loggedInUser] = await Promise.all([
         login({ email, password }),
-        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
       const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : '/dashboard'

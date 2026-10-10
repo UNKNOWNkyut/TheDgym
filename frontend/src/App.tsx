@@ -180,23 +180,35 @@ function PageFallback() {
 
 
 function IntroLoader() {
-  const [visible, setVisible] = useState(true)
+  const [visible, setVisible] = useState(() => {
+    try {
+      return !sessionStorage.getItem('dgym_intro_shown')
+    } catch {
+      return true
+    }
+  })
   const [fading, setFading] = useState(false)
 
   useEffect(() => {
+    if (!visible) return
+
+    try {
+      sessionStorage.setItem('dgym_intro_shown', 'true')
+    } catch {}
+
     const fadeTimer = window.setTimeout(() => {
       setFading(true)
-    }, 1500)
+    }, 1200)
 
     const removeTimer = window.setTimeout(() => {
       setVisible(false)
-    }, 2000)
+    }, 1600)
 
     return () => {
       window.clearTimeout(fadeTimer)
       window.clearTimeout(removeTimer)
     }
-  }, [])
+  }, [visible])
 
   if (!visible) return null
 

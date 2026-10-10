@@ -77,13 +77,18 @@ export function ManageAnalyticsPage() {
   useGSAP(
     () => {
       if (!isLoading) {
-        gsap.from('.analytics-card', {
-          opacity: 0,
-          y: 20,
-          duration: 0.6,
-          stagger: 0.08,
-          ease: 'power2.out',
-        })
+        gsap.fromTo(
+          '.analytics-card',
+          { opacity: 0, y: 15 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.5,
+            stagger: 0.06,
+            ease: 'power2.out',
+            clearProps: 'opacity,transform',
+          },
+        )
       }
     },
     { dependencies: [isLoading], scope: containerRef },
@@ -106,6 +111,13 @@ export function ManageAnalyticsPage() {
     ...(analytics?.hourly_distribution.map((h) => h.count) || [1]),
     1,
   )
+
+  const retentionPct = churn?.overall_retention_rate_pct ?? 0
+  const isHealthy = retentionPct >= 75
+  const isWarning = retentionPct >= 50 && retentionPct < 75
+  const retentionStatusLabel = isHealthy ? 'Healthy' : isWarning ? 'Moderate' : 'Attention Needed'
+  const retentionStatusColor = isHealthy ? 'text-emerald-400' : isWarning ? 'text-amber-400' : 'text-red-400'
+  const retentionDotColor = isHealthy ? 'bg-emerald-400' : isWarning ? 'bg-amber-400' : 'bg-red-400'
 
   return (
     <div ref={containerRef} className="space-y-8 py-4">
@@ -167,9 +179,9 @@ export function ManageAnalyticsPage() {
             <span className="text-3xl font-black text-white font-mono">
               {churn?.overall_retention_rate_pct ?? '--'}%
             </span>
-            <span className="text-xs text-emerald-400 font-mono font-medium flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Healthy
+            <span className={`text-xs font-mono font-medium flex items-center gap-1.5 ${retentionStatusColor}`}>
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${retentionDotColor} ${!isHealthy ? 'animate-pulse' : ''}`} />
+              {retentionStatusLabel}
             </span>
           </div>
           <span className="text-xs text-white/40 block mt-2">
@@ -248,32 +260,49 @@ export function ManageAnalyticsPage() {
           </div>
 
           {/* Bar Chart Container */}
-          <div className="h-44 flex items-end gap-1.5 pt-4">
-            {analytics?.hourly_distribution.map((item) => {
-              const heightPct = Math.max(12, Math.round((item.count / maxHourlyCount) * 100))
-              const isPeak = item.count === maxHourlyCount && item.count > 0
-              return (
-                <div key={item.hour} className="flex-1 flex flex-col items-center gap-1 group relative">
-                  {/* Tooltip */}
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 bg-white/90 text-black text-[10px] font-mono px-1.5 py-0.5 rounded shadow pointer-events-none z-10 whitespace-nowrap">
-                    {item.count} check-ins
-                  </div>
-                  {/* Bar */}
+          <div className="h-48 w-full pt-4 flex flex-col justify-end">
+            <div className="h-36 w-full flex items-end gap-1.5 sm:gap-2">
+              {analytics?.hourly_distribution.map((item) => {
+                const heightPct = item.count > 0
+                  ? Math.max(12, Math.round((item.count / maxHourlyCount) * 100))
+                  : 4
+                const isPeak = item.count === maxHourlyCount && item.count > 0
+                return (
                   <div
-                    style={{ height: `${heightPct}%` }}
-                    className={`w-full rounded-t transition-all ${
-                      isPeak
-                        ? 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]'
-                        : 'bg-white/20 group-hover:bg-white/40'
-                    }`}
-                  />
-                  {/* Label (Show alternating on small screens) */}
-                  <span className="text-[9px] font-mono text-white/30 truncate mt-1">
-                    {item.hour % 2 === 0 ? item.hour_label.split(' ')[0] : ''}
+                    key={item.hour}
+                    className="flex-1 h-full flex flex-col justify-end items-center group relative cursor-pointer"
+                  >
+                    {/* Tooltip */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-all duration-150 absolute -top-8 bg-zinc-900 border border-white/20 text-white text-[10px] font-mono px-2 py-0.5 rounded shadow-lg pointer-events-none z-20 whitespace-nowrap">
+                      <span className="text-white/60">{item.hour_label}:</span> <strong className="text-red-400">{item.count}</strong> check-in{item.count !== 1 ? 's' : ''}
+                    </div>
+
+                    {/* Bar */}
+                    <div
+                      style={{ height: `${heightPct}%` }}
+                      className={`w-full rounded-t transition-all duration-300 ${
+                        isPeak
+                          ? 'bg-red-500 shadow-[0_0_14px_rgba(239,68,68,0.7)]'
+                          : item.count > 0
+                          ? 'bg-white/25 group-hover:bg-red-500/80'
+                          : 'bg-white/5 group-hover:bg-white/10'
+                      }`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* X-Axis Labels */}
+            <div className="w-full flex items-center gap-1.5 sm:gap-2 mt-2 pt-2 border-t border-white/5">
+              {analytics?.hourly_distribution.map((item) => (
+                <div key={item.hour} className="flex-1 text-center">
+                  <span className="text-[10px] font-mono text-white/40 block truncate">
+                    {item.hour % 2 === 0 ? item.hour_label.replace(' ', '') : ''}
                   </span>
                 </div>
-              )
-            })}
+              ))}
+            </div>
           </div>
         </div>
 
@@ -532,16 +561,25 @@ export function ManageAnalyticsPage() {
                         </td>
 
                         {/* Risk Factors */}
-                        <td className="py-3.5 px-4 max-w-xs">
-                          <div className="flex flex-wrap gap-1">
+                        <td className="py-3.5 px-4 max-w-sm">
+                          <div className="flex flex-col gap-1">
                             {m.top_risk_factors.slice(0, 2).map((factor, idx) => (
-                              <span
+                              <div
                                 key={idx}
-                                className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/5 text-[10px] text-white/50 truncate max-w-[200px]"
+                                className="inline-flex items-center gap-1.5 text-[11px] text-white/60 font-mono"
                                 title={factor}
                               >
-                                {factor}
-                              </span>
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    m.risk_tier === 'HIGH'
+                                      ? 'bg-red-400'
+                                      : m.risk_tier === 'MEDIUM'
+                                      ? 'bg-amber-400'
+                                      : 'bg-emerald-400'
+                                  }`}
+                                />
+                                <span className="truncate max-w-[280px]">{factor}</span>
+                              </div>
                             ))}
                           </div>
                         </td>

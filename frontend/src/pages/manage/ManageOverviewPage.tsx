@@ -66,12 +66,12 @@ export function ManageOverviewPage() {
         </div>
 
         {/* Quick Links */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           <Link
             to="/manage/members"
-            className="group p-6 rounded-xl border border-white/8 bg-surface hover:border-red/30 hover:bg-surface-2 transition-all"
+            className="group p-5 rounded-xl border border-white/8 bg-surface hover:border-red/30 hover:bg-surface-2 transition-all"
           >
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-3">
               <div className="p-2 rounded-lg bg-red/10 border border-red/20 text-red">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -82,19 +82,19 @@ export function ManageOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <h2 className="font-display text-lg font-bold uppercase tracking-wide text-white mb-1">
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
               Member Registry
             </h2>
-            <p className="text-sm text-white/50">
-              Search, register, and manage all gym members. Assign membership plans and track statuses.
+            <p className="text-xs text-white/50">
+              Search, register, and manage member profiles and active plans.
             </p>
           </Link>
 
           <Link
             to="/manage/plans"
-            className="group p-6 rounded-xl border border-white/8 bg-surface hover:border-red/30 hover:bg-surface-2 transition-all"
+            className="group p-5 rounded-xl border border-white/8 bg-surface hover:border-red/30 hover:bg-surface-2 transition-all"
           >
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-3">
               <div className="p-2 rounded-lg bg-red/10 border border-red/20 text-red">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -105,11 +105,57 @@ export function ManageOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <h2 className="font-display text-lg font-bold uppercase tracking-wide text-white mb-1">
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
               Membership Plans
             </h2>
-            <p className="text-sm text-white/50">
-              View and manage membership tiers — Day Pass, Monthly, Quarterly, Annual, and Student plans.
+            <p className="text-xs text-white/50">
+              Manage pricing tiers — Day Pass, Monthly, and Student passes.
+            </p>
+          </Link>
+
+          <Link
+            to="/manage/analytics"
+            className="group p-5 rounded-xl border border-white/8 bg-surface hover:border-red/30 hover:bg-surface-2 transition-all"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="p-2 rounded-lg bg-red/10 border border-red/20 text-red">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <svg className="w-4 h-4 text-white/20 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
+              Retention & Analytics
+            </h2>
+            <p className="text-xs text-white/50">
+              Track gym traffic, peak dwell time, and XGBoost churn forecasts.
+            </p>
+          </Link>
+
+          <Link
+            to="/manage/visits"
+            className="group p-5 rounded-xl border border-white/8 bg-surface hover:border-red/30 hover:bg-surface-2 transition-all"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="p-2 rounded-lg bg-red/10 border border-red/20 text-red">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <svg className="w-4 h-4 text-white/20 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
+              Check-In Visits
+            </h2>
+            <p className="text-xs text-white/50">
+              Log daily athlete attendance and monitor active occupancy.
             </p>
           </Link>
         </div>

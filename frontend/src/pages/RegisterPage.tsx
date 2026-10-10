@@ -57,7 +57,7 @@ export function RegisterPage() {
     setShowLoading(true)
 
     try {
-      // Keep the loading screen visible for at least 3 seconds
+      // Keep loading ring visible for a snappy, polished transition
       await Promise.all([
         register({
           full_name: fullName.trim(),
@@ -65,7 +65,7 @@ export function RegisterPage() {
           phone: phone.trim() || undefined,
           password,
         }),
-        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
       navigate('/dashboard', { replace: true })
