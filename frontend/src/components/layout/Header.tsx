@@ -153,16 +153,8 @@ export function Header() {
           <div className="hidden md:flex items-center gap-4">
             {isAuthenticated && user ? (
               <div className="flex items-center gap-3">
-                {/* Action button next to avatar */}
-                {isGymMember ? (
-                  <Link
-                    to={isStaffOrAdmin ? '/manage' : '/dashboard'}
-                    className="text-xs font-semibold px-4 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/30 text-white transition-all duration-150 flex items-center gap-1.5"
-                  >
-                    <span>{isStaffOrAdmin ? 'Management Hub' : 'Dashboard'}</span>
-                    <span className="text-white/40">→</span>
-                  </Link>
-                ) : (
+                {/* Non-members have Join Now next to avatar; members access dashboard via avatar dropdown */}
+                {!isGymMember && (
                   <Link
                     to="/membership"
                     className="text-xs font-semibold px-4 py-2 rounded-lg bg-red text-white hover:bg-red-hover hover:shadow-[0_0_20px_rgba(229,32,26,0.35)] transition-all duration-150"
