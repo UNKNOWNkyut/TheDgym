@@ -1,4 +1,6 @@
+import secrets
 from datetime import timedelta
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,8 +9,16 @@ from app.config import settings
 from app.core.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.database import get_db
+from app.models.member import Member, MemberStatus
 from app.models.user import User, UserRole
-from app.schemas.auth import TokenResponse, UserLogin, UserRegister, UserResponse
+from app.schemas.auth import (
+    GoogleLoginRequest,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+)
+from app.seed_members import generate_member_code
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -90,6 +100,126 @@ async def login(
         )
 
     # Generate token
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
+    access_token = create_access_token(token_data)
+
+    # Set httpOnly cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=settings.ENVIRONMENT == "production",
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+async def google_auth(
+    payload: GoogleLoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Authenticate or register a user using Google OAuth ID Token (JWT).
+    Verifies token with Google's public tokeninfo service, extracts profile,
+    and returns a DGym JWT access token.
+    """
+    token = payload.credential.strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google credential token is required.",
+        )
+
+    # 1. Verify token with Google's public tokeninfo endpoint
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": token},
+            )
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired Google token.",
+                )
+            google_data = resp.json()
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to connect to Google authentication service: {str(e)}",
+        )
+
+    # 2. Check audience if GOOGLE_CLIENT_ID is configured in environment
+    if settings.GOOGLE_CLIENT_ID:
+        token_aud = google_data.get("aud")
+        if token_aud != settings.GOOGLE_CLIENT_ID:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google token was not issued for this application client.",
+            )
+
+    email = (google_data.get("email") or "").lower().strip()
+    full_name = (google_data.get("name") or "").strip() or email.split("@")[0].title()
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google account did not provide an email address.",
+        )
+
+    # 3. Check if user already exists
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Create user account
+        random_pwd = secrets.token_urlsafe(32)
+        user = User(
+            email=email,
+            hashed_password=hash_password(random_pwd),
+            full_name=full_name,
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+        # Ensure Member record exists
+        stmt_mem = select(Member).where(Member.email == email)
+        mem_res = await db.execute(stmt_mem)
+        if not mem_res.scalar_one_or_none():
+            name_parts = full_name.split()
+            first_name = name_parts[0] if name_parts else "Member"
+            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "Client"
+            member_code = await generate_member_code(db)
+            new_mem = Member(
+                member_code=member_code,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                status=MemberStatus.ACTIVE,
+                is_active=True,
+            )
+            db.add(new_mem)
+            await db.commit()
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated. Please contact gym administration.",
+        )
+
+    # 4. Generate DGym JWT access token
     token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
     access_token = create_access_token(token_data)
 

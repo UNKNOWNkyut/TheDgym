@@ -17,6 +17,10 @@ class UserLogin(BaseModel):
     password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    credential: str = Field(..., description="Google ID Token JWT")
+
+
 class UserCreateAdmin(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)

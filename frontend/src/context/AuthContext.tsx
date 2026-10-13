@@ -233,6 +233,22 @@ export function AuthProvider({
     }
 
 
+  const loginWithGoogle = async (credential: string): Promise<User> => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await api.loginWithGoogle(credential)
+      setUser(response.user)
+      return response.user
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed'
+      setError(message)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const logout =
     async (): Promise<void> => {
 
@@ -271,6 +287,8 @@ export function AuthProvider({
         login,
 
         register,
+
+        loginWithGoogle,
 
         logout,
 

@@ -145,6 +145,19 @@ export const api = {
     return data
   },
 
+  async loginWithGoogle(credential: string): Promise<TokenResponse> {
+    const data = await request<TokenResponse>('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    })
+
+    if (data?.access_token) {
+      setStoredToken(data.access_token)
+    }
+
+    return data
+  },
+
   async register(credentials: RegisterCredentials): Promise<TokenResponse> {
     const data = await request<TokenResponse>('/api/auth/register', {
       method: 'POST',

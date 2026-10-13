@@ -44,6 +44,7 @@ export interface AuthContextType {
     credentials: RegisterCredentials,
   ) => Promise<User>
 
+  loginWithGoogle: (credential: string) => Promise<User>
   logout: () => Promise<void>
 
   refreshUser:
