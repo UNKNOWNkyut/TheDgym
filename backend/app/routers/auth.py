@@ -50,9 +50,13 @@ async def _build_user_response(user: User, db: AsyncSession) -> UserResponse:
         now = datetime.now(timezone.utc)
         active_m = None
         for m in (member.memberships or []):
-            if m.status == MembershipStatus.ACTIVE and m.end_date >= now:
-                active_m = m
-                break
+            end_d = m.end_date
+            if end_d and m.status == MembershipStatus.ACTIVE:
+                if end_d.tzinfo is None:
+                    end_d = end_d.replace(tzinfo=timezone.utc)
+                if end_d >= now:
+                    active_m = m
+                    break
 
         if active_m:
             has_active_membership = True

@@ -20,6 +20,10 @@ import {
 } from '@/services/accountApi'
 
 import {
+  NotificationBell,
+} from '@/components/notifications/NotificationBell'
+
+import {
   Badge,
 } from '@/components/ui/Badge'
 
@@ -991,83 +995,82 @@ export function MemberSettingsPage() {
             "
           >
 
-            <button
-              type="button"
-
-              onClick={() =>
-                navigate(
-                  '/dashboard',
-                )
-              }
-
-              aria-label="
-                Back to dashboard
-              "
-            >
-
-              <img
-                src="/assets/logos/thedgym.png"
-
-                alt="The DGym"
-
-                className="
-                  h-9
-                  w-auto
-                  object-contain
-                  md:h-10
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    '/dashboard',
+                  )
+                }
+                aria-label="
+                  Back to dashboard
                 "
-              />
-
-            </button>
-
-
-            <Button
-              type="button"
-
-              variant="secondary"
-
-              size="sm"
-
-              onClick={() =>
-                navigate(
-                  '/dashboard',
-                )
-              }
-            >
-
-              <svg
-                className="
-                  h-4
-                  w-4
-                "
-
-                fill="none"
-
-                stroke="currentColor"
-
-                viewBox="0 0 24 24"
               >
-
-                <path
-                  strokeLinecap="round"
-
-                  strokeLinejoin="round"
-
-                  strokeWidth={1.8}
-
-                  d="
-                    M15 19
-                    l-7-7
-                    7-7
+                <img
+                  src="/assets/logos/thedgym.png"
+                  alt="The DGym"
+                  className="
+                    h-9
+                    w-auto
+                    object-contain
+                    md:h-10
                   "
                 />
+              </button>
 
-              </svg>
+              {user && user.role === 'member' && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-medium text-white/70 hover:text-white transition-all cursor-pointer"
+                  title="Return to Public Website"
+                >
+                  <svg className="w-3.5 h-3.5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  <span>Back to Home</span>
+                </button>
+              )}
+            </div>
 
+            <div className="flex items-center gap-3">
+              {user && <NotificationBell user={user} />}
 
-              Back to Dashboard
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  navigate(
+                    '/dashboard',
+                  )
+                }
+              >
+                <svg
+                  className="
+                    h-4
+                    w-4
+                  "
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.8}
+                    d="
+                      M15 19
+                      l-7-7
+                      7-7
+                    "
+                  />
+                </svg>
 
-            </Button>
+                Back to Dashboard
+              </Button>
+            </div>
 
           </div>
 

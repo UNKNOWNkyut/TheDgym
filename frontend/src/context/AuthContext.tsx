@@ -18,6 +18,7 @@ import {
   getStoredToken,
   clearStoredToken,
 } from '@/services/api'
+import { QuarterRing } from '@/components/ui/quarter-ring'
 
 
 const AuthContext =
@@ -45,6 +46,14 @@ export function AuthProvider({
   ] =
     useState<boolean>(
       true,
+    )
+
+  const [
+    isLoggingOut,
+    setIsLoggingOut,
+  ] =
+    useState<boolean>(
+      false,
     )
 
   const [
@@ -267,18 +276,14 @@ export function AuthProvider({
 
   const logout =
     async (): Promise<void> => {
-
-      setIsLoading(true)
-
-
+      setIsLoggingOut(true)
       try {
         await api.logout()
-
+        // Brief loading animation duration for smooth feedback
+        await new Promise((resolve) => setTimeout(resolve, 750))
       } finally {
-
         setUser(null)
-
-        setIsLoading(false)
+        setIsLoggingOut(false)
       }
     }
 
@@ -298,6 +303,8 @@ export function AuthProvider({
 
         isLoading,
 
+        isLoggingOut,
+
         error,
 
         login,
@@ -316,6 +323,26 @@ export function AuthProvider({
       }}
     >
       {children}
+      {isLoggingOut && (
+        <div
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md text-white transition-opacity duration-300 animate-fade-in"
+          role="status"
+          aria-live="polite"
+        >
+          <img
+            src="/assets/logos/thedgym.png"
+            alt="The DGym"
+            className="mb-6 h-20 w-auto object-contain drop-shadow-[0_4px_16px_rgba(229,32,26,0.25)]"
+          />
+          <QuarterRing className="size-10 text-red" />
+          <p className="mt-4 font-mono text-xs font-bold tracking-widest uppercase text-white/80">
+            SIGNING OUT...
+          </p>
+          <p className="text-[11px] text-white/40 mt-1 font-mono">
+            Securing your athlete session
+          </p>
+        </div>
+      )}
     </AuthContext.Provider>
   )
 }

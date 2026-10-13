@@ -39,6 +39,7 @@ export interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  isLoggingOut: boolean
   error: string | null
 
   login: (

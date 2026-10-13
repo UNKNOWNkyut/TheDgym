@@ -12,8 +12,9 @@ import { QuarterRing } from '@/components/ui/quarter-ring'
 const DEMO_ACCOUNTS = [
   { role: 'Admin', email: 'admin@thedgym.com', pass: 'admin12345', badge: 'Full Access' },
   { role: 'Staff', email: 'staff@thedgym.com', pass: 'staff12345', badge: 'Front Desk' },
-  { role: 'Trainer', email: 'trainer@thedgym.com', pass: 'trainer12345', badge: 'Coaching' },
-  { role: 'Member', email: 'member@thedgym.com', pass: 'member12345', badge: 'Client' },
+  { role: 'Trainer', email: 'trainer@thedgym.com', pass: 'trainer12345', badge: 'Coach' },
+  { role: 'Active Member', email: 'member@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
+  { role: 'Registered User', email: 'user@thedgym.com', pass: 'user12345', badge: 'No Plan' },
 ]
 
 export function LoginPage() {
@@ -363,19 +364,29 @@ export function LoginPage() {
               One-Click Role Demo Logins
             </p>
             <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((acc) => (
+              {DEMO_ACCOUNTS.map((acc, idx) => (
                 <button
                   key={acc.role}
                   type="button"
                   onClick={() => fillDemo(acc.email, acc.pass)}
                   disabled={isLoading || showLoading}
-                  className="p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group disabled:opacity-50"
+                  className={`p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group disabled:opacity-50 cursor-pointer ${
+                    idx === 4 ? 'col-span-2' : ''
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-white group-hover:text-red transition-colors">
                       {acc.role}
                     </span>
-                    <span className="text-[9px] uppercase tracking-wider text-white/30 px-1.5 py-0.5 rounded bg-white/5">
+                    <span
+                      className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-mono ${
+                        acc.badge === 'Verified Plan'
+                          ? 'bg-green-500/10 text-green-400 border border-green-500/25'
+                          : acc.badge === 'No Plan'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
+                          : 'bg-white/5 text-white/40'
+                      }`}
+                    >
                       {acc.badge}
                     </span>
                   </div>

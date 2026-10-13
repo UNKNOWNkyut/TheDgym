@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/Badge'
 import {
   MemberAccountMenu,
 } from '@/components/layout/MemberAccountMenu'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 import type {
   UserRole,
@@ -352,12 +353,21 @@ export function ManagementLayout() {
           return true
         }
 
-        return (
-          user &&
-          item.roles.includes(
+        if (
+          !user ||
+          !item.roles.includes(
             user.role,
           )
-        )
+        ) {
+          return false
+        }
+
+        // Hide Book a Coach for non-members who have not availed an active plan
+        if (item.href === '/dashboard/book') {
+          return Boolean(user.has_active_membership)
+        }
+
+        return true
       },
     )
 
@@ -614,37 +624,44 @@ export function ManagementLayout() {
 
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-white/8 bg-surface">
-          <button
-            onClick={() =>
-              setSidebarOpen(
-                true,
-              )
-            }
-            className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <header className="flex items-center justify-between px-4 md:px-8 py-3.5 border-b border-white/8 bg-surface/50 backdrop-blur-md sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              aria-label="Open menu"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
 
-          <img
-            src="/assets/logos/thedgym.png"
-            alt="The DGym"
-            className="h-8 w-auto object-contain"
-          />
+            {/* Back to Home - Visible ONLY for member or registered user, NOT for admin, staff, or trainer */}
+            {user && user.role === 'member' && (
+              <Link
+                to="/"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/25 text-xs font-medium text-white/70 hover:text-white transition-all duration-150 group"
+                title="Return to Public Website"
+              >
+                <svg
+                  className="w-3.5 h-3.5 text-white/40 group-hover:text-white transition-transform group-hover:-translate-x-0.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Back to Home</span>
+              </Link>
+            )}
+          </div>
 
-          <div className="w-8" />
+          {/* Right Side: Notification Bell for all accounts */}
+          <div className="flex items-center gap-3">
+            {user && (
+              <NotificationBell user={user} />
+            )}
+          </div>
         </header>
 
 

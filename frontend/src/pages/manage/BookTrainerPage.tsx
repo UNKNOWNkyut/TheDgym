@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import { Navigate } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
+import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import type { TrainerProfile, PTSession } from '@/types/auth'
 
@@ -47,7 +49,12 @@ const STATUS_BADGES: Record<string, { label: string; style: string }> = {
 }
 
 export function BookTrainerPage() {
+  const { user } = useAuth()
   const [trainers, setTrainers] = useState<TrainerProfile[]>([])
+
+  if (user && user.role === 'member' && !user.has_active_membership) {
+    return <Navigate to="/dashboard" replace />
+  }
   const [myBookings, setMyBookings] = useState<PTSession[]>([])
   const [selectedTrainer, setSelectedTrainer] = useState<number | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>('')
