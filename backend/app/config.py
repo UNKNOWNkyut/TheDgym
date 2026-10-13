@@ -1,5 +1,18 @@
 import os
+from pathlib import Path
 from typing import List
+
+try:
+    from dotenv import load_dotenv
+
+    # Search for .env file in cwd, backend directory, or root directory
+    base_dir = Path(__file__).resolve().parent.parent
+    for p in [Path(".env"), base_dir / ".env", base_dir.parent / ".env"]:
+        if p.is_file():
+            load_dotenv(dotenv_path=p, override=False)
+            break
+except ImportError:
+    pass
 
 
 class Settings:
@@ -20,6 +33,7 @@ class Settings:
 
     # Google OAuth Settings
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
     # CORS
     CORS_ORIGINS: List[str] = [
