@@ -66,7 +66,7 @@ export function LoginPage() {
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
-      const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : '/dashboard'
+      const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : (loggedInUser.has_active_membership ? '/dashboard' : '/')
       const dest = (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login')) ? from : defaultDest
 
       navigate(dest, { replace: true })
@@ -84,7 +84,7 @@ export function LoginPage() {
         loginWithGoogle(credential),
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
-      const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : '/dashboard'
+      const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : (loggedInUser.has_active_membership ? '/dashboard' : '/')
       const dest = (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login')) ? from : defaultDest
       navigate(dest, { replace: true })
     } catch {

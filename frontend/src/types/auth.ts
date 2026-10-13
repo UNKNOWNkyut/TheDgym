@@ -10,6 +10,10 @@ export interface User {
   role: UserRole
   is_active: boolean
   created_at: string
+  has_active_membership?: boolean
+  membership_status?: 'active' | 'inactive' | 'suspended' | 'expired' | 'none'
+  plan_name?: string | null
+  profile_picture_url?: string | null
 }
 
 export interface LoginCredentials {
@@ -22,6 +26,7 @@ export interface RegisterCredentials {
   password: string
   full_name: string
   phone?: string
+  plan_slug?: string
 }
 
 export interface TokenResponse {
@@ -45,6 +50,7 @@ export interface AuthContextType {
   ) => Promise<User>
 
   loginWithGoogle: (credential: string) => Promise<User>
+  availPlan: (planSlug: string) => Promise<User>
   logout: () => Promise<void>
 
   refreshUser:

@@ -171,6 +171,13 @@ export const api = {
     return data
   },
 
+  async availPlan(planSlug: string): Promise<User> {
+    return request<User>('/api/auth/avail-plan', {
+      method: 'POST',
+      body: JSON.stringify({ plan_slug: planSlug }),
+    })
+  },
+
   async logout(): Promise<void> {
     try {
       await request<void>('/api/auth/logout', {

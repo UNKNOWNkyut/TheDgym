@@ -1,30 +1,21 @@
 import { type ReactNode } from 'react'
-import { Outlet, Navigate } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { ScrollProgressBar } from '@/components/layout/ScrollProgressBar'
 import { BackToTop } from '@/components/layout/BackToTop'
 import { useLenis } from '@/hooks/useLenis'
-import { useAuth } from '@/context/AuthContext'
 
 interface RootLayoutProps {
   children?: ReactNode
 }
 
 /**
- * RootLayout wraps public pages.
- * If user is authenticated, it redirects immediately to the user's dedicated dashboard portal.
- * Public website & marketing tabs are NOT visible to authenticated users.
+ * RootLayout wraps public pages (Home, About, Membership, Classes, Trainers, Contact).
+ * Accessible to both visitors and registered members alike.
  */
 export function RootLayout({ children }: RootLayoutProps) {
-  const { user, isAuthenticated, isLoading } = useAuth()
   useLenis()
-
-  // Authenticated users are prevented from seeing the public website
-  if (!isLoading && isAuthenticated && user) {
-    const destination = user.role === 'admin' || user.role === 'staff' ? '/manage' : '/dashboard'
-    return <Navigate to={destination} replace />
-  }
 
   return (
     <>

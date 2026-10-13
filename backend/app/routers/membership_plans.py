@@ -33,9 +33,8 @@ router = APIRouter(tags=["Membership Plans & Assignments"])
 @router.get("/api/plans", response_model=List[MembershipPlanResponse])
 async def list_plans(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """List all membership plans. All authenticated users can view plans."""
+    """List all membership plans. Publicly available for visitors and registration."""
     result = await db.execute(
         select(MembershipPlan)
         .order_by(MembershipPlan.sort_order.asc())
@@ -47,7 +46,6 @@ async def list_plans(
 async def get_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """Get a single membership plan by ID."""
     result = await db.execute(select(MembershipPlan).where(MembershipPlan.id == plan_id))

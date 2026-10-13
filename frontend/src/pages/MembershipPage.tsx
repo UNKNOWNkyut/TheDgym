@@ -1,25 +1,20 @@
-import { useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
+import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 
 gsap.registerPlugin(ScrollTrigger)
 
-/*
- * MEMBERSHIP PRICING NOTE:
- * Prices are [PLACEHOLDER] — actual pricing not yet verified from client.
- * Tier names (Day Pass, Monthly, Quarterly) are reasonable industry standard.
- * Do NOT present placeholders as real prices.
- */
-
 const PLANS = [
   {
     name: 'Day Pass',
-    price: null, // [PLACEHOLDER]
+    slug: 'day-pass',
+    price: null,
     period: 'per visit',
     description: 'Full gym access for one day. No commitment.',
     features: [
@@ -32,7 +27,8 @@ const PLANS = [
   },
   {
     name: 'Monthly',
-    price: null, // [PLACEHOLDER]
+    slug: 'monthly',
+    price: null,
     period: 'per month',
     description: 'Unlimited access, billed monthly. Cancel anytime.',
     features: [
@@ -46,7 +42,8 @@ const PLANS = [
   },
   {
     name: 'Quarterly',
-    price: null, // [PLACEHOLDER]
+    slug: 'quarterly',
+    price: null,
     period: 'per quarter',
     description: 'Three months upfront. Best value per session.',
     features: [
@@ -61,6 +58,11 @@ const PLANS = [
 ]
 
 export function MembershipPage() {
+  const { user, isAuthenticated, availPlan } = useAuth()
+  const navigate = useNavigate()
+  const [loadingSlug, setLoadingSlug] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
   const heroRef = useRef<HTMLDivElement>(null)
   const plansRef = useRef<HTMLDivElement>(null)
 
@@ -82,6 +84,25 @@ export function MembershipPage() {
       })
     })
   }, { scope: plansRef })
+
+  const handleAvailPlan = async (slug: string) => {
+    if (!isAuthenticated) {
+      navigate('/register')
+      return
+    }
+
+    setLoadingSlug(slug)
+    setSuccessMessage(null)
+    try {
+      await availPlan(slug)
+      setSuccessMessage('Membership plan activated successfully! Redirecting to your dashboard...')
+      setTimeout(() => {
+        navigate('/dashboard')
+      }, 1200)
+    } catch {
+      setLoadingSlug(null)
+    }
+  }
 
   return (
     <>
@@ -107,6 +128,13 @@ export function MembershipPage() {
         </div>
       </div>
 
+      {/* Success Notification */}
+      {successMessage && (
+        <div className="bg-green-500/10 border-b border-green-500/20 py-3 text-center text-sm text-green-400 font-medium animate-fade-in">
+          ✓ {successMessage}
+        </div>
+      )}
+
       {/* Pricing notice */}
       <div className="border-b border-white/8 bg-surface">
         <div className="container-dgym py-4">
@@ -128,63 +156,86 @@ export function MembershipPage() {
       {/* Plans */}
       <div ref={plansRef} className="container-dgym section-padding">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.name}
-              className={[
-                'plan-card relative flex flex-col rounded-2xl border p-8 transition-all duration-200',
-                plan.highlight
-                  ? 'bg-surface border-red/30 hover:border-red/50 shadow-[0_0_40px_rgba(229,32,26,0.1)]'
-                  : 'bg-surface border-white/8 hover:border-white/15',
-              ].join(' ')}
-            >
-              {/* Badge */}
-              {plan.badge && (
-                <div className="absolute -top-3 left-6">
-                  <Badge variant={plan.highlight ? 'red' : 'default'}>
-                    {plan.badge}
-                  </Badge>
-                </div>
-              )}
+          {PLANS.map((plan) => {
+            const isUserCurrentPlan = user?.has_active_membership && user?.plan_name?.toLowerCase().includes(plan.slug)
+            return (
+              <div
+                key={plan.name}
+                className={[
+                  'plan-card relative flex flex-col rounded-2xl border p-8 transition-all duration-200',
+                  plan.highlight
+                    ? 'bg-surface border-red/30 hover:border-red/50 shadow-[0_0_40px_rgba(229,32,26,0.1)]'
+                    : 'bg-surface border-white/8 hover:border-white/15',
+                ].join(' ')}
+              >
+                {/* Badge */}
+                {plan.badge && (
+                  <div className="absolute -top-3 left-6">
+                    <Badge variant={plan.highlight ? 'red' : 'default'}>
+                      {plan.badge}
+                    </Badge>
+                  </div>
+                )}
 
-              <div className="mb-6">
-                <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-2">
-                  {plan.name}
-                </h2>
-                {/* Price placeholder */}
-                <div className="flex items-baseline gap-2 mb-3">
-                  <span className="text-4xl font-bold text-white/20 font-mono tracking-tight">
-                    —
-                  </span>
-                  <span className="text-sm text-white/30">{plan.period}</span>
+                <div className="mb-6">
+                  <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-2">
+                    {plan.name}
+                  </h2>
+                  {/* Price placeholder */}
+                  <div className="flex items-baseline gap-2 mb-3">
+                    <span className="text-4xl font-bold text-white/20 font-mono tracking-tight">
+                      —
+                    </span>
+                    <span className="text-sm text-white/30">{plan.period}</span>
+                  </div>
+                  <p className="text-sm text-white/50 leading-relaxed">
+                    {plan.description}
+                  </p>
                 </div>
-                <p className="text-sm text-white/50 leading-relaxed">
-                  {plan.description}
-                </p>
+
+                {/* Features */}
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-3 text-sm text-white/60">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                {isAuthenticated && !user?.has_active_membership ? (
+                  <Button
+                    fullWidth
+                    variant={plan.highlight ? 'primary' : 'secondary'}
+                    loading={loadingSlug === plan.slug}
+                    disabled={loadingSlug !== null}
+                    onClick={() => handleAvailPlan(plan.slug)}
+                  >
+                    Avail This Plan
+                  </Button>
+                ) : isUserCurrentPlan ? (
+                  <Button
+                    fullWidth
+                    variant="secondary"
+                    disabled
+                  >
+                    Current Active Plan ✓
+                  </Button>
+                ) : (
+                  <Link to={isAuthenticated ? "/contact" : "/register"} className="block">
+                    <Button
+                      fullWidth
+                      variant={plan.highlight ? 'primary' : 'secondary'}
+                    >
+                      {isAuthenticated ? "Inquire Plan" : "Join Now"}
+                    </Button>
+                  </Link>
+                )}
               </div>
-
-              {/* Features */}
-              <ul className="space-y-3 mb-8 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-3 text-sm text-white/60">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5" aria-hidden="true">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <Link to="/contact" className="block">
-                <Button
-                  fullWidth
-                  variant={plan.highlight ? 'primary' : 'secondary'}
-                >
-                  Ask About This Plan
-                </Button>
-              </Link>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* All plans note */}

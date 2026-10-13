@@ -10,6 +10,7 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
     full_name: str = Field(..., min_length=2, description="Full name of the user")
     phone: Optional[str] = None
+    plan_slug: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -44,6 +45,10 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+    has_active_membership: bool = False
+    membership_status: Optional[str] = None
+    plan_name: Optional[str] = None
+    profile_picture_url: Optional[str] = None
 
     class Config:
         from_attributes = True

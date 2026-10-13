@@ -249,6 +249,22 @@ export function AuthProvider({
     }
   }
 
+  const availPlan = async (planSlug: string): Promise<User> => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const updatedUser = await api.availPlan(planSlug)
+      setUser(updatedUser)
+      return updatedUser
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to avail plan'
+      setError(message)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const logout =
     async (): Promise<void> => {
 
@@ -289,6 +305,8 @@ export function AuthProvider({
         register,
 
         loginWithGoogle,
+
+        availPlan,
 
         logout,
 
