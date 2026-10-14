@@ -30,6 +30,8 @@ import type {
   ChurnOverview,
   AtRiskMemberItem,
   MemberChurnDetail,
+  RetentionStrategy,
+  AppNotification,
 } from '@/types/auth'
 
 
@@ -643,6 +645,53 @@ export const api = {
     total_members_updated: number
   }> {
     return request('/api/churn/retrain', {
+      method: 'POST',
+    })
+  },
+
+  // ─── AI Retention Strategies & Notifications (Phase 7) ───────────────────
+
+  async generateRetentionStrategy(memberId: number): Promise<RetentionStrategy> {
+    return request<RetentionStrategy>(`/api/retention/generate/${memberId}`, {
+      method: 'POST',
+    })
+  },
+
+  async getMemberRetentionStrategy(memberId: number): Promise<RetentionStrategy | null> {
+    return request<RetentionStrategy | null>(`/api/retention/member/${memberId}`)
+  },
+
+  async dispatchRetentionOffer(payload: {
+    strategy_id?: number
+    member_id: number
+    title: string
+    message: string
+    action_text?: string
+    action_url?: string
+  }): Promise<{
+    status: string
+    message: string
+    notification_id: number
+    recipient_name: string
+  }> {
+    return request('/api/retention/dispatch-offer', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async getMyNotifications(): Promise<AppNotification[]> {
+    return request<AppNotification[]>('/api/notifications')
+  },
+
+  async markNotificationRead(notificationId: number): Promise<{ status: string; id: number; is_read: boolean }> {
+    return request(`/api/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+    })
+  },
+
+  async markAllNotificationsRead(): Promise<{ status: string; updated_count: number }> {
+    return request('/api/notifications/read-all', {
       method: 'POST',
     })
   },

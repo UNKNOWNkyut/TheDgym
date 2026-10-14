@@ -4,6 +4,7 @@ import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useAuth } from '@/context/AuthContext'
 import { Badge } from '@/components/ui/Badge'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import type { NavItem } from '@/types'
 
 const NAV_ITEMS: NavItem[] = [
@@ -162,6 +163,9 @@ export function Header() {
                     Join Now
                   </Link>
                 )}
+
+                {/* Notifications Bell */}
+                <NotificationBell user={user} />
 
                 {/* Round Profile Avatar with Dropdown */}
                 <div ref={profileDropdownRef} className="relative">
@@ -341,27 +345,32 @@ export function Header() {
             <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-white/8">
               {isAuthenticated && user ? (
                 <>
-                  <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-white/5 border border-white/10">
-                    <div className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-red flex items-center justify-center text-xs font-bold text-white shrink-0">
-                      {user.profile_picture_url ? (
-                        <img
-                          src={user.profile_picture_url}
-                          alt={user.full_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        getInitials(user.full_name)
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white truncate">{user.full_name}</p>
-                      <div className="mt-1">
-                        {isGymMember ? (
-                          <Badge variant="success" dot size="sm">ACTIVE MEMBER</Badge>
+                  <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-red flex items-center justify-center text-xs font-bold text-white shrink-0">
+                        {user.profile_picture_url ? (
+                          <img
+                            src={user.profile_picture_url}
+                            alt={user.full_name}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
-                          <Badge variant="default" dot size="sm">REGISTERED USER</Badge>
+                          getInitials(user.full_name)
                         )}
                       </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white truncate">{user.full_name}</p>
+                        <div className="mt-1">
+                          {isGymMember ? (
+                            <Badge variant="success" dot size="sm">ACTIVE MEMBER</Badge>
+                          ) : (
+                            <Badge variant="default" dot size="sm">REGISTERED USER</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <NotificationBell user={user} />
                     </div>
                   </div>
 

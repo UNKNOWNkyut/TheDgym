@@ -8,6 +8,8 @@ from app.routers.class_sessions import router as class_sessions_router
 from app.routers.pt_sessions import router as pt_sessions_router
 from app.routers.finance import router as finance_router
 from app.routers.analytics import router as analytics_router
+from app.routers.retention import router as retention_router
+from app.routers.notifications import router as notifications_router
 
 __all__ = [
     "auth_router",
@@ -20,4 +22,6 @@ __all__ = [
     "pt_sessions_router",
     "finance_router",
     "analytics_router",
+    "retention_router",
+    "notifications_router",
 ]

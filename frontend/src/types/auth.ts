@@ -429,3 +429,34 @@ export interface MemberChurnDetail {
   features: Record<string, any>
   predicted_at: string
 }
+
+export interface RetentionStrategy {
+  id: number
+  member_id: number
+  risk_tier: 'HIGH' | 'MEDIUM' | 'LOW'
+  churn_probability: number
+  urgency: 'CRITICAL' | 'HIGH' | 'MODERATE'
+  strategy_title: string
+  diagnosis_summary: string
+  tactical_action_steps: string[]
+  offer_title: string
+  offer_message: string
+  offer_action_text: string
+  offer_action_url: string
+  status: 'generated' | 'dispatched' | 'completed'
+  dispatched_at: string | null
+  created_at: string
+}
+
+export interface AppNotification {
+  id: number
+  user_id: number | null
+  member_id: number | null
+  title: string
+  message: string
+  type: 'retention' | 'offer' | 'booking' | 'announcement'
+  action_text: string | null
+  action_url: string | null
+  is_read: boolean
+  created_at: string
+}

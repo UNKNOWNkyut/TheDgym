@@ -22,6 +22,8 @@ from app.routers import (
     pt_sessions_router,
     finance_router,
     analytics_router,
+    retention_router,
+    notifications_router,
 )
 from app.seed import seed_users
 from app.seed_plans import seed_plans
@@ -126,6 +128,8 @@ app.include_router(class_sessions_router)
 app.include_router(pt_sessions_router)
 app.include_router(finance_router)
 app.include_router(analytics_router)
+app.include_router(retention_router)
+app.include_router(notifications_router)
 
 
 # =========================================================

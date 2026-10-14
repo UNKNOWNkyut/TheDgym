@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { User } from '@/types/auth'
+import { api } from '@/services/api'
 
 export interface GymNotification {
   id: string
@@ -11,10 +12,33 @@ export interface GymNotification {
   read: boolean
   actionText?: string
   actionUrl?: string
+  isServer?: boolean
 }
 
 interface NotificationBellProps {
   user: User
+}
+
+function formatRelativeTime(dateString?: string): string {
+  if (!dateString) return 'Just now'
+  try {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    if (isNaN(diffMs) || diffMs < 0) return 'Just now'
+    const diffSec = Math.floor(diffMs / 1000)
+    if (diffSec < 60) return 'Just now'
+    const diffMin = Math.floor(diffSec / 60)
+    if (diffMin < 60) return `${diffMin}m ago`
+    const diffHours = Math.floor(diffMin / 60)
+    if (diffHours < 24) return `${diffHours}h ago`
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  } catch {
+    return 'Recently'
+  }
 }
 
 export function NotificationBell({ user }: NotificationBellProps) {
@@ -109,7 +133,61 @@ export function NotificationBell({ user }: NotificationBellProps) {
     return getInitialNotifications()
   })
 
-  // Save changes to localStorage
+  // Synchronize notifications from the backend API with fallback
+  const fetchServerNotifications = useCallback(async () => {
+    try {
+      const serverNotifs = await api.getMyNotifications()
+      if (serverNotifs && serverNotifs.length > 0) {
+        const mapped: GymNotification[] = serverNotifs.map((n) => ({
+          id: String(n.id),
+          title: n.title,
+          message: n.message,
+          type: n.type,
+          timestamp: formatRelativeTime(n.created_at),
+          read: n.is_read,
+          actionText: n.action_text || undefined,
+          actionUrl: n.action_url || undefined,
+          isServer: true,
+        }))
+        setNotifications(mapped)
+      } else {
+        // Fallback to local storage or initial defaults
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          try {
+            setNotifications(JSON.parse(saved))
+          } catch {
+            setNotifications(getInitialNotifications())
+          }
+        } else {
+          setNotifications(getInitialNotifications())
+        }
+      }
+    } catch {
+      // Backend offline or error fallback to saved
+      try {
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          setNotifications(JSON.parse(saved))
+        }
+      } catch {}
+    }
+  }, [storageKey])
+
+  useEffect(() => {
+    fetchServerNotifications()
+    const interval = window.setInterval(fetchServerNotifications, 30000)
+    return () => window.clearInterval(interval)
+  }, [fetchServerNotifications])
+
+  // Re-fetch when opened to ensure fresh status
+  useEffect(() => {
+    if (isOpen) {
+      fetchServerNotifications()
+    }
+  }, [isOpen, fetchServerNotifications])
+
+  // Save changes to localStorage as offline mirror
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(notifications))
@@ -133,14 +211,27 @@ export function NotificationBell({ user }: NotificationBellProps) {
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    try {
+      await api.markAllNotificationsRead()
+    } catch (err) {
+      console.warn('Failed to mark all notifications read on server:', err)
+    }
   }
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     )
+    const numId = Number(id)
+    if (!isNaN(numId) && numId > 0) {
+      try {
+        await api.markNotificationRead(numId)
+      } catch (err) {
+        console.warn('Failed to mark notification read on server:', err)
+      }
+    }
   }
 
   const dismissNotification = (id: string) => {
@@ -226,9 +317,16 @@ export function NotificationBell({ user }: NotificationBellProps) {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold leading-snug">
-                      {notif.title}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      {notif.type === 'retention' && (
+                        <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-red/20 text-red border border-red/30 mb-1">
+                          VIP Retention Offer
+                        </span>
+                      )}
+                      <p className="text-xs font-semibold leading-snug">
+                        {notif.title}
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => {

@@ -30,6 +30,8 @@ from app.models.expense import Expense
 from app.models.raw_transaction import RawTransaction
 from app.models.processed_customer import ProcessedCustomer
 from app.models.prediction import Prediction
+from app.models.retention_strategy import RetentionStrategy
+from app.models.notification import Notification
 
 __all__ = [
     "User",
@@ -55,4 +57,6 @@ __all__ = [
     "RawTransaction",
     "ProcessedCustomer",
     "Prediction",
+    "RetentionStrategy",
+    "Notification",
 ]
