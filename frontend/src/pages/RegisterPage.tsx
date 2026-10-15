@@ -263,7 +263,18 @@ export function RegisterPage() {
                 Next Step →
               </Button>
 
-              <p className="text-center text-xs text-white/40 mt-6">
+              <p className="text-center text-[11px] text-white/35 mt-4 leading-relaxed">
+                By creating an account, you agree to our separate{' '}
+                <Link to="/terms" target="_blank" className="text-white/60 hover:text-white underline transition-colors">
+                  Terms of Use
+                </Link>{' '}
+                and{' '}
+                <Link to="/privacy" target="_blank" className="text-white/60 hover:text-white underline transition-colors">
+                  Privacy Policy
+                </Link>.
+              </p>
+
+              <p className="text-center text-xs text-white/40 mt-5">
                 Already have an account?{' '}
                 <Link
                   to="/login"

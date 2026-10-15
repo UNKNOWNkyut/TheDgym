@@ -115,6 +115,30 @@ export function PrivacyPolicyPage() {
 
       {/* Main Content Area */}
       <div ref={contentRef} className="container-dgym py-12 md:py-20">
+        {/* Document Navigation Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-10 pb-6 border-b border-white/8">
+          <div className="flex items-center gap-2 p-1 rounded-xl border border-white/10 bg-[#0f0f12] w-fit">
+            <Link
+              to="/privacy"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider font-mono bg-red text-white shadow-sm transition-all"
+            >
+              <span>🔒</span>
+              <span>Privacy Policy</span>
+            </Link>
+            <Link
+              to="/terms"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider font-mono text-white/50 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <span>📜</span>
+              <span>Terms of Use</span>
+            </Link>
+          </div>
+
+          <p className="text-xs text-white/40 font-mono">
+            Standalone Page: <span className="text-white">thedgym.com/privacy</span>
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
           
           {/* Quick Navigation Sidebar */}
