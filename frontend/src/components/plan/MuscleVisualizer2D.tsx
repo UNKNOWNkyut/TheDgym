@@ -9,476 +9,351 @@ interface MuscleVisualizer2DProps {
 
 export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisualizer2DProps) {
   void React;
-  const isSelected = (area: FocusArea) =>
-    selectedFocus.includes(area) || selectedFocus.includes('full body');
 
-  // Exact Image 2 aesthetics: Charcoal dark-gray base, crisp white division lines, electric blue active highlight
-  const getMuscleStyle = (area: FocusArea) => {
-    const active = isSelected(area);
-    return {
-      fill: active ? '#3b82f6' : '#2c2d31',
-      stroke: '#ffffff',
-      strokeWidth: active ? 1.3 : 1.1,
-      strokeLinejoin: 'round' as const,
-      strokeLinecap: 'round' as const,
-      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-      cursor: 'pointer',
-    };
+  const isSelected = (group: string): boolean => {
+    if (selectedFocus.includes('full body')) return true;
+    if (group === 'chest' && selectedFocus.includes('chest')) return true;
+    if ((group === 'shoulders' || group === 'shoulder') && selectedFocus.includes('shoulder')) return true;
+    if ((group === 'arms' || group === 'arm') && selectedFocus.includes('arm')) return true;
+    if (group === 'back' && selectedFocus.includes('back')) return true;
+    if (group === 'abs' && selectedFocus.includes('abs')) return true;
+    if ((group === 'glutes' || group === 'butt') && selectedFocus.includes('butt')) return true;
+    if ((group === 'legs' || group === 'leg') && selectedFocus.includes('leg')) return true;
+    return false;
   };
 
+  const handleGroupClick = (group: string) => {
+    let mappedArea: FocusArea = 'chest';
+    if (group === 'shoulders' || group === 'shoulder') mappedArea = 'shoulder';
+    else if (group === 'arms' || group === 'arm') mappedArea = 'arm';
+    else if (group === 'back') mappedArea = 'back';
+    else if (group === 'abs') mappedArea = 'abs';
+    else if (group === 'glutes' || group === 'butt') mappedArea = 'butt';
+    else if (group === 'legs' || group === 'leg') mappedArea = 'leg';
+    else if (group === 'chest') mappedArea = 'chest';
+    onToggleFocus(mappedArea);
+  };
+
+  // Human-readable labels for selected muscles
+  const selectedLabels = selectedFocus.map((f) => {
+    switch (f) {
+      case 'chest': return 'Chest';
+      case 'shoulder': return 'Shoulders';
+      case 'arm': return 'Arms';
+      case 'back': return 'Back';
+      case 'abs': return 'Abs & Core';
+      case 'butt': return 'Glutes / Butt';
+      case 'leg': return 'Legs';
+      case 'full body': return 'Full Body';
+      default: return f;
+    }
+  });
+
   return (
-    <div className="p-6 rounded-2xl border border-white/10 bg-[#0c0c0f] flex flex-col items-center gap-6 shadow-2xl">
-      {/* Visualizer Top Bar & Legend */}
-      <div className="w-full flex items-center justify-between border-b border-white/8 pb-3">
+    <div className="w-full flex flex-col items-center rounded-2xl bg-white border border-neutral-200 p-4 sm:p-6 shadow-2xl space-y-4 text-neutral-800 select-none">
+      <style>{`
+        .silhouette-base {
+          fill: #b5b5b5;
+          stroke: #b5b5b5;
+          stroke-width: 2;
+          stroke-linejoin: round;
+          stroke-linecap: round;
+        }
+        .hair-shape {
+          fill: #6b6b6b;
+        }
+        .muscle-static {
+          fill: #3d3d3d;
+          stroke: #b5b5b5;
+          stroke-width: 2.1;
+          stroke-linejoin: round;
+          stroke-linecap: round;
+        }
+        .muscle-part {
+          fill: #3d3d3d;
+          stroke: #b5b5b5;
+          stroke-width: 2.3;
+          stroke-linejoin: round;
+          stroke-linecap: round;
+          cursor: pointer;
+          transition: fill 0.18s cubic-bezier(0.4, 0, 0.2, 1), filter 0.18s ease;
+        }
+        .muscle-part:hover {
+          fill: #525252;
+        }
+        .muscle-part.selected {
+          fill: #5186fb;
+        }
+        .muscle-part.selected:hover {
+          fill: #3b71e8;
+        }
+      `}</style>
+
+      {/* Header & Legend */}
+      <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-200 pb-3">
         <div>
-          <span className="text-[10px] font-mono uppercase tracking-widest text-blue-400 font-bold">
-            Interactive Anatomy Visualizer
-          </span>
-          <p className="text-xs text-white/50 font-mono mt-0.5">
-            Click any muscle group on the athletic models to target in your plan.
+          <h3 className="text-base sm:text-lg font-bold text-neutral-900 tracking-tight">
+            Gym Muscle Visualizer
+          </h3>
+          <p className="text-xs text-neutral-500">
+            Click directly on any muscle group in the anatomical diagram to highlight.
           </p>
         </div>
-        <div className="flex items-center gap-3 text-[11px] font-mono">
-          <span className="flex items-center gap-1.5 text-white/40">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#2c2d31] border border-white" />
+        <div className="flex items-center gap-3 text-xs font-medium">
+          <span className="flex items-center gap-1.5 text-neutral-600">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#3d3d3d] border border-[#b5b5b5]" />
             Rest
           </span>
-          <span className="flex items-center gap-1.5 text-blue-400 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] border border-white shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+          <span className="flex items-center gap-1.5 text-blue-600 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#5186fb] shadow-[0_0_6px_rgba(81,134,251,0.6)]" />
             Active Focus
           </span>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-around gap-8 w-full py-2">
-        {/* ===================================================================
-            FRONT ANATOMICAL ATHLETIC PHYSIQUE (Anterior View)
-        =================================================================== */}
-        <div className="flex flex-col items-center">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-white/60 mb-3 font-bold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            Anterior (Front View)
+      {/* Anatomical SVG Canvas matching anatomical_muscle_visualizer.html */}
+      <div className="w-full flex items-center justify-center py-2">
+        <svg
+          id="anatomy-svg"
+          viewBox="0 0 600 580"
+          className="w-full h-auto max-h-[520px] max-w-[560px] overflow-visible"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* ==================== FRONT VIEW (LEFT) ==================== */}
+          <g id="front-figure">
+            {/* 1. BASE SILHOUETTE (Light Grey #b5b5b5 for head, joints, fascia) */}
+            <g id="front-silhouette">
+              {/* Neck & Trapezius Base */}
+              <path className="silhouette-base" d="M 134,82 L 132,102 L 102,115 L 152,125 L 202,115 L 172,102 L 170,82 Z" />
+              {/* Torso, Pelvis & Hip Fascia Base */}
+              <path className="silhouette-base" d="M 102,115 C 80,118 72,135 76,162 L 62,218 L 46,274 L 56,280 L 78,225 L 95,180 L 106,208 L 108,262 L 99,296 L 104,352 L 108,395 L 106,455 L 114,515 L 102,535 L 128,539 L 131,512 L 137,455 L 135,395 L 148,315 L 152,306 L 156,315 L 169,395 L 167,455 L 173,512 L 176,539 L 202,535 L 190,515 L 198,455 L 196,395 L 200,352 L 205,296 L 196,262 L 198,208 L 209,180 L 226,225 L 248,280 L 258,274 L 242,218 L 228,162 C 232,135 224,118 202,115 Z" />
+              {/* Head & Ears Base */}
+              <path className="silhouette-base" d="M 129,57 C 125,57 124,66 129,70 C 131,82 140,94 152,94 C 164,94 173,82 175,70 C 180,66 179,57 175,57 C 176,40 167,30 152,30 C 137,30 128,40 129,57 Z" />
+              {/* Hair (Dark Grey #6b6b6b) */}
+              <path className="hair-shape" d="M 129,58 C 127,42 135,29 152,29 C 169,29 177,42 175,58 C 174,52 172,46 168,43 C 162,45 142,45 136,43 C 132,46 130,52 129,58 Z" />
+            </g>
+
+            {/* 2. NECK & HANDS & FEET (Static Dark Grey #3d3d3d) */}
+            <g id="front-static-parts">
+              {/* Sternocleidomastoid (Neck) Left & Right */}
+              <path className="muscle-static" d="M 136,88 L 149,115 L 137,114 L 133,94 Z" />
+              <path className="muscle-static" d="M 168,88 L 155,115 L 167,114 L 171,94 Z" />
+              <path className="muscle-static" d="M 146,93 L 152,113 L 158,93 Z" />
+
+              {/* Left Hand & Fingers */}
+              <path className="muscle-static" d="M 45,274 L 57,279 L 51,297 L 35,291 Z" />
+              <path className="muscle-static" d="M 36,284 L 22,296 C 20,298 22,301 25,299 L 39,289 Z" />
+              <path className="muscle-static" d="M 36,292 L 24,313 C 23,316 26,318 28,315 L 40,295 Z" />
+              <path className="muscle-static" d="M 41,295 L 32,320 C 31,323 35,324 36,321 L 45,297 Z" />
+              <path className="muscle-static" d="M 46,297 L 41,321 C 41,324 44,324 45,321 L 50,298 Z" />
+              <path className="muscle-static" d="M 51,297 L 50,317 C 50,320 53,320 54,317 L 55,296 Z" />
+
+              {/* Right Hand & Fingers */}
+              <path className="muscle-static" d="M 259,274 L 247,279 L 253,297 L 269,291 Z" />
+              <path className="muscle-static" d="M 268,284 L 282,296 C 284,298 282,301 279,299 L 265,289 Z" />
+              <path className="muscle-static" d="M 268,292 L 280,313 C 281,316 278,318 276,315 L 264,295 Z" />
+              <path className="muscle-static" d="M 263,295 L 272,320 C 273,323 269,324 268,321 L 259,297 Z" />
+              <path className="muscle-static" d="M 258,297 L 263,321 C 263,324 260,324 259,321 L 254,298 Z" />
+              <path className="muscle-static" d="M 253,297 L 254,317 C 254,320 251,320 250,317 L 249,296 Z" />
+
+              {/* Knees / Patella */}
+              <path className="muscle-static" d="M 114,380 C 118,376 126,376 130,380 C 131,389 128,399 122,402 C 116,399 113,389 114,380 Z" />
+              <path className="muscle-static" d="M 190,380 C 186,376 178,376 174,380 C 173,389 176,399 182,402 C 188,399 191,389 190,380 Z" />
+
+              {/* Left & Right Ankles/Feet */}
+              <path className="muscle-static" d="M 115,498 L 128,506 L 129,522 L 114,515 Z" />
+              <path className="muscle-static" d="M 113,519 L 129,525 L 128,539 L 101,536 Z" />
+              <path className="muscle-static" d="M 189,498 L 176,506 L 175,522 L 190,515 Z" />
+              <path className="muscle-static" d="M 191,519 L 175,525 L 176,539 L 203,536 Z" />
+            </g>
+
+            {/* 3. INTERACTIVE MUSCLE GROUPS - FRONT VIEW */}
+            {/* TRAPEZIUS (Back / Upper) */}
+            <g onClick={() => handleGroupClick('back')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 131,100 L 105,114 L 135,116 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 173,100 L 199,114 L 169,116 Z" />
+            </g>
+
+            {/* CHEST (Pectoralis Major) */}
+            <g onClick={() => handleGroupClick('chest')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('chest') ? 'selected' : ''}`} d="M 105,121 C 118,117 138,118 150,124 L 150,164 C 138,175 112,175 101,161 C 96,147 98,130 105,121 Z" />
+              <path className={`muscle-part ${isSelected('chest') ? 'selected' : ''}`} d="M 199,121 C 186,117 166,118 154,124 L 154,164 C 166,175 192,175 203,161 C 208,147 206,130 199,121 Z" />
+            </g>
+
+            {/* SHOULDERS (Anterior & Lateral Deltoids) */}
+            <g onClick={() => handleGroupClick('shoulders')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('shoulders') ? 'selected' : ''}`} d="M 114,116 C 92,115 76,129 77,154 C 79,163 87,168 96,161 C 97,144 102,126 114,116 Z" />
+              <path className={`muscle-part ${isSelected('shoulders') ? 'selected' : ''}`} d="M 190,116 C 212,115 228,129 227,154 C 225,163 217,168 208,161 C 207,144 202,126 190,116 Z" />
+            </g>
+
+            {/* ARMS (Biceps, Brachialis, Forearms) */}
+            <g onClick={() => handleGroupClick('arms')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 88,163 C 95,159 100,166 97,179 L 85,212 C 79,213 76,206 79,193 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 77,161 C 83,163 85,174 81,189 L 72,208 C 67,203 68,182 77,161 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 216,163 C 209,159 204,166 207,179 L 219,212 C 225,213 228,206 225,193 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 227,161 C 221,163 219,174 223,189 L 232,208 C 237,203 236,182 227,161 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 68,207 C 75,208 78,215 74,230 L 55,275 L 47,271 L 61,222 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 84,214 C 78,225 68,252 57,276 L 52,274 L 74,214 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 236,207 C 229,208 226,215 230,230 L 249,275 L 257,271 L 243,222 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 220,214 C 226,225 236,252 247,276 L 252,274 L 230,214 Z" />
+            </g>
+
+            {/* ABS & CORE (Rectus Abdominis 6-Pack, Lower Abs & Obliques) */}
+            <g onClick={() => handleGroupClick('abs')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 150,168 L 150,188 L 125,187 C 124,177 132,169 150,168 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 154,168 L 154,188 L 179,187 C 180,177 172,169 154,168 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 150,190 L 150,208 L 125,207 L 125,189 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 154,190 L 154,208 L 179,207 L 179,189 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 150,210 L 150,227 L 127,226 L 125,209 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 154,210 L 154,227 L 177,226 L 179,209 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 150,230 L 150,250 L 127,249 L 127,229 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 154,230 L 154,250 L 177,249 L 177,229 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 150,252 L 150,301 C 138,298 130,275 127,251 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 154,252 L 154,301 C 166,298 174,275 177,251 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 103,167 L 122,175 L 122,193 L 106,184 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 106,186 L 122,195 L 123,215 L 108,205 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 108,207 L 124,217 L 125,246 L 109,235 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 109,237 L 125,249 L 132,292 C 121,284 112,265 109,237 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 201,167 L 182,175 L 182,193 L 198,184 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 198,186 L 182,195 L 181,215 L 196,205 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 196,207 L 180,217 L 179,246 L 195,235 Z" />
+              <path className={`muscle-part ${isSelected('abs') ? 'selected' : ''}`} d="M 195,237 L 179,249 L 172,292 C 183,284 192,265 195,237 Z" />
+            </g>
+
+            {/* LEGS - FRONT (Quadriceps, Adductors, Calves/Tibialis) */}
+            <g onClick={() => handleGroupClick('legs')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 108,266 C 100,285 98,312 102,332 L 114,296 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 116,282 C 106,312 102,348 109,378 L 121,346 L 124,292 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 125,294 L 119,369 L 129,369 L 138,312 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 139,316 L 128,374 C 136,377 142,368 143,350 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 129,296 L 147,313 L 142,344 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 196,266 C 204,285 206,312 202,332 L 190,296 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 188,282 C 198,312 202,348 195,378 L 183,346 L 180,292 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 179,294 L 185,369 L 175,369 L 166,312 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 165,316 L 176,374 C 168,377 162,368 161,350 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 175,296 L 157,313 L 162,344 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 112,402 C 104,424 106,462 115,496 L 121,496 L 120,408 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 122,410 L 123,496 L 130,502 C 137,468 139,432 131,406 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 192,402 C 200,424 198,462 189,496 L 183,496 L 184,408 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 182,410 L 181,496 L 174,502 C 167,468 165,432 173,406 Z" />
+            </g>
+          </g>
+
+          {/* ==================== BACK VIEW (RIGHT) ==================== */}
+          <g id="back-figure">
+            {/* 1. BASE SILHOUETTE (Light Grey #b5b5b5) */}
+            <g id="back-silhouette">
+              {/* Neck & Trapezius Base */}
+              <path className="silhouette-base" d="M 430,82 L 428,102 L 398,115 L 448,125 L 498,115 L 468,102 L 466,82 Z" />
+              {/* Torso, Pelvis & Legs Base */}
+              <path className="silhouette-base" d="M 398,115 C 376,118 368,135 372,162 L 358,218 L 342,274 L 352,280 L 374,225 L 391,180 L 402,208 L 404,262 L 395,296 L 400,352 L 404,395 L 402,455 L 410,515 L 398,535 L 424,539 L 427,512 L 433,455 L 431,395 L 444,315 L 448,306 L 452,315 L 465,395 L 463,455 L 469,512 L 472,539 L 498,535 L 486,515 L 494,455 L 492,395 L 496,352 L 501,296 L 492,262 L 494,208 L 505,180 L 522,225 L 544,280 L 554,274 L 538,218 L 524,162 C 528,135 520,118 498,115 Z" />
+              {/* Head & Ears Base */}
+              <path className="silhouette-base" d="M 425,57 C 421,57 420,66 425,70 C 427,82 436,94 448,94 C 460,94 469,82 471,70 C 476,66 475,57 471,57 C 472,40 463,30 448,30 C 433,30 424,40 425,57 Z" />
+              {/* Back of Hair */}
+              <path className="hair-shape" d="M 425,59 C 423,41 432,29 448,29 C 464,29 473,41 471,59 C 468,69 462,74 448,74 C 434,74 428,69 425,59 Z" />
+            </g>
+
+            {/* 2. NECK & HANDS & FEET (Static Dark Grey #3d3d3d) */}
+            <g id="back-static-parts">
+              <path className="muscle-static" d="M 435,82 L 446,82 L 446,105 L 431,105 Z" />
+              <path className="muscle-static" d="M 461,82 L 450,82 L 450,105 L 465,105 Z" />
+              {/* Left Hand & Fingers */}
+              <path className="muscle-static" d="M 341,274 L 353,279 L 347,297 L 331,291 Z" />
+              <path className="muscle-static" d="M 332,284 L 318,296 C 316,298 318,301 321,299 L 335,289 Z" />
+              <path className="muscle-static" d="M 332,292 L 320,313 C 319,316 322,318 324,315 L 336,295 Z" />
+              <path className="muscle-static" d="M 337,295 L 328,320 C 327,323 331,324 332,321 L 341,297 Z" />
+              <path className="muscle-static" d="M 342,297 L 337,321 C 337,324 340,324 341,321 L 346,298 Z" />
+              <path className="muscle-static" d="M 347,297 L 346,317 C 346,320 349,320 350,317 L 351,296 Z" />
+              {/* Right Hand & Fingers */}
+              <path className="muscle-static" d="M 555,274 L 543,279 L 549,297 L 565,291 Z" />
+              <path className="muscle-static" d="M 564,284 L 578,296 C 580,298 578,301 575,299 L 561,289 Z" />
+              <path className="muscle-static" d="M 564,292 L 576,313 C 577,316 574,318 572,315 L 560,295 Z" />
+              <path className="muscle-static" d="M 559,295 L 568,320 C 569,323 565,324 564,321 L 555,297 Z" />
+              <path className="muscle-static" d="M 554,297 L 559,321 C 559,324 556,324 555,321 L 550,298 Z" />
+              <path className="muscle-static" d="M 549,297 L 550,317 C 550,320 547,320 546,317 L 545,296 Z" />
+              {/* Left & Right Heels / Feet */}
+              <path className="muscle-static" d="M 412,515 L 424,515 L 425,539 L 397,536 Z" />
+              <path className="muscle-static" d="M 484,515 L 472,515 L 471,539 L 499,536 Z" />
+            </g>
+
+            {/* 3. INTERACTIVE MUSCLE GROUPS - BACK VIEW */}
+            {/* BACK (Trapezius, Infraspinatus, Teres Major, Latissimus Dorsi, Erector Spinae) */}
+            <g onClick={() => handleGroupClick('back')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 430,104 L 446,104 L 446,120 L 399,116 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 466,104 L 450,104 L 450,120 L 497,116 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 402,118 L 446,122 L 446,198 L 424,148 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 494,118 L 450,122 L 450,198 L 472,148 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 401,126 L 422,148 L 399,158 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 398,158 L 423,150 L 428,167 L 396,174 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 495,126 L 474,148 L 497,158 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 498,158 L 473,150 L 468,167 L 500,174 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 398,175 L 428,169 L 444,205 L 434,248 L 405,232 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 498,175 L 468,169 L 452,205 L 462,248 L 491,232 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 446,208 L 446,265 L 435,250 Z" />
+              <path className={`muscle-part ${isSelected('back') ? 'selected' : ''}`} d="M 450,208 L 450,265 L 461,250 Z" />
+            </g>
+
+            {/* SHOULDERS - BACK (Posterior Deltoids) */}
+            <g onClick={() => handleGroupClick('shoulders')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('shoulders') ? 'selected' : ''}`} d="M 399,117 C 378,120 370,136 374,158 L 399,152 L 403,125 Z" />
+              <path className={`muscle-part ${isSelected('shoulders') ? 'selected' : ''}`} d="M 497,117 C 518,120 526,136 522,158 L 497,152 L 493,125 Z" />
+            </g>
+
+            {/* ARMS - BACK (Triceps Brachii & Posterior Forearms) */}
+            <g onClick={() => handleGroupClick('arms')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 374,159 L 393,154 L 383,198 L 366,196 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 394,156 L 397,178 L 384,212 L 378,198 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 522,159 L 503,154 L 513,198 L 530,196 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 502,156 L 499,178 L 512,212 L 518,198 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 365,202 L 378,208 L 352,276 L 343,271 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 380,210 L 386,216 L 356,278 L 350,275 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 531,202 L 518,208 L 544,276 L 553,271 Z" />
+              <path className={`muscle-part ${isSelected('arms') ? 'selected' : ''}`} d="M 516,210 L 510,216 L 540,278 L 546,275 Z" />
+            </g>
+
+            {/* GLUTES / BUTT (Gluteus Medius & Gluteus Maximus) */}
+            <g onClick={() => handleGroupClick('glutes')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('glutes') ? 'selected' : ''}`} d="M 405,244 C 416,242 428,246 436,255 L 400,268 C 400,257 402,249 405,244 Z" />
+              <path className={`muscle-part ${isSelected('glutes') ? 'selected' : ''}`} d="M 400,270 C 414,254 436,255 446,268 L 446,310 C 425,317 402,308 398,285 Z" />
+              <path className={`muscle-part ${isSelected('glutes') ? 'selected' : ''}`} d="M 491,244 C 480,242 468,246 460,255 L 496,268 C 496,257 494,249 491,244 Z" />
+              <path className={`muscle-part ${isSelected('glutes') ? 'selected' : ''}`} d="M 496,270 C 482,254 460,255 450,268 L 450,310 C 471,317 494,308 498,285 Z" />
+            </g>
+
+            {/* LEGS - BACK (Hamstrings, Adductors/Vastus Lateralis Edge, Calves) */}
+            <g onClick={() => handleGroupClick('legs')} className="cursor-pointer">
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 405,308 C 414,312 421,314 424,314 L 417,392 L 404,402 C 405,368 405,335 405,308 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 425,314 L 434,314 L 431,394 L 424,402 L 418,392 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 491,308 C 482,312 475,314 472,314 L 479,392 L 492,402 C 491,368 491,335 491,308 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 471,314 L 462,314 L 465,394 L 472,402 L 478,392 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 398,298 L 404,308 L 403,365 C 397,345 396,320 398,298 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 435,314 L 444,314 L 436,356 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 498,298 L 492,308 L 493,365 C 499,345 500,320 498,298 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 461,314 L 452,314 L 460,356 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 414,398 L 418,465 L 404,458 C 401,432 405,408 414,398 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 419,398 C 429,408 434,432 429,458 L 419,465 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 406,462 L 415,468 L 415,508 L 410,508 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 428,462 L 420,468 L 420,508 L 425,508 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 482,398 L 478,465 L 492,458 C 495,432 491,408 482,398 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 477,398 C 467,408 462,432 467,458 L 477,465 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 490,462 L 481,468 L 481,508 L 486,508 Z" />
+              <path className={`muscle-part ${isSelected('legs') ? 'selected' : ''}`} d="M 468,462 L 476,468 L 476,508 L 471,508 Z" />
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      {/* Footer Status Pill */}
+      <div className="w-full flex items-center justify-center pt-2 border-t border-neutral-100">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-neutral-100 text-neutral-700 text-xs font-mono font-medium">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#5186fb] inline-block shadow-[0_0_6px_rgba(81,134,251,0.6)]" />
+          <span>
+            {selectedLabels.length > 0
+              ? `Selected Focus: ${selectedLabels.join(', ')}`
+              : 'Click any muscle group to focus in your routine'}
           </span>
-
-          <svg
-            viewBox="0 0 200 350"
-            className="w-52 h-84 overflow-visible select-none drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
-          >
-            {/* Glow Filter for Active Muscles */}
-            <defs>
-              <filter id="activeBlueGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#3b82f6" floodOpacity="0.8" />
-              </filter>
-            </defs>
-
-            {/* ─── HEAD & NECK (Gray Anatomical Mask like Image 2) ─────────── */}
-            <g id="front-head-neck">
-              {/* Head Profile */}
-              <path
-                d="M 100 12 C 90 12, 84 21, 84 34 C 84 46, 91 56, 100 57 C 109 56, 116 46, 116 34 C 116 21, 110 12, 100 12 Z"
-                fill="#8f9398"
-                stroke="#ffffff"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Neck & Sternocleidomastoid */}
-              <path
-                d="M 92 56 L 86 70 L 114 70 L 108 56 Z"
-                fill="#8f9398"
-                stroke="#ffffff"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* White Neck Separation Lines */}
-              <line x1="97" y1="58" x2="94" y2="70" stroke="#ffffff" strokeWidth="1" />
-              <line x1="103" y1="58" x2="106" y2="70" stroke="#ffffff" strokeWidth="1" />
-            </g>
-
-            {/* ─── DELTOIDS / SHOULDERS (Front) ────────────────────────── */}
-            <g onClick={() => onToggleFocus('shoulder')} className="cursor-pointer group">
-              {/* Left Deltoid */}
-              <path
-                d="M 82 68 C 72 70, 58 76, 54 88 C 52 98, 56 108, 64 114 C 70 106, 73 95, 76 84 Z"
-                style={getMuscleStyle('shoulder')}
-                filter={isSelected('shoulder') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Deltoid */}
-              <path
-                d="M 118 68 C 128 70, 142 76, 146 88 C 148 98, 144 108, 136 114 C 130 106, 127 95, 124 84 Z"
-                style={getMuscleStyle('shoulder')}
-                filter={isSelected('shoulder') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* ─── PECTORALIS MAJOR / CHEST ────────────────────────────── */}
-            <g onClick={() => onToggleFocus('chest')} className="cursor-pointer group">
-              {/* Left Pec */}
-              <path
-                d="M 76 80 L 98 80 L 98 116 C 89 117, 78 114, 71 106 C 68 96, 71 86, 76 80 Z"
-                style={getMuscleStyle('chest')}
-                filter={isSelected('chest') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Pec */}
-              <path
-                d="M 124 80 L 102 80 L 102 116 C 111 117, 122 114, 129 106 C 132 96, 129 86, 124 80 Z"
-                style={getMuscleStyle('chest')}
-                filter={isSelected('chest') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* ─── ARMS / BICEPS & FOREARMS (Front) ────────────────────── */}
-            <g onClick={() => onToggleFocus('arm')} className="cursor-pointer group">
-              {/* Left Bicep */}
-              <path
-                d="M 63 114 C 57 118, 53 129, 55 141 C 59 147, 65 147, 69 141 C 71 131, 69 122, 63 114 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Bicep */}
-              <path
-                d="M 137 114 C 143 118, 147 129, 145 141 C 141 147, 135 147, 131 141 C 129 131, 131 122, 137 114 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Left Forearm */}
-              <path
-                d="M 55 143 C 51 151, 46 166, 44 182 C 46 186, 52 186, 56 180 C 60 168, 64 156, 67 143 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Forearm */}
-              <path
-                d="M 145 143 C 149 151, 154 166, 156 182 C 154 186, 148 186, 144 180 C 140 168, 136 156, 133 143 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* ─── HANDS (Image 2 style with white fingers) ─────────────── */}
-            <g id="front-hands">
-              {/* Left Hand */}
-              <path
-                d="M 44 183 C 41 190, 36 200, 31 206 L 36 211 L 43 203 L 46 208 L 49 201 L 52 205 L 54 198 L 56 182 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Right Hand */}
-              <path
-                d="M 156 183 C 159 190, 164 200, 169 206 L 164 211 L 157 203 L 154 208 L 151 201 L 148 205 L 146 198 L 144 182 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </g>
-
-            {/* ─── ABDOMINALS & OBLIQUES (Core 6-Pack Grid) ─────────────── */}
-            <g onClick={() => onToggleFocus('abs')} className="cursor-pointer group">
-              {/* Upper Abs (Pair 1) */}
-              <rect
-                x="84"
-                y="119"
-                width="14"
-                height="11"
-                rx="2"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              <rect
-                x="102"
-                y="119"
-                width="14"
-                height="11"
-                rx="2"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Mid Abs (Pair 2) */}
-              <rect
-                x="84"
-                y="133"
-                width="14"
-                height="11"
-                rx="2"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              <rect
-                x="102"
-                y="133"
-                width="14"
-                height="11"
-                rx="2"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Lower Abs & V-Taper */}
-              <path
-                d="M 84 147 L 98 147 L 98 163 L 87 159 Z"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              <path
-                d="M 116 147 L 102 147 L 102 163 L 113 159 Z"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Left External Obliques */}
-              <path
-                d="M 73 121 C 71 133, 72 145, 75 156 C 80 154, 82 144, 82 123 Z"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right External Obliques */}
-              <path
-                d="M 127 121 C 129 133, 128 145, 125 156 C 120 154, 118 144, 118 123 Z"
-                style={getMuscleStyle('abs')}
-                filter={isSelected('abs') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* Pelvic Line & Groin */}
-            <path
-              d="M 86 160 L 100 167 L 114 160 L 108 174 L 92 174 Z"
-              fill="#2c2d31"
-              stroke="#ffffff"
-              strokeWidth="1.1"
-              strokeLinejoin="round"
-            />
-
-            {/* ─── QUADRICEPS & ANTERIOR LEGS ──────────────────────────── */}
-            <g onClick={() => onToggleFocus('leg')} className="cursor-pointer group">
-              {/* Left Quad (Vastus Lateralis + Medialis) */}
-              <path
-                d="M 75 166 C 71 184, 67 214, 71 236 C 77 240, 85 238, 91 232 C 93 214, 93 186, 95 166 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Quad */}
-              <path
-                d="M 125 166 C 129 184, 133 214, 129 236 C 123 240, 115 238, 109 232 C 107 214, 107 186, 105 166 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Left Knee Patella */}
-              <circle cx="81" cy="241" r="4.5" fill="#2c2d31" stroke="#ffffff" strokeWidth="1.1" />
-              {/* Right Knee Patella */}
-              <circle cx="119" cy="241" r="4.5" fill="#2c2d31" stroke="#ffffff" strokeWidth="1.1" />
-              {/* Left Lower Leg / Calves */}
-              <path
-                d="M 74 248 C 70 264, 70 288, 74 312 C 78 314, 84 314, 86 308 C 90 290, 90 268, 88 248 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Lower Leg / Calves */}
-              <path
-                d="M 126 248 C 130 264, 130 288, 126 312 C 122 314, 116 314, 114 308 C 110 290, 110 268, 112 248 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Feet (Left & Right) */}
-              <path
-                d="M 73 313 L 70 324 L 84 324 L 86 313 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M 127 313 L 130 324 L 116 324 L 114 313 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinejoin="round"
-              />
-            </g>
-          </svg>
-        </div>
-
-        {/* ===================================================================
-            REAR ANATOMICAL ATHLETIC PHYSIQUE (Posterior View)
-        =================================================================== */}
-        <div className="flex flex-col items-center">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-white/60 mb-3 font-bold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            Posterior (Rear View)
-          </span>
-
-          <svg
-            viewBox="0 0 200 350"
-            className="w-52 h-84 overflow-visible select-none drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
-          >
-            {/* ─── HEAD & NECK POSTERIOR (Gray Mask like Image 2) ─────────── */}
-            <g id="rear-head-neck">
-              <path
-                d="M 100 12 C 90 12, 84 21, 84 34 C 84 46, 91 56, 100 57 C 109 56, 116 46, 116 34 C 116 21, 110 12, 100 12 Z"
-                fill="#8f9398"
-                stroke="#ffffff"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Cervical Spine / Neck Lines */}
-              <path
-                d="M 94 57 L 90 68 L 110 68 L 106 57 Z"
-                fill="#8f9398"
-                stroke="#ffffff"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </g>
-
-            {/* ─── BACK: TRAPEZIUS & LATISSIMUS DORSI ──────────────────── */}
-            <g onClick={() => onToggleFocus('back')} className="cursor-pointer group">
-              {/* Upper Trapezius (Diamond Crest) */}
-              <path
-                d="M 100 58 L 86 68 L 78 86 L 100 110 L 122 86 L 114 68 Z"
-                style={getMuscleStyle('back')}
-                filter={isSelected('back') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Left Latissimus Dorsi (V-Taper Wing) */}
-              <path
-                d="M 76 88 L 98 112 L 98 152 L 80 152 C 72 136, 68 114, 74 94 Z"
-                style={getMuscleStyle('back')}
-                filter={isSelected('back') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Latissimus Dorsi (V-Taper Wing) */}
-              <path
-                d="M 124 88 L 102 112 L 102 152 L 120 152 C 128 136, 132 114, 126 94 Z"
-                style={getMuscleStyle('back')}
-                filter={isSelected('back') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* ─── REAR DELTOIDS (Shoulders Posterior) ─────────────────── */}
-            <g onClick={() => onToggleFocus('shoulder')} className="cursor-pointer group">
-              <path
-                d="M 80 72 C 70 76, 58 84, 56 94 C 54 104, 60 112, 66 116 C 70 106, 73 94, 76 84 Z"
-                style={getMuscleStyle('shoulder')}
-                filter={isSelected('shoulder') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              <path
-                d="M 120 72 C 130 76, 142 84, 144 94 C 146 104, 140 112, 134 116 C 130 106, 127 94, 124 84 Z"
-                style={getMuscleStyle('shoulder')}
-                filter={isSelected('shoulder') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* ─── TRICEPS & POSTERIOR ARMS ────────────────────────────── */}
-            <g onClick={() => onToggleFocus('arm')} className="cursor-pointer group">
-              {/* Left Tricep (Horseshoe Head) */}
-              <path
-                d="M 64 116 C 58 122, 54 132, 56 142 C 60 148, 66 148, 70 142 C 72 132, 70 124, 64 116 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Tricep */}
-              <path
-                d="M 136 116 C 142 122, 146 132, 144 142 C 140 148, 134 148, 130 142 C 128 132, 130 124, 136 116 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Posterior Forearms */}
-              <path
-                d="M 55 143 C 51 151, 46 166, 44 182 C 46 186, 52 186, 56 180 C 60 168, 64 156, 67 143 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              <path
-                d="M 145 143 C 149 151, 154 166, 156 182 C 154 186, 148 186, 144 180 C 140 168, 136 156, 133 143 Z"
-                style={getMuscleStyle('arm')}
-                filter={isSelected('arm') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* Posterior Hands */}
-            <g id="rear-hands">
-              <path
-                d="M 44 183 C 41 190, 36 200, 31 206 L 36 211 L 43 203 L 46 208 L 49 201 L 52 205 L 54 198 L 56 182 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M 156 183 C 159 190, 164 200, 169 206 L 164 211 L 157 203 L 154 208 L 151 201 L 148 205 L 146 198 L 144 182 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </g>
-
-            {/* ─── GLUTES / BUTT (Exact split like Image 2) ─────────────── */}
-            <g onClick={() => onToggleFocus('butt')} className="cursor-pointer group">
-              {/* Left Glute */}
-              <path
-                d="M 75 156 C 71 172, 73 192, 85 200 C 93 200, 97 188, 97 158 Z"
-                style={getMuscleStyle('butt')}
-                filter={isSelected('butt') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Glute */}
-              <path
-                d="M 125 156 C 129 172, 127 192, 115 200 C 107 200, 103 188, 103 158 Z"
-                style={getMuscleStyle('butt')}
-                filter={isSelected('butt') ? 'url(#activeBlueGlow)' : undefined}
-              />
-            </g>
-
-            {/* ─── HAMSTRINGS & POSTERIOR CALVES ───────────────────────── */}
-            <g onClick={() => onToggleFocus('leg')} className="cursor-pointer group">
-              {/* Left Hamstrings */}
-              <path
-                d="M 75 202 C 71 216, 71 232, 75 244 C 81 246, 89 244, 93 236 C 95 222, 95 210, 95 202 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Hamstrings */}
-              <path
-                d="M 125 202 C 129 216, 129 232, 125 244 C 119 246, 111 244, 107 236 C 105 222, 105 210, 105 202 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Left Gastrocnemius (Calf) */}
-              <path
-                d="M 74 248 C 68 266, 70 290, 74 312 C 78 314, 84 314, 86 308 C 90 290, 90 268, 88 248 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Right Gastrocnemius (Calf) */}
-              <path
-                d="M 126 248 C 132 266, 130 290, 126 312 C 122 314, 116 314, 114 308 C 110 290, 110 268, 112 248 Z"
-                style={getMuscleStyle('leg')}
-                filter={isSelected('leg') ? 'url(#activeBlueGlow)' : undefined}
-              />
-              {/* Posterior Heels / Feet */}
-              <path
-                d="M 73 313 L 71 324 L 83 324 L 85 313 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M 127 313 L 129 324 L 117 324 L 115 313 Z"
-                fill="#2c2d31"
-                stroke="#ffffff"
-                strokeWidth="1.1"
-                strokeLinejoin="round"
-              />
-            </g>
-          </svg>
         </div>
       </div>
     </div>
   );
 }
+export default MuscleVisualizer2D;
