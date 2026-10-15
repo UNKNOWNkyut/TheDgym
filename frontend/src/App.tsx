@@ -60,6 +60,18 @@ const FAQPage = lazy(() =>
   })),
 )
 
+const PrivacyPolicyPage = lazy(() =>
+  import('@/pages/PrivacyPolicyPage').then((module) => ({
+    default: module.PrivacyPolicyPage,
+  })),
+)
+
+const TermsOfUsePage = lazy(() =>
+  import('@/pages/TermsOfUsePage').then((module) => ({
+    default: module.TermsOfUsePage,
+  })),
+)
+
 const LoginPage = lazy(() =>
   import('@/pages/LoginPage').then((module) => ({
     default: module.LoginPage,
@@ -303,6 +315,16 @@ export function App() {
               <Route
                 path="/faq"
                 element={<FAQPage />}
+              />
+
+              <Route
+                path="/privacy"
+                element={<PrivacyPolicyPage />}
+              />
+
+              <Route
+                path="/terms"
+                element={<TermsOfUsePage />}
               />
 
               <Route
