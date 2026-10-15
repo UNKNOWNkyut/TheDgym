@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -8,6 +9,8 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import type { Member, MemberStatus } from '@/types/auth'
+import { AlertCircle, X, Trash2, UserX, UserCheck } from 'lucide-react'
+import { QuarterRing } from '@/components/ui/quarter-ring'
 
 gsap.registerPlugin()
 
@@ -31,14 +34,21 @@ function getStatusBadgeVariant(status: MemberStatus) {
 export function ManageMembersPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
-  const canRegister = user?.role === 'admin' || user?.role === 'staff'
+  const isAdmin = user?.role === 'admin'
 
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [deleting, setDeleting] = useState<number | null>(null)
+  
+  // Modal states for Deactivate, Reactivate & Delete
+  const [deactivateTarget, setDeactivateTarget] = useState<Member | null>(null)
+  const [reactivateTarget, setReactivateTarget] = useState<Member | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null)
+  const [isActionLoading, setIsActionLoading] = useState(false)
+  const [actionLoadingText, setActionLoadingText] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   // GSAP entrance animation
   useGSAP(() => {
@@ -67,18 +77,75 @@ export function ManageMembersPage() {
     return () => clearTimeout(timer)
   }, [fetchMembers])
 
-  const handleDeactivate = async (id: number) => {
-    if (!confirm('Are you sure you want to deactivate this member?')) return
-    setDeleting(id)
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return
+    setIsActionLoading(true)
+    setActionError(null)
+    setActionLoadingText(`Deactivating ${deactivateTarget.full_name}...`)
     try {
-      await api.deactivateMember(id)
+      await Promise.all([
+        new Promise((resolve) => setTimeout(resolve, 800)),
+        api.deactivateMember(deactivateTarget.id),
+      ])
       setMembers((prev) =>
-        prev.map((m) => m.id === id ? { ...m, status: 'inactive' as MemberStatus, is_active: false } : m)
+        prev.map((m) =>
+          m.id === deactivateTarget.id
+            ? { ...m, status: 'inactive' as MemberStatus, is_active: false }
+            : m
+        )
       )
+      setDeactivateTarget(null)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to deactivate member.')
+      setActionError(err instanceof Error ? err.message : 'Failed to deactivate member.')
     } finally {
-      setDeleting(null)
+      setIsActionLoading(false)
+      setActionLoadingText(null)
+    }
+  }
+
+  const confirmReactivate = async () => {
+    if (!reactivateTarget) return
+    setIsActionLoading(true)
+    setActionError(null)
+    setActionLoadingText(`Reactivating ${reactivateTarget.full_name}...`)
+    try {
+      await Promise.all([
+        new Promise((resolve) => setTimeout(resolve, 800)),
+        api.reactivateMember(reactivateTarget.id),
+      ])
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === reactivateTarget.id
+            ? { ...m, status: 'active' as MemberStatus, is_active: true }
+            : m
+        )
+      )
+      setReactivateTarget(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to reactivate member.')
+    } finally {
+      setIsActionLoading(false)
+      setActionLoadingText(null)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setIsActionLoading(true)
+    setActionError(null)
+    setActionLoadingText(`Deleting ${deleteTarget.full_name} permanently...`)
+    try {
+      await Promise.all([
+        new Promise((resolve) => setTimeout(resolve, 800)),
+        api.deleteMember(deleteTarget.id),
+      ])
+      setMembers((prev) => prev.filter((m) => m.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete member.')
+    } finally {
+      setIsActionLoading(false)
+      setActionLoadingText(null)
     }
   }
 
@@ -103,7 +170,7 @@ export function ManageMembersPage() {
               {loading ? 'Loading...' : `${members.length} members found`}
             </p>
           </div>
-          {canRegister && (
+          {isAdmin && (
             <Link to="/manage/members/new">
               <Button variant="primary" size="md">
                 + Register Member
@@ -139,9 +206,18 @@ export function ManageMembersPage() {
         </div>
 
         {/* Error */}
-        {error && (
-          <div className="mb-6 p-4 rounded-xl border border-red/30 bg-red/10 text-red text-sm">
-            {error}
+        {(error || actionError) && (
+          <div className="mb-6 p-4 rounded-xl border border-red/30 bg-red/10 text-red text-sm flex items-center justify-between gap-2">
+            <span>{error || actionError}</span>
+            {actionError && (
+              <button
+                type="button"
+                onClick={() => setActionError(null)}
+                className="text-red/70 hover:text-red cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
 
@@ -211,18 +287,57 @@ export function ManageMembersPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <Link to={`/manage/members/${member.id}`}>
-                            <button className="px-3 py-1.5 text-xs text-white/60 hover:text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors">
+                            <button
+                              type="button"
+                              className="px-3 py-1.5 text-xs text-white/60 hover:text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors cursor-pointer"
+                            >
                               View
                             </button>
                           </Link>
-                          {canRegister && member.is_active && (
-                            <button
-                              onClick={() => handleDeactivate(member.id)}
-                              disabled={deleting === member.id}
-                              className="px-3 py-1.5 text-xs text-red/60 hover:text-red border border-red/10 hover:border-red/30 rounded-lg transition-colors disabled:opacity-40"
-                            >
-                              {deleting === member.id ? '...' : 'Deactivate'}
-                            </button>
+
+                          {isAdmin && (
+                            <>
+                              {member.is_active ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActionError(null)
+                                    setDeactivateTarget(member)
+                                  }}
+                                  className="px-2.5 py-1.5 text-xs text-amber-400/80 hover:text-amber-300 border border-amber-500/20 hover:border-amber-500/40 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                  title="Deactivate Member"
+                                >
+                                  <UserX className="w-3.5 h-3.5" />
+                                  <span>Deactivate</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActionError(null)
+                                    setReactivateTarget(member)
+                                  }}
+                                  className="px-2.5 py-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                  title="Reactivate Member"
+                                >
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                  <span>Reactivate</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActionError(null)
+                                  setDeleteTarget(member)
+                                }}
+                                className="p-1.5 text-red/60 hover:text-red border border-red/10 hover:border-red/30 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Member"
+                                aria-label="Delete member"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -233,6 +348,267 @@ export function ManageMembersPage() {
             </table>
           </div>
         </div>
+
+        {/* ===================================================================
+            DEACTIVATE CONFIRMATION MODAL (Rendered to document.body via Portal)
+        =================================================================== */}
+        {deactivateTarget &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => !isActionLoading && setDeactivateTarget(null)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div
+                className="relative w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#121214] p-6 shadow-2xl space-y-5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                      <UserX className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white uppercase tracking-tight">
+                        Deactivate Member
+                      </h3>
+                      <p className="text-xs text-white/40 font-mono">
+                        CODE: {deactivateTarget.member_code}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeactivateTarget(null)}
+                    disabled={isActionLoading}
+                    className="text-white/40 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {actionError && (
+                  <div className="p-3 rounded-xl border border-red/30 bg-red/10 text-red text-xs">
+                    {actionError}
+                  </div>
+                )}
+
+                <div className="space-y-2 text-sm text-white/70">
+                  <p className="text-white font-medium">
+                    Are you sure you want to deactivate{' '}
+                    <span className="text-amber-400 font-semibold">{deactivateTarget.full_name}</span>?
+                  </p>
+                  <p className="text-xs text-white/50 leading-relaxed">
+                    Their membership pass will be paused, turnstile gate access will be set to inactive, 
+                    and they will no longer be marked as an active facility lifter.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeactivateTarget(null)}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-xs text-white/70 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeactivate}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    {isActionLoading ? 'Deactivating...' : 'Yes, Deactivate'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+
+        {/* ===================================================================
+            REACTIVATE CONFIRMATION MODAL (Rendered to document.body via Portal)
+        =================================================================== */}
+        {reactivateTarget &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => !isActionLoading && setReactivateTarget(null)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div
+                className="relative w-full max-w-md rounded-2xl border border-emerald-500/30 bg-[#121214] p-6 shadow-2xl space-y-5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white uppercase tracking-tight">
+                        Reactivate Member
+                      </h3>
+                      <p className="text-xs text-white/40 font-mono">
+                        CODE: {reactivateTarget.member_code}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReactivateTarget(null)}
+                    disabled={isActionLoading}
+                    className="text-white/40 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {actionError && (
+                  <div className="p-3 rounded-xl border border-red/30 bg-red/10 text-red text-xs">
+                    {actionError}
+                  </div>
+                )}
+
+                <div className="space-y-2 text-sm text-white/70">
+                  <p className="text-white font-medium">
+                    Are you sure you want to reactivate{' '}
+                    <span className="text-emerald-400 font-semibold">{reactivateTarget.full_name}</span>?
+                  </p>
+                  <p className="text-xs text-white/50 leading-relaxed">
+                    Their membership profile will be restored to active status, allowing them to enter the facility, 
+                    enroll in classes, and be assigned membership plans.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setReactivateTarget(null)}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-xs text-white/70 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmReactivate}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    {isActionLoading ? 'Reactivating...' : 'Yes, Reactivate'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+
+        {/* ===================================================================
+            DELETE MEMBER CONFIRMATION MODAL (Rendered to document.body via Portal)
+        =================================================================== */}
+        {deleteTarget &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => !isActionLoading && setDeleteTarget(null)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div
+                className="relative w-full max-w-md rounded-2xl border border-red/40 bg-[#121214] p-6 shadow-2xl space-y-5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red/10 border border-red/30 flex items-center justify-center text-red shrink-0">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white uppercase tracking-tight">
+                        Delete Member
+                      </h3>
+                      <p className="text-xs text-white/40 font-mono">
+                        CODE: {deleteTarget.member_code}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={isActionLoading}
+                    className="text-white/40 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {actionError && (
+                  <div className="p-3 rounded-xl border border-red/30 bg-red/10 text-red text-xs">
+                    {actionError}
+                  </div>
+                )}
+
+                <div className="space-y-2 text-sm text-white/70">
+                  <p className="text-white font-medium">
+                    Are you sure you want to delete{' '}
+                    <span className="text-red font-semibold">{deleteTarget.full_name}</span>?
+                  </p>
+                  <p className="text-xs text-white/50 leading-relaxed">
+                    This action is <strong className="text-red">permanent and irreversible</strong>. 
+                    All associated check-ins, package records, and athlete details will be completely removed.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-xs text-white/70 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(229,32,26,0.3)] disabled:opacity-40"
+                  >
+                    {isActionLoading ? 'Deleting...' : 'Yes, Delete Permanently'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+
+        {/* Action Loading Full-Screen Overlay */}
+        {actionLoadingText &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in"
+              role="status"
+              aria-live="polite"
+            >
+              <img
+                src="/assets/logos/thedgym.png"
+                alt="The DGym"
+                className="mb-8 h-12 w-auto object-contain"
+              />
+              <QuarterRing className="h-14 w-14 text-red" />
+              <p className="mt-6 text-sm uppercase tracking-[0.25em] font-mono text-white/80 font-bold">
+                {actionLoadingText}
+              </p>
+              <p className="mt-2 text-xs font-mono text-white/40">
+                Updating member records in database...
+              </p>
+            </div>,
+            document.body,
+          )}
       </div>
     </>
   )

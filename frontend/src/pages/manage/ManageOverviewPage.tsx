@@ -82,12 +82,9 @@ export function ManageOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white">
               Member Registry
             </h2>
-            <p className="text-xs text-white/50">
-              Search, register, and manage member profiles and active plans.
-            </p>
           </Link>
 
           <Link
@@ -105,12 +102,9 @@ export function ManageOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white">
               Membership Plans
             </h2>
-            <p className="text-xs text-white/50">
-              Manage pricing tiers — Day Pass, Monthly, and Student passes.
-            </p>
           </Link>
 
           <Link
@@ -128,12 +122,9 @@ export function ManageOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white">
               Retention & Analytics
             </h2>
-            <p className="text-xs text-white/50">
-              Track gym traffic, peak dwell time, and XGBoost churn forecasts.
-            </p>
           </Link>
 
           <Link
@@ -151,12 +142,9 @@ export function ManageOverviewPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>
-            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white mb-1">
+            <h2 className="font-display text-base font-bold uppercase tracking-wide text-white">
               Check-In Visits
             </h2>
-            <p className="text-xs text-white/50">
-              Log daily athlete attendance and monitor active occupancy.
-            </p>
           </Link>
         </div>
 

@@ -19,9 +19,6 @@ import {
   accountApi,
 } from '@/services/accountApi'
 
-import {
-  NotificationBell,
-} from '@/components/notifications/NotificationBell'
 
 import {
   Badge,
@@ -1035,8 +1032,6 @@ export function MemberSettingsPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              {user && <NotificationBell user={user} />}
-
               <Button
                 type="button"
                 variant="secondary"

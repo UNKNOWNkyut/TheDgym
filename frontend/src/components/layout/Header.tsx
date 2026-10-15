@@ -95,8 +95,8 @@ export function Header() {
   const isActive = (href: string) =>
     href === '/' ? location.pathname === '/' : location.pathname.startsWith(href)
 
-  const isStaffOrAdmin = user?.role === 'admin' || user?.role === 'staff'
-  const isGymMember = Boolean(user?.has_active_membership) || isStaffOrAdmin
+  const isAdmin = user?.role === 'admin'
+  const isGymMember = Boolean(user?.has_active_membership) || isAdmin || user?.role === 'trainer'
 
   return (
     <header
@@ -232,14 +232,14 @@ export function Header() {
                       {/* Menu Links */}
                       <div className="space-y-0.5 text-xs">
                         <Link
-                          to={isStaffOrAdmin ? '/manage' : '/dashboard'}
+                          to={isAdmin ? '/manage' : '/dashboard'}
                           onClick={() => setProfileDropdownOpen(false)}
                           className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-white/80 hover:text-white hover:bg-white/5 transition-colors font-medium"
                         >
                           <svg className="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                           </svg>
-                          <span>{isStaffOrAdmin ? 'Management Hub' : 'Dashboard'}</span>
+                          <span>{isAdmin ? 'Management Hub' : 'Dashboard'}</span>
                         </Link>
 
                         <div className="border-t border-white/8 my-1 pt-1">
@@ -375,11 +375,11 @@ export function Header() {
                   </div>
 
                   <Link
-                    to={isStaffOrAdmin ? '/manage' : '/dashboard'}
+                    to={isAdmin ? '/manage' : '/dashboard'}
                     onClick={() => setMenuOpen(false)}
                     className="py-3 px-4 text-base font-semibold text-white bg-white/10 hover:bg-white/15 rounded-lg text-center transition-colors duration-150"
                   >
-                    {isStaffOrAdmin ? 'Go to Management Hub' : 'Go to Dashboard'}
+                    {isAdmin ? 'Go to Management Hub' : 'Go to Dashboard'}
                   </Link>
 
                   <button

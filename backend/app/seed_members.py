@@ -71,10 +71,27 @@ PLACEHOLDER_MEMBERS = [
 
 
 async def generate_member_code(session: AsyncSession) -> str:
-    """Generate the next member code in sequence: DGM-0001, DGM-0002, ..."""
-    result = await session.execute(select(func.count()).select_from(Member))
-    count = result.scalar() or 0
-    return f"DGM-{(count + 1):04d}"
+    """Generate the next unique member code in sequence: DGM-0001, DGM-0002, ..."""
+    result = await session.execute(select(Member.member_code))
+    codes = set(result.scalars().all())
+
+    max_num = 0
+    for code in codes:
+        if code and code.startswith("DGM-"):
+            try:
+                num = int(code.split("-")[1])
+                if num > max_num:
+                    max_num = num
+            except (ValueError, IndexError):
+                pass
+
+    next_num = max_num + 1
+    next_code = f"DGM-{next_num:04d}"
+    while next_code in codes:
+        next_num += 1
+        next_code = f"DGM-{next_num:04d}"
+
+    return next_code
 
 
 async def seed_members(session: AsyncSession) -> None:

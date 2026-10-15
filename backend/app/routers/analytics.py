@@ -70,40 +70,56 @@ async def get_analytics_overview(
     stmt_active = select(func.count(Member.id)).where(Member.status == MemberStatus.ACTIVE)
     active_members_count = (await db.execute(stmt_active)).scalar() or 0
 
-    # 4. Average dwell minutes
-    stmt_dwell = select(Visit).where(Visit.checked_out_at.isnot(None)).limit(100)
+    # 4. Average dwell minutes from real checked-out visits (ordered by most recent)
+    stmt_dwell = (
+        select(Visit)
+        .where(Visit.checked_out_at.isnot(None))
+        .order_by(Visit.checked_in_at.desc())
+        .limit(300)
+    )
     checked_out_visits = (await db.execute(stmt_dwell)).scalars().all()
     if checked_out_visits:
+        # Filter out sub-3-minute checkout glitches (e.g. quick test clicks) to get true workout dwell
         dwell_durations = [
             (v.checked_out_at - v.checked_in_at).total_seconds() / 60.0
             for v in checked_out_visits
-            if v.checked_out_at > v.checked_in_at
+            if v.checked_out_at > v.checked_in_at and (v.checked_out_at - v.checked_in_at).total_seconds() >= 180
         ]
-        avg_dwell = int(sum(dwell_durations) / len(dwell_durations)) if dwell_durations else 68
+        avg_dwell = int(sum(dwell_durations) / len(dwell_durations)) if dwell_durations else 65
     else:
-        avg_dwell = 68
+        avg_dwell = 65
 
-    # 5. Hourly check-in distribution (6 AM to 9 PM)
-    all_visits_recent = (await db.execute(select(Visit.checked_in_at).limit(500))).scalars().all()
+    # 5. Hourly check-in distribution (6 AM to 9 PM) - dynamic realtime query
+    all_visits_recent = (
+        await db.execute(
+            select(Visit.checked_in_at)
+            .order_by(Visit.checked_in_at.desc())
+            .limit(1000)
+        )
+    ).scalars().all()
+
     hour_counts = {h: 0 for h in range(6, 22)}
     for v_time in all_visits_recent:
-        h = v_time.hour
-        if 6 <= h <= 21:
-            hour_counts[h] += 1
+        # Check-in datetimes are stored in UTC; convert to Philippine Standard Time (UTC+8)
+        local_h = (v_time.hour + 8) % 24 if v_time.tzinfo is not None else v_time.hour
+        if 6 <= local_h <= 21:
+            hour_counts[local_h] += 1
 
-    # Format hourly list
+    # Format hourly list and compute dynamic peak hour
     hourly_distribution: List[HourlyCheckinStat] = []
-    peak_count = 0
-    peak_hour_str = "6:00 PM"
+    peak_count = -1
+    peak_h = 18  # default 6:00 PM if no data
     for h in range(6, 22):
         label = f"{h if h <= 12 else h - 12} {'AM' if h < 12 else 'PM'}"
         count = hour_counts[h]
         if count > peak_count:
             peak_count = count
-            peak_hour_str = f"{h if h <= 12 else h - 12}:00 {'AM' if h < 12 else 'PM'}"
+            peak_h = h
         hourly_distribution.append(
             HourlyCheckinStat(hour=h, hour_label=label, count=count)
         )
+
+    peak_hour_str = f"{peak_h if peak_h <= 12 else peak_h - 12}:00 {'AM' if peak_h < 12 else 'PM'}"
 
     # 6. Popular classes
     stmt_classes = (
@@ -128,7 +144,7 @@ async def get_analytics_overview(
     ]
 
     return AnalyticsOverviewResponse(
-        total_visits_this_month=visits_this_month if visits_this_month > 0 else 42,
+        total_visits_this_month=visits_this_month,
         attendance_growth_pct=attendance_growth,
         active_members_count=active_members_count,
         average_dwell_minutes=avg_dwell,

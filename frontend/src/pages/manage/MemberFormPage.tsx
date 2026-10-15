@@ -5,10 +5,13 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { QuarterRing } from '@/components/ui/quarter-ring'
 import { api } from '@/services/api'
 import type { MemberCreate, Gender } from '@/types/auth'
 
 gsap.registerPlugin()
+
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 
 const GENDER_OPTIONS: { value: Gender | ''; label: string }[] = [
   { value: '', label: 'Prefer not to say' },
@@ -67,6 +70,11 @@ export function MemberFormPage() {
       return
     }
 
+    if (form.email.trim() && !EMAIL_REGEX.test(form.email.trim())) {
+      setError('Please enter a valid email address (e.g. athlete@example.com).')
+      return
+    }
+
     setSubmitting(true)
     setError(null)
 
@@ -84,11 +92,13 @@ export function MemberFormPage() {
     }
 
     try {
-      const member = await api.createMember(payload)
+      const [member] = await Promise.all([
+        api.createMember(payload),
+        new Promise<void>((resolve) => setTimeout(resolve, 800)),
+      ])
       navigate(`/manage/members/${member.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to register member.')
-    } finally {
       setSubmitting(false)
     }
   }
@@ -241,6 +251,28 @@ export function MemberFormPage() {
             </Button>
           </div>
         </form>
+
+        {/* Full-screen Loading Overlay */}
+        {submitting && (
+          <div
+            className="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in"
+            role="status"
+            aria-live="polite"
+          >
+            <img
+              src="/assets/logos/thedgym.png"
+              alt="The DGym"
+              className="mb-8 h-12 w-auto object-contain"
+            />
+            <QuarterRing className="h-14 w-14 text-red" />
+            <p className="mt-6 text-sm uppercase tracking-[0.25em] font-mono text-white/80 font-bold">
+              Registering Member to Database
+            </p>
+            <p className="mt-2 text-xs font-mono text-white/40">
+              Generating unique member code and saving record...
+            </p>
+          </div>
+        )}
       </div>
     </>
   )

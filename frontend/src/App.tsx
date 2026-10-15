@@ -100,6 +100,12 @@ const MemberSettingsPage = lazy(() =>
   })),
 )
 
+const YourPlanPage = lazy(() =>
+  import('@/pages/YourPlanPage').then((module) => ({
+    default: module.YourPlanPage,
+  })),
+)
+
 const BookTrainerPage = lazy(() =>
   import('@/pages/manage/BookTrainerPage').then((module) => ({
     default: module.BookTrainerPage,
@@ -370,12 +376,21 @@ export function App() {
 
 
               <Route
+                path="/dashboard/plan"
+                element={
+                  <ProtectedRoute allowedRoles={['member']}>
+                    <YourPlanPage />
+                  </ProtectedRoute>
+                }
+              />
+
+
+              <Route
                 path="/manage"
                 element={
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                     ]}
                   >
                     <ManageOverviewPage />
@@ -390,7 +405,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                       'trainer',
                     ]}
                   >
@@ -406,7 +420,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                     ]}
                   >
                     <MemberFormPage />
@@ -421,7 +434,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                       'trainer',
                     ]}
                   >
@@ -437,7 +449,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                     ]}
                   >
                     <ManagePlansPage />
@@ -466,7 +477,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                       'trainer',
                     ]}
                   >
@@ -482,7 +492,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                       'trainer',
                     ]}
                   >
@@ -498,7 +507,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
                       'trainer',
                     ]}
                   >
@@ -540,7 +548,7 @@ export function App() {
               />
 
 
-              {/* Analytics & Churn Prediction — Admin, Staff, Trainer */}
+              {/* Analytics & Churn Prediction — Admin Only */}
 
               <Route
                 path="/manage/analytics"
@@ -548,8 +556,6 @@ export function App() {
                   <ProtectedRoute
                     allowedRoles={[
                       'admin',
-                      'staff',
-                      'trainer',
                     ]}
                   >
                     <ManageAnalyticsPage />

@@ -226,6 +226,12 @@ export const api = {
     })
   },
 
+  async deleteUser(id: number): Promise<void> {
+    return request<void>(`/api/users/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
   // ─── Members ─────────────────────────────────────────────────────────────
 
   async getMembers(params?: {
@@ -284,6 +290,18 @@ export const api = {
   async deactivateMember(id: number): Promise<void> {
     return request<void>(`/api/members/${id}`, {
       method: 'DELETE',
+    })
+  },
+
+  async deleteMember(id: number): Promise<void> {
+    return request<void>(`/api/members/${id}/permanent`, {
+      method: 'DELETE',
+    })
+  },
+
+  async reactivateMember(id: number): Promise<Member> {
+    return request<Member>(`/api/members/${id}/reactivate`, {
+      method: 'POST',
     })
   },
 
@@ -607,6 +625,18 @@ export const api = {
     return request<FinanceSummary>(
       `/api/finance/summary?${query.toString()}`,
     )
+  },
+
+  async getAnnualFinanceSummary(
+    year: number,
+  ): Promise<{
+    month: number
+    month_name: string
+    revenue: number
+    expenses: number
+    net_income: number
+  }[]> {
+    return request(`/api/finance/annual?year=${year}`)
   },
 
   // ─── Analytics & Churn Prediction (Phase 6) ──────────────────────────────

@@ -22,7 +22,9 @@ class Settings:
 
     # Database: defaults to async SQLite for local standalone development,
     # or PostgreSQL (e.g. postgresql+asyncpg://user:pass@localhost:5432/dgym)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./dgym.db")
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL", f"sqlite+aiosqlite:///{base_dir / 'dgym.db'}"
+    )
 
     # JWT Settings
     JWT_SECRET_KEY: str = os.getenv(

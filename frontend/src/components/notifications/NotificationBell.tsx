@@ -7,7 +7,16 @@ export interface GymNotification {
   id: string
   title: string
   message: string
-  type: 'offer' | 'retention' | 'booking' | 'announcement'
+  type:
+    | 'offer'
+    | 'retention'
+    | 'booking'
+    | 'announcement'
+    | 'churn_alert'
+    | 'enrollment'
+    | 'registration'
+    | 'pt_booking'
+    | 'session_alert'
   timestamp: string
   read: boolean
   actionText?: string
@@ -45,10 +54,77 @@ export function NotificationBell({ user }: NotificationBellProps) {
   const [isOpen, setIsOpen] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
-  // Generate initial contextual notifications for the user
+  // Generate initial contextual notifications based strictly on user role
   const getInitialNotifications = (): GymNotification[] => {
-    const isMemberActive = Boolean(user.has_active_membership)
+    // 1. ADMIN NOTIFICATIONS — No member offers; only operations, churn alerts, and enrollments
+    if (user.role === 'admin') {
+      return [
+        {
+          id: 'admin-churn-1',
+          title: '⚠️ High Churn Risk Alert: Action Needed',
+          message:
+            'AI Model flagged Juan Dela Cruz (Recency: Today, Churn Risk: 88%) with high cancellation velocity. Immediate retention strategy required.',
+          type: 'churn_alert',
+          timestamp: 'Just now',
+          read: false,
+          actionText: 'Review AI Strategy',
+          actionUrl: '/manage/analytics',
+        },
+        {
+          id: 'admin-enroll-1',
+          title: '🎉 New Member Enrollment',
+          message:
+            'Alex Cruz enrolled in 1-Month Unlimited Plan (₱1,500). Payment confirmed via GCash.',
+          type: 'enrollment',
+          timestamp: '2 hours ago',
+          read: false,
+          actionText: 'View Members',
+          actionUrl: '/manage/members',
+        },
+        {
+          id: 'admin-user-1',
+          title: '👤 New User Registered',
+          message:
+            'Jordan Ramos created a DGym account via mobile onboarding. Awaiting membership plan selection.',
+          type: 'registration',
+          timestamp: 'Yesterday',
+          read: true,
+          actionText: 'View Users',
+          actionUrl: '/manage/users',
+        },
+      ]
+    }
 
+    // 2. TRAINER NOTIFICATIONS — Only PT enrollments & coaching check-ins (no member offers)
+    if (user.role === 'trainer') {
+      return [
+        {
+          id: 'trainer-pt-1',
+          title: '🏋️ New 1-on-1 PT Session Booking',
+          message:
+            'Alex Cruz enrolled and booked a 1-on-1 Powerlifting Assessment session with you for Saturday 9:00 AM.',
+          type: 'pt_booking',
+          timestamp: 'Just now',
+          read: false,
+          actionText: 'View PT Sessions',
+          actionUrl: '/manage/pt-sessions',
+        },
+        {
+          id: 'trainer-checkin-1',
+          title: '📅 PT Client Check-In',
+          message:
+            'Marcus Vance checked in for today\'s 4:00 PM Strength & Hypertrophy session.',
+          type: 'session_alert',
+          timestamp: '3 hours ago',
+          read: true,
+          actionText: 'Open PT Schedule',
+          actionUrl: '/manage/pt-sessions',
+        },
+      ]
+    }
+
+    // 3. ACTIVE MEMBER NOTIFICATIONS — Retention offers, coaching slots, facility news
+    const isMemberActive = Boolean(user.has_active_membership)
     if (isMemberActive) {
       return [
         {
@@ -85,7 +161,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
       ]
     }
 
-    // Unsubscribed registered user notifications
+    // 4. REGISTERED USER / INACTIVE NOTIFICATIONS — Starter discounts, onboarding, hours
     return [
       {
         id: 'starter-offer-1',
@@ -121,7 +197,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
     ]
   }
 
-  const storageKey = `dgym_notifs_${user.id}_${user.has_active_membership ? 'member' : 'user'}`
+  const storageKey = `dgym_notifs_${user.id}_${user.role || (user.has_active_membership ? 'member' : 'user')}`
 
   const [notifications, setNotifications] = useState<GymNotification[]>(() => {
     try {
@@ -321,6 +397,31 @@ export function NotificationBell({ user }: NotificationBellProps) {
                       {notif.type === 'retention' && (
                         <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-red/20 text-red border border-red/30 mb-1">
                           VIP Retention Offer
+                        </span>
+                      )}
+                      {notif.type === 'churn_alert' && (
+                        <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 mb-1">
+                          AI Churn Risk Alert
+                        </span>
+                      )}
+                      {notif.type === 'enrollment' && (
+                        <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mb-1">
+                          New Enrollment
+                        </span>
+                      )}
+                      {notif.type === 'registration' && (
+                        <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 mb-1">
+                          New Registered User
+                        </span>
+                      )}
+                      {notif.type === 'pt_booking' && (
+                        <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 mb-1">
+                          1-on-1 PT Booking
+                        </span>
+                      )}
+                      {notif.type === 'session_alert' && (
+                        <span className="inline-block text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 mb-1">
+                          Session Check-In
                         </span>
                       )}
                       <p className="text-xs font-semibold leading-snug">

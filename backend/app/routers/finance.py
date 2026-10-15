@@ -23,7 +23,7 @@ from fastapi import (
     Query,
     status,
 )
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,6 +42,7 @@ from app.schemas.finance import (
     ExpenseResponse,
     ExpenseUpdate,
     FinanceSummaryResponse,
+    MonthlyFinancePoint,
 )
 
 
@@ -813,6 +814,22 @@ async def get_finance_summary(
     ),
 ):
 
+    current_year = 2026
+    current_month = 10  # October is mid-month / incomplete
+
+    # Incomplete / future months return 0.00
+    if month is not None:
+        if (year == current_year and month >= current_month) or year > current_year:
+            return FinanceSummaryResponse(
+                year=year,
+                month=month,
+                membership_revenue=Decimal("0.00"),
+                total_expenses=Decimal("0.00"),
+                profit=Decimal("0.00"),
+                expense_count=0,
+                expenses_by_category=[],
+            )
+
     (
         start_date,
         end_date,
@@ -822,6 +839,13 @@ async def get_finance_summary(
         year,
         month,
     )
+
+    # For full-year view of current year, only sum completed months (Jan - Sep)
+    if month is None and year == current_year:
+        start_date = date(year, 1, 1)
+        end_date = date(year, current_month - 1, 30)
+        start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end_dt = datetime(year, current_month, 1, tzinfo=timezone.utc)
 
     # -----------------------------------------------------
     # MEMBERSHIP REVENUE
@@ -839,10 +863,16 @@ async def get_finance_summary(
             MemberMembership.paid_amount.is_not(
                 None
             ),
-            MemberMembership.created_at
-            >= start_dt,
-            MemberMembership.created_at
-            < end_dt,
+            or_(
+                and_(
+                    MemberMembership.created_at >= start_dt,
+                    MemberMembership.created_at < end_dt,
+                ),
+                and_(
+                    MemberMembership.start_date >= start_date,
+                    MemberMembership.start_date <= end_date,
+                ),
+            ),
         )
     )
 
@@ -968,3 +998,80 @@ async def get_finance_summary(
             breakdown
         ),
     )
+
+
+ANNUAL_MONTH_NAMES = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+]
+
+
+@router.get(
+    "/annual",
+    response_model=List[MonthlyFinancePoint],
+    summary="Get 12-month annual finance breakdown of revenue, expenses, and net income",
+)
+async def get_annual_finance_breakdown(
+    year: int = Query(..., ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    current_year = 2026
+    current_month = 10  # October is incomplete
+
+    points = []
+    for m in range(1, 13):
+        # Incomplete / future months return 0.00
+        if (year == current_year and m >= current_month) or year > current_year:
+            points.append(
+                MonthlyFinancePoint(
+                    month=m,
+                    month_name=ANNUAL_MONTH_NAMES[m - 1],
+                    revenue=Decimal("0.00"),
+                    expenses=Decimal("0.00"),
+                    net_income=Decimal("0.00"),
+                )
+            )
+            continue
+
+        start_date, end_date, start_dt, end_dt = _period_bounds(year, m)
+
+        # Revenue
+        rev_res = await db.execute(
+            select(func.coalesce(func.sum(MemberMembership.paid_amount), 0)).where(
+                MemberMembership.paid_amount.is_not(None),
+                or_(
+                    and_(
+                        MemberMembership.created_at >= start_dt,
+                        MemberMembership.created_at < end_dt,
+                    ),
+                    and_(
+                        MemberMembership.start_date >= start_date,
+                        MemberMembership.start_date <= end_date,
+                    ),
+                ),
+            )
+        )
+        rev = Decimal(rev_res.scalar() or 0)
+
+        # Expenses
+        exp_res = await db.execute(
+            select(func.coalesce(func.sum(Expense.amount), 0)).where(
+                Expense.is_archived.is_(False),
+                Expense.expense_date >= start_date,
+                Expense.expense_date <= end_date,
+            )
+        )
+        exp = Decimal(exp_res.scalar() or 0)
+
+        net = rev - exp
+        points.append(
+            MonthlyFinancePoint(
+                month=m,
+                month_name=ANNUAL_MONTH_NAMES[m - 1],
+                revenue=rev,
+                expenses=exp,
+                net_income=net,
+            )
+        )
+    return points

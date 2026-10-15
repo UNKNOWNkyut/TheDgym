@@ -11,7 +11,6 @@ import { QuarterRing } from '@/components/ui/quarter-ring'
 
 const DEMO_ACCOUNTS = [
   { role: 'Admin', email: 'admin@thedgym.com', pass: 'admin12345', badge: 'Full Access' },
-  { role: 'Staff', email: 'staff@thedgym.com', pass: 'staff12345', badge: 'Front Desk' },
   { role: 'Trainer', email: 'trainer@thedgym.com', pass: 'trainer12345', badge: 'Coach' },
   { role: 'Active Member', email: 'member@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
   { role: 'Registered User', email: 'user@thedgym.com', pass: 'user12345', badge: 'No Plan' },
@@ -67,8 +66,20 @@ export function LoginPage() {
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
-      const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : (loggedInUser.has_active_membership ? '/dashboard' : '/')
-      const dest = (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login')) ? from : defaultDest
+      const defaultDest = loggedInUser.role === 'admin'
+        ? '/manage'
+        : loggedInUser.role === 'trainer'
+        ? '/dashboard'
+        : loggedInUser.has_active_membership
+        ? '/dashboard'
+        : '/'
+
+      let dest = defaultDest
+      if (loggedInUser.role === 'member') {
+        if (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login') && !from.startsWith('/manage')) {
+          dest = from
+        }
+      }
 
       navigate(dest, { replace: true })
     } catch {
@@ -85,8 +96,21 @@ export function LoginPage() {
         loginWithGoogle(credential),
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
-      const defaultDest = (loggedInUser.role === 'admin' || loggedInUser.role === 'staff') ? '/manage' : (loggedInUser.has_active_membership ? '/dashboard' : '/')
-      const dest = (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login')) ? from : defaultDest
+      const defaultDest = loggedInUser.role === 'admin'
+        ? '/manage'
+        : loggedInUser.role === 'trainer'
+        ? '/dashboard'
+        : loggedInUser.has_active_membership
+        ? '/dashboard'
+        : '/'
+
+      let dest = defaultDest
+      if (loggedInUser.role === 'member') {
+        if (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login') && !from.startsWith('/manage')) {
+          dest = from
+        }
+      }
+
       navigate(dest, { replace: true })
     } catch {
       setShowLoading(false)

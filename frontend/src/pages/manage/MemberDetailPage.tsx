@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
@@ -9,6 +10,8 @@ import { Card } from '@/components/ui/Card'
 import { api } from '@/services/api'
 import type { Member, MemberStatus, MembershipPlan } from '@/types/auth'
 import { AssignMembershipModal } from '@/components/manage/AssignMembershipModal'
+import { UserCheck, X, AlertTriangle } from 'lucide-react'
+import { QuarterRing } from '@/components/ui/quarter-ring'
 
 gsap.registerPlugin()
 
@@ -32,6 +35,10 @@ function getMembershipStatusVariant(status: string) {
 
 export function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const fromAnalytics = (location.state as { from?: string } | null)?.from === 'analytics'
+  const backTo = fromAnalytics ? '/manage/analytics' : '/manage/members'
+  const backLabel = fromAnalytics ? 'Analytics' : 'Members'
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [member, setMember] = useState<Member | null>(null)
@@ -39,6 +46,10 @@ export function MemberDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
+  const [showReactivateModal, setShowReactivateModal] = useState(false)
+  const [isReactivating, setIsReactivating] = useState(false)
+  const [actionLoadingText, setActionLoadingText] = useState<string | null>(null)
+  const [reactivateError, setReactivateError] = useState<string | null>(null)
 
   useGSAP(() => {
     if (!loading && member) {
@@ -73,7 +84,27 @@ export function MemberDetailPage() {
       const m = await api.getMember(parseInt(id))
       setMember(m)
     } catch {
-      // Silently fail refresh
+      // ignore
+    }
+  }
+
+  const handleReactivate = async () => {
+    if (!member) return
+    setIsReactivating(true)
+    setReactivateError(null)
+    setActionLoadingText(`Reactivating ${member.full_name}...`)
+    try {
+      const [, updated] = await Promise.all([
+        new Promise((resolve) => setTimeout(resolve, 800)),
+        api.reactivateMember(member.id),
+      ])
+      setMember(updated)
+      setShowReactivateModal(false)
+    } catch (err) {
+      setReactivateError(err instanceof Error ? err.message : 'Failed to reactivate member.')
+    } finally {
+      setIsReactivating(false)
+      setActionLoadingText(null)
     }
   }
 
@@ -99,8 +130,8 @@ export function MemberDetailPage() {
         <div className="p-6 rounded-xl border border-red/30 bg-red/10 text-red">
           {error || 'Member not found.'}
         </div>
-        <Link to="/manage/members" className="mt-4 inline-block text-sm text-white/50 hover:text-white">
-          ← Back to Members
+        <Link to={backTo} className="mt-4 inline-block text-sm text-white/50 hover:text-white">
+          ← Back to {backLabel}
         </Link>
       </div>
     )
@@ -114,11 +145,11 @@ export function MemberDetailPage() {
 
       <div ref={containerRef} className="p-6 md:p-8 max-w-4xl mx-auto">
         {/* Back */}
-        <Link to="/manage/members" className="inline-flex items-center gap-2 text-sm text-white/40 hover:text-white transition-colors mb-6">
+        <Link to={backTo} className="inline-flex items-center gap-2 text-sm text-white/40 hover:text-white transition-colors mb-6">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Members
+          {backLabel}
         </Link>
 
         {/* Profile Header */}
@@ -141,15 +172,64 @@ export function MemberDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowAssignModal(true)}
-            >
-              + Assign Plan
-            </Button>
+            {!member.is_active || member.status === 'inactive' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReactivateError(null)
+                    setShowReactivateModal(true)
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/40"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>Reactivate Member</span>
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  title="Cannot assign a plan to a deactivated member. Please reactivate first."
+                  className="px-3.5 py-2 text-xs text-white/30 border border-white/10 rounded-xl cursor-not-allowed font-medium"
+                >
+                  + Assign Plan
+                </button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAssignModal(true)}
+              >
+                + Assign Plan
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Deactivated Notice Banner */}
+        {(!member.is_active || member.status === 'inactive') && (
+          <div className="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <p className="font-semibold text-amber-300 text-sm">Account Deactivated</p>
+                <p className="text-xs text-amber-400/80">
+                  This member cannot be assigned a plan while deactivated. Reactivate this account to restore plan access.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setReactivateError(null)
+                setShowReactivateModal(true)
+              }}
+              className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer"
+            >
+              Reactivate Account
+            </button>
+          </div>
+        )}
 
         {/* Active Membership Banner */}
         {activeMembership ? (
@@ -295,6 +375,107 @@ export function MemberDetailPage() {
           }}
         />
       )}
+
+      {/* Reactivate Confirmation Modal */}
+      {showReactivateModal &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => !isReactivating && setShowReactivateModal(false)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="relative w-full max-w-md rounded-2xl border border-emerald-500/30 bg-[#121214] p-6 shadow-2xl space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white uppercase tracking-tight">
+                      Reactivate Member
+                    </h3>
+                    <p className="text-xs text-white/40 font-mono">
+                      CODE: {member.member_code}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReactivateModal(false)}
+                  disabled={isReactivating}
+                  className="text-white/40 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {reactivateError && (
+                <div className="p-3 rounded-xl border border-red/30 bg-red/10 text-red text-xs">
+                  {reactivateError}
+                </div>
+              )}
+
+              <div className="space-y-2 text-sm text-white/70">
+                <p className="text-white font-medium">
+                  Are you sure you want to reactivate{' '}
+                  <span className="text-emerald-400 font-semibold">{member.full_name}</span>?
+                </p>
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Their account will be restored to active status, turnstile access will be unblocked, 
+                  and you will be able to assign membership plans to them.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReactivateModal(false)}
+                  disabled={isReactivating}
+                  className="px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-xs text-white/70 hover:text-white transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReactivate}
+                  disabled={isReactivating}
+                  className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-40"
+                >
+                  {isReactivating ? 'Reactivating...' : 'Yes, Reactivate'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {/* Action Loading Full-Screen Overlay */}
+      {actionLoadingText &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in"
+            role="status"
+            aria-live="polite"
+          >
+            <img
+              src="/assets/logos/thedgym.png"
+              alt="The DGym"
+              className="mb-8 h-12 w-auto object-contain"
+            />
+            <QuarterRing className="h-14 w-14 text-emerald-500" />
+            <p className="mt-6 text-sm uppercase tracking-[0.25em] font-mono text-white/80 font-bold">
+              {actionLoadingText}
+            </p>
+            <p className="mt-2 text-xs font-mono text-white/40">
+              Restoring membership privileges in database...
+            </p>
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

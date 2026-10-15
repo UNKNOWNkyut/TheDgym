@@ -80,3 +80,25 @@ async def update_user(
     await db.commit()
     await db.refresh(user)
     return UserResponse.model_validate(user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    """Delete a user account. Admin only."""
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own active admin account.",
+        )
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    await db.delete(user)
+    await db.commit()
+

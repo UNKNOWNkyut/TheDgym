@@ -23,7 +23,120 @@ async def get_my_notifications(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Find matching member if exists
+    # 1. Admin Role Notifications
+    if current_user.role == "admin":
+        stmt = (
+            select(Notification)
+            .where(
+                Notification.user_id == current_user.id,
+                Notification.type.notin_(["retention", "offer"]),
+            )
+            .order_by(Notification.created_at.desc())
+            .limit(50)
+        )
+        rows = (await db.execute(stmt)).scalars().all()
+
+        # If no notifications exist yet for admin, seed default admin alerts
+        if not rows:
+            default_admin_notifs = [
+                Notification(
+                    user_id=current_user.id,
+                    title="⚠️ High Churn Risk Alert: Action Needed",
+                    message="AI Model flagged Juan Dela Cruz (Recency: Today, Risk: 88%) with high cancellation velocity. Immediate retention strategy required.",
+                    type="churn_alert",
+                    action_text="Review AI Strategy",
+                    action_url="/manage/analytics",
+                    is_read=False,
+                ),
+                Notification(
+                    user_id=current_user.id,
+                    title="🎉 New Member Enrollment",
+                    message="Alex Cruz enrolled in 1-Month Unlimited Plan (₱1,500). Payment confirmed via GCash.",
+                    type="enrollment",
+                    action_text="View Members",
+                    action_url="/manage/members",
+                    is_read=False,
+                ),
+                Notification(
+                    user_id=current_user.id,
+                    title="👤 New User Registered",
+                    message="Jordan Ramos created a DGym account via mobile onboarding. Awaiting membership plan selection.",
+                    type="registration",
+                    action_text="View Users",
+                    action_url="/manage/users",
+                    is_read=True,
+                ),
+            ]
+            for n in default_admin_notifs:
+                db.add(n)
+            await db.commit()
+
+            stmt = (
+                select(Notification)
+                .where(
+                    Notification.user_id == current_user.id,
+                    Notification.type.notin_(["retention", "offer"]),
+                )
+                .order_by(Notification.created_at.desc())
+                .limit(50)
+            )
+            rows = (await db.execute(stmt)).scalars().all()
+
+        return rows
+
+    # 2. Trainer Role Notifications
+    if current_user.role == "trainer":
+        stmt = (
+            select(Notification)
+            .where(
+                Notification.user_id == current_user.id,
+                Notification.type.notin_(["retention", "offer"]),
+            )
+            .order_by(Notification.created_at.desc())
+            .limit(50)
+        )
+        rows = (await db.execute(stmt)).scalars().all()
+
+        # If no notifications exist yet for trainer, seed default trainer alerts
+        if not rows:
+            default_trainer_notifs = [
+                Notification(
+                    user_id=current_user.id,
+                    title="🏋️ New 1-on-1 PT Session Booking",
+                    message="Alex Cruz enrolled and booked a 1-on-1 Powerlifting Assessment session with you for Saturday 9:00 AM.",
+                    type="pt_booking",
+                    action_text="View PT Sessions",
+                    action_url="/manage/pt-sessions",
+                    is_read=False,
+                ),
+                Notification(
+                    user_id=current_user.id,
+                    title="📅 PT Client Check-In",
+                    message="Marcus Vance checked in for today's 4:00 PM Strength & Hypertrophy session.",
+                    type="session_alert",
+                    action_text="Open PT Schedule",
+                    action_url="/manage/pt-sessions",
+                    is_read=True,
+                ),
+            ]
+            for n in default_trainer_notifs:
+                db.add(n)
+            await db.commit()
+
+            stmt = (
+                select(Notification)
+                .where(
+                    Notification.user_id == current_user.id,
+                    Notification.type.notin_(["retention", "offer"]),
+                )
+                .order_by(Notification.created_at.desc())
+                .limit(50)
+            )
+            rows = (await db.execute(stmt)).scalars().all()
+
+        return rows
+
+    # 3. Member / User Notifications (Account offers, personal retention, bookings)
     stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
     mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
 

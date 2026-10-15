@@ -34,9 +34,12 @@ export function ManageAnalyticsPage() {
   const [isRetraining, setIsRetraining] = useState(false)
   const [notification, setNotification] = useState<string | null>(null)
 
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
   // Fetch initial data
-  const loadData = async () => {
-    setIsLoading(true)
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true)
+    else setIsRefreshing(true)
     try {
       const [analyticsData, churnData, membersData] = await Promise.all([
         api.getAnalyticsOverview(),
@@ -50,11 +53,17 @@ export function ManageAnalyticsPage() {
       console.error('Failed to load analytics data:', err)
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
   useEffect(() => {
     loadData()
+    // Periodic refresh every 30 seconds for live attendance velocity and peak density
+    const interval = setInterval(() => {
+      loadData(true)
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   // Trigger XGBoost pipeline retraining
@@ -196,12 +205,13 @@ export function ManageAnalyticsPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={handleRetrain}
-            disabled={isRetraining}
+            onClick={() => loadData(false)}
+            disabled={isLoading || isRefreshing}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white text-xs uppercase tracking-widest font-mono font-semibold transition-all disabled:opacity-50"
+            title="Update real-time dwell, peak density, and check-ins"
           >
             <svg
-              className={`w-3.5 h-3.5 ${isRetraining ? 'animate-spin text-red-500' : 'text-white/60'}`}
+              className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : 'text-white/60'}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -211,6 +221,27 @@ export function ManageAnalyticsPage() {
                 strokeLinejoin="round"
                 strokeWidth={2}
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {isRefreshing ? 'Refreshing...' : 'Live Refresh'}
+          </button>
+
+          <button
+            onClick={handleRetrain}
+            disabled={isRetraining}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs uppercase tracking-widest font-mono font-semibold transition-all disabled:opacity-50"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isRetraining ? 'animate-spin text-red-500' : 'text-red-400'}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 10V3L4 14h7v7l9-11h-7z"
               />
             </svg>
             {isRetraining ? 'Retraining Model...' : 'Retrain ML Model'}
@@ -987,6 +1018,7 @@ export function ManageAnalyticsPage() {
             <div className="pt-3 border-t border-white/10 flex justify-between items-center">
               <Link
                 to={`/manage/members/${selectedMember.member_id}`}
+                state={{ from: 'analytics' }}
                 className="text-xs text-red-400 hover:text-red-300 font-mono underline"
               >
                 View Full Member Profile &rarr;

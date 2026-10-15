@@ -12,7 +12,7 @@ from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.membership_plan import MembershipPlan
 from app.models.member_membership import MemberMembership, MembershipStatus
-from app.models.member import Member
+from app.models.member import Member, MemberStatus
 from app.models.user import User, UserRole
 from app.schemas.gym import (
     MembershipPlanCreate,
@@ -148,6 +148,12 @@ async def assign_membership(
     member = member_result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
+
+    if not member.is_active or member.status in [MemberStatus.INACTIVE, MemberStatus.SUSPENDED]:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot assign a membership plan to a deactivated member. Please reactivate the member first."
+        )
 
     # Verify plan exists and is active
     plan_result = await db.execute(select(MembershipPlan).where(MembershipPlan.id == data.plan_id))

@@ -147,6 +147,12 @@ class FinanceSummaryResponse(BaseModel):
     total_expenses: Decimal
     profit: Decimal
 
-    expense_count: int
-
     expenses_by_category: list[ExpenseCategoryTotal]
+
+
+class MonthlyFinancePoint(BaseModel):
+    month: int
+    month_name: str
+    revenue: Decimal
+    expenses: Decimal
+    net_income: Decimal

@@ -4,7 +4,7 @@ Access: Admin and Staff only (read + create + update), Admin only (delete).
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,14 @@ from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership
+from app.models.visit import Visit
+from app.models.pt_session import PTSession
+from app.models.class_session import ClassEnrollment
+from app.models.notification import Notification
+from app.models.retention_strategy import RetentionStrategy
+from app.models.prediction import Prediction
+from app.models.processed_customer import ProcessedCustomer
+from app.models.raw_transaction import RawTransaction
 from app.models.user import User, UserRole
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
 from app.seed_members import generate_member_code
@@ -154,10 +162,19 @@ async def create_member(
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """Register a new gym member. Admin and Staff only."""
-    # Check for duplicate email if provided
-    if member_in.email:
+    # Check and validate email if provided
+    import re
+    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+    email_val = member_in.email.lower().strip() if (member_in.email and member_in.email.strip()) else None
+
+    if email_val:
+        if not re.match(email_regex, email_val):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid email format. Please provide a valid email address.",
+            )
         existing = await db.execute(
-            select(Member).where(Member.email == member_in.email.lower().strip())
+            select(Member).where(Member.email == email_val)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(
@@ -165,15 +182,15 @@ async def create_member(
                 detail="A member with this email already exists.",
             )
 
-    # Generate unique member code
+    # Generate unique member code without collisions
     member_code = await generate_member_code(db)
 
     new_member = Member(
         member_code=member_code,
         first_name=member_in.first_name.strip(),
         last_name=member_in.last_name.strip(),
-        email=member_in.email.lower().strip() if member_in.email else None,
-        phone=member_in.phone.strip() if member_in.phone else None,
+        email=email_val,
+        phone=member_in.phone.strip() if member_in.phone and member_in.phone.strip() else None,
         date_of_birth=member_in.date_of_birth,
         gender=member_in.gender,
         address=member_in.address,
@@ -240,3 +257,57 @@ async def deactivate_member(
     member.is_active = False
     member.status = MemberStatus.INACTIVE
     await db.commit()
+
+
+@router.delete("/{member_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_member_permanent(
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    """Hard-delete (permanently delete) a member. Admin only."""
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found.")
+
+    # Delete referencing child records across dependent tables to ensure clean CASCADE deletion
+    await db.execute(delete(Notification).where(Notification.member_id == member_id))
+    await db.execute(delete(RetentionStrategy).where(RetentionStrategy.member_id == member_id))
+    await db.execute(delete(Prediction).where(Prediction.customer_id == member_id))
+    await db.execute(delete(ProcessedCustomer).where(ProcessedCustomer.customer_id == member_id))
+    await db.execute(delete(RawTransaction).where(RawTransaction.customer_id == member_id))
+    await db.execute(delete(PTSession).where(PTSession.member_id == member_id))
+    await db.execute(delete(ClassEnrollment).where(ClassEnrollment.member_id == member_id))
+    await db.execute(delete(Visit).where(Visit.member_id == member_id))
+    await db.execute(delete(MemberMembership).where(MemberMembership.member_id == member_id))
+    await db.execute(delete(Member).where(Member.id == member_id))
+    await db.commit()
+
+
+@router.post("/{member_id}/reactivate", response_model=MemberResponse)
+async def reactivate_member(
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    """Reactivate a deactivated member. Admin only."""
+    result = await db.execute(select(Member).where(Member.id == member_id))
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found.")
+
+    member.is_active = True
+    member.status = MemberStatus.ACTIVE
+    await db.commit()
+
+    stmt = (
+        select(Member)
+        .where(Member.id == member_id)
+        .options(selectinload(Member.memberships).selectinload(MemberMembership.plan))
+    )
+    result2 = await db.execute(stmt)
+    loaded_member = result2.scalar_one()
+    return _member_to_response(loaded_member)
+
+

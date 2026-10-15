@@ -37,7 +37,6 @@ const NAV_ITEMS: NavConfig[] = [
     href: '/manage',
     roles: [
       'admin',
-      'staff',
     ],
     icon: (
       <svg
@@ -61,7 +60,6 @@ const NAV_ITEMS: NavConfig[] = [
     href: '/manage/members',
     roles: [
       'admin',
-      'staff',
       'trainer',
     ],
     icon: (
@@ -86,7 +84,6 @@ const NAV_ITEMS: NavConfig[] = [
     href: '/manage/members/new',
     roles: [
       'admin',
-      'staff',
     ],
     icon: (
       <svg
@@ -110,7 +107,6 @@ const NAV_ITEMS: NavConfig[] = [
     href: '/manage/plans',
     roles: [
       'admin',
-      'staff',
     ],
     icon: (
       <svg
@@ -132,7 +128,7 @@ const NAV_ITEMS: NavConfig[] = [
   {
     label: 'Visits',
     href: '/manage/visits',
-    roles: ['admin', 'staff', 'trainer'],
+    roles: ['admin', 'trainer'],
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -143,7 +139,7 @@ const NAV_ITEMS: NavConfig[] = [
   {
     label: 'Classes',
     href: '/manage/classes',
-    roles: ['admin', 'staff', 'trainer'],
+    roles: ['admin', 'trainer'],
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -154,7 +150,7 @@ const NAV_ITEMS: NavConfig[] = [
   {
     label: 'PT Sessions',
     href: '/manage/pt-sessions',
-    roles: ['admin', 'staff', 'trainer'],
+    roles: ['trainer'],
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -242,8 +238,6 @@ const NAV_ITEMS: NavConfig[] = [
     href: '/manage/analytics',
     roles: [
       'admin',
-      'staff',
-      'trainer',
     ],
     icon: (
       <svg
@@ -283,6 +277,17 @@ const NAV_ITEMS: NavConfig[] = [
           strokeWidth={1.5}
           d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
         />
+      </svg>
+    ),
+  },
+  {
+    label: 'Your Plan',
+    href: '/dashboard/plan',
+    roles: ['member'],
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
       </svg>
     ),
   },
@@ -373,7 +378,7 @@ export function ManagementLayout() {
 
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen w-screen bg-background flex overflow-hidden">
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/70 z-40 md:hidden backdrop-blur-sm"
@@ -387,7 +392,7 @@ export function ManagementLayout() {
 
 
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-surface border-r border-white/8 flex flex-col z-50 transform transition-transform duration-300 md:translate-x-0 md:static md:flex ${
+        className={`fixed top-0 left-0 h-full w-64 bg-surface border-r border-white/8 flex flex-col z-40 transform transition-transform duration-300 md:relative md:translate-x-0 shrink-0 select-none ${
           sidebarOpen
             ? 'translate-x-0'
             : '-translate-x-full'
@@ -623,8 +628,8 @@ export function ManagementLayout() {
       </aside>
 
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center justify-between px-4 md:px-8 py-3.5 border-b border-white/8 bg-surface/50 backdrop-blur-md sticky top-0 z-30">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <header className="shrink-0 flex items-center justify-between px-4 md:px-8 py-3.5 border-b border-white/8 bg-surface/50 backdrop-blur-md z-30">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -665,7 +670,7 @@ export function ManagementLayout() {
         </header>
 
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto min-w-0">
           <Outlet />
         </main>
       </div>

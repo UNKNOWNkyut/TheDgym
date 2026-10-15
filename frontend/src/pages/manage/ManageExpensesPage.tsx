@@ -324,11 +324,14 @@ export function ManageExpensesPage() {
 
   const visibleTotal =
     expenses.reduce(
-      (sum, expense) =>
-        sum +
-        Number(
-          expense.amount,
-        ),
+      (sum, expense) => {
+        // For 2026 all-months view, only compute completed months (Jan - Sep)
+        if (yearFilter === '2026' && monthFilter === '') {
+          const expMonth = new Date(`${expense.expense_date}T00:00:00`).getMonth() + 1
+          if (expMonth >= 10) return sum
+        }
+        return sum + Number(expense.amount)
+      },
       0,
     )
 
@@ -499,7 +502,7 @@ export function ManageExpensesPage() {
 
           <div className="rounded-xl border border-white/8 bg-surface p-5">
             <p className="text-xs uppercase tracking-widest text-white/40 mb-2">
-              Filtered Total
+              {yearFilter === '2026' && monthFilter === '' ? 'Completed Total (Jan – Sep 2026)' : 'Filtered Total'}
             </p>
 
             <p className="font-display text-3xl font-black text-red">
@@ -509,11 +512,12 @@ export function ManageExpensesPage() {
             </p>
 
             <p className="text-xs text-white/35 mt-2">
-              {expenses.length}{' '}
-              expense record
-              {expenses.length === 1
-                ? ''
-                : 's'}
+              {yearFilter === '2026' && monthFilter === ''
+                ? `${expenses.filter(e => {
+                    const m = new Date(`${e.expense_date}T00:00:00`).getMonth() + 1
+                    return m < 10
+                  }).length} completed records (Oct–Dec incomplete)`
+                : `${expenses.length} expense record${expenses.length === 1 ? '' : 's'}`}
             </p>
           </div>
         </div>
@@ -564,15 +568,21 @@ export function ManageExpensesPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-4 py-12 text-center"
+                      className="px-4 py-20 text-center align-middle"
                     >
-                      <p className="font-medium text-white/55">
-                        No expenses found.
-                      </p>
-
-                      <p className="mt-1 text-xs text-white/30">
-                        Add an expense or change your filters.
-                      </p>
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3 text-white/30">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                          </svg>
+                        </div>
+                        <p className="text-base font-semibold text-white/70">
+                          No expenses found.
+                        </p>
+                        <p className="mt-1 text-xs text-white/40">
+                          Add an expense or change your filters.
+                        </p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
