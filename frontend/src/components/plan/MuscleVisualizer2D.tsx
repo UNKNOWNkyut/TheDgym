@@ -50,7 +50,7 @@ export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisua
   });
 
   return (
-    <div className="w-full flex flex-col items-center rounded-2xl bg-black border border-white/10 p-4 sm:p-6 shadow-2xl space-y-4 text-white select-none">
+    <div className="w-full flex flex-col items-center rounded-2xl bg-black border border-white/10 p-2 sm:p-3 shadow-xl space-y-2 text-white select-none">
       <style>{`
         .silhouette-base {
           fill: #b5b5b5;
@@ -90,34 +90,12 @@ export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisua
         }
       `}</style>
 
-      {/* Header & Legend */}
-      <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-        <div>
-          <h3 className="text-base sm:text-lg font-bold text-white tracking-tight uppercase">
-            Gym Muscle Visualizer
-          </h3>
-          <p className="text-xs text-white/50">
-            Click directly on any muscle group in the anatomical diagram to highlight.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-xs font-medium">
-          <span className="flex items-center gap-1.5 text-white/60">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#3d3d3d] border border-[#b5b5b5]" />
-            Rest
-          </span>
-          <span className="flex items-center gap-1.5 text-red-400 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]" />
-            Active Focus
-          </span>
-        </div>
-      </div>
-
       {/* Anatomical SVG Canvas matching elongated legs model (viewBox 0 0 600 660) */}
-      <div className="w-full flex items-center justify-center py-2 bg-black">
+      <div className="w-full flex items-center justify-center py-0.5 bg-black">
         <svg
           id="anatomy-svg"
           viewBox="0 0 600 660"
-          className="w-full h-auto max-h-[580px] max-w-[580px] overflow-visible"
+          className="w-full h-auto max-h-[330px] sm:max-h-[355px] max-w-[420px] overflow-visible"
           xmlns="http://www.w3.org/2000/svg"
         >
           {/* ==================== FRONT VIEW (LEFT) ==================== */}
@@ -361,9 +339,9 @@ export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisua
       </div>
 
       {/* Footer Status Pill */}
-      <div className="w-full flex items-center justify-center pt-2 border-t border-white/10">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/80 text-xs font-mono font-medium">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shadow-[0_0_8px_rgba(239,68,68,0.7)]" />
+      <div className="w-full flex items-center justify-center pt-1.5 border-t border-white/10">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/80 text-[11px] font-mono font-medium">
+          <span className="w-2 h-2 rounded-full bg-red-500 inline-block shadow-[0_0_6px_rgba(239,68,68,0.7)]" />
           <span>
             {selectedLabels.length > 0
               ? `Selected Focus: ${selectedLabels.join(', ')}`

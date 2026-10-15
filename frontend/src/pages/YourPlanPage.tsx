@@ -1688,7 +1688,7 @@ export function YourPlanPage() {
           }}
         >
           <div
-            className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl border border-white/15 bg-[#0f0f13] p-6 sm:p-8 shadow-2xl space-y-6 relative"
+            className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl border border-white/15 bg-[#0f0f13] p-5 sm:p-6 shadow-2xl space-y-4 relative"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top Bar with Step Indicator */}
@@ -2133,12 +2133,12 @@ export function YourPlanPage() {
                 STEP 6: FOCUS AREAS WITH REALISTIC 2D ANATOMICAL MUSCLE VISUALIZER
             ─────────────────────────────────────────────────────────────────── */}
             {wizardStep === 6 && (
-              <div className="space-y-6">
+              <div className="space-y-3">
                 <div>
-                  <h2 className="text-2xl font-black uppercase text-white tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-black uppercase text-white tracking-tight">
                     Select the areas you want to focus on
                   </h2>
-                  <p className="text-xs text-white/50 font-mono mt-1">
+                  <p className="text-[11px] sm:text-xs text-white/50 font-mono mt-0.5">
                     Click the muscle bellies on the anatomical athletic models or toggle the buttons below.
                   </p>
                 </div>
@@ -2150,7 +2150,7 @@ export function YourPlanPage() {
                 />
 
                 {/* Focus Option Buttons */}
-                <div className="flex flex-wrap gap-2 justify-center">
+                <div className="flex flex-wrap gap-1.5 justify-center">
                   {FOCUS_OPTIONS.map((opt) => {
                     const isSelected = selectedFocus.includes(opt.id);
                     return (
@@ -2158,9 +2158,9 @@ export function YourPlanPage() {
                         key={opt.id}
                         type="button"
                         onClick={() => handleToggleFocus(opt.id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-mono font-bold uppercase transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-red text-white shadow-[0_0_12px_rgba(239,68,68,0.4)]'
+                            ? 'bg-red text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]'
                             : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
                         }`}
                       >
@@ -2170,11 +2170,11 @@ export function YourPlanPage() {
                   })}
                 </div>
 
-                <div className="flex justify-between pt-2">
+                <div className="flex justify-between pt-1">
                   <button
                     type="button"
                     onClick={() => setWizardStep(5)}
-                    className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-mono font-bold uppercase transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs font-mono font-bold uppercase transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span>Back</span>
@@ -2182,7 +2182,7 @@ export function YourPlanPage() {
                   <button
                     type="button"
                     onClick={() => setWizardStep(7)}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-lg"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-lg"
                   >
                     <span>Next</span>
                     <ChevronRight className="w-4 h-4" />
