@@ -11,6 +11,20 @@ from app.models.user import User, UserRole
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
+def extract_token_from_request(
+    request: Request,
+    bearer_token: Optional[str] = None,
+    access_token_cookie: Optional[str] = None,
+) -> Optional[str]:
+    """Extract JWT from Bearer Authorization header or httpOnly cookie."""
+    token = bearer_token or access_token_cookie
+    if not token and "authorization" in request.headers:
+        auth_header = request.headers["authorization"]
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+    return token
+
+
 async def get_current_user(
     request: Request,
     bearer_token: Optional[str] = Depends(oauth2_scheme),
@@ -19,15 +33,9 @@ async def get_current_user(
 ) -> User:
     """
     Extract and authenticate current user from Bearer header OR httpOnly cookie.
-    Raises HTTPException 401 if unauthenticated or invalid token.
+    Fails closed (Check 63): raises HTTPException 401/403 on any invalid state.
     """
-    token = bearer_token or access_token_cookie
-
-    # Fallback to Authorization header manual parse if needed
-    if not token and "authorization" in request.headers:
-        auth_header = request.headers["authorization"]
-        if auth_header.startswith("Bearer "):
-            token = auth_header.split(" ", 1)[1]
+    token = extract_token_from_request(request, bearer_token, access_token_cookie)
 
     if not token:
         raise HTTPException(
@@ -44,14 +52,22 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id: Optional[int] = payload.get("sub")
-    if user_id is None:
+    raw_sub = payload.get("sub")
+    if raw_sub is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload.",
         )
 
-    stmt = select(User).where(User.id == int(user_id))
+    try:
+        user_id = int(raw_sub)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject.",
+        )
+
+    stmt = select(User).where(User.id == user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -72,7 +88,7 @@ async def get_current_user(
 
 def require_roles(allowed_roles: List[UserRole]):
     """
-    Role-Based Access Control (RBAC) dependency factory.
+    Role-Based Access Control (RBAC) dependency factory (Check 05 & 09).
     Verifies that the authenticated user possesses one of the permitted roles.
     """
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:

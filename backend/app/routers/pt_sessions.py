@@ -333,7 +333,7 @@ async def list_pt_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List PT sessions with optional filters."""
+    """List PT sessions with optional filters (scoped to own bookings for MEMBER role)."""
     stmt = (
         select(PTSession)
         .options(
@@ -345,10 +345,20 @@ async def list_pt_sessions(
         .limit(limit)
     )
 
+    # Check 06 / Check 33: Prevent horizontal privilege escalation by scoping MEMBER queries
+    if current_user.role == UserRole.MEMBER:
+        mem_res = await db.execute(
+            select(Member).where(Member.email == current_user.email.lower().strip())
+        )
+        own_member = mem_res.scalar_one_or_none()
+        if not own_member:
+            return []
+        stmt = stmt.where(PTSession.member_id == own_member.id)
+    elif member_id is not None:
+        stmt = stmt.where(PTSession.member_id == member_id)
+
     if trainer_id is not None:
         stmt = stmt.where(PTSession.trainer_id == trainer_id)
-    if member_id is not None:
-        stmt = stmt.where(PTSession.member_id == member_id)
     if status_filter:
         stmt = stmt.where(PTSession.status == status_filter)
 
@@ -363,10 +373,22 @@ async def get_pt_session(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a single PT session."""
+    """Get a single PT session (verified for ownership when called by MEMBER)."""
     session = await _load_pt_session(session_id, db)
     if not session:
         raise HTTPException(status_code=404, detail="PT session not found.")
+
+    if current_user.role == UserRole.MEMBER:
+        if (
+            not session.member
+            or not session.member.email
+            or session.member.email.lower().strip() != current_user.email.lower().strip()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own PT sessions.",
+            )
+
     return _format_pt_session(session)
 
 

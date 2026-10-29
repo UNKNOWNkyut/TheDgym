@@ -17,22 +17,23 @@ from app.schemas.phase5 import (
 router = APIRouter(prefix="/api/classes", tags=["Classes"])
 
 
-def _format_session(s: ClassSession) -> dict:
+def _format_session(s: ClassSession, include_enrollments: bool = True) -> dict:
     coach_name = None
     if s.coach:
         coach_name = s.coach.full_name
 
     enrollments = []
-    for e in s.enrollments:
-        member_name = e.member.full_name if e.member else None
-        member_code = e.member.member_code if e.member else None
-        enrollments.append({
-            "id": e.id,
-            "member_id": e.member_id,
-            "member_code": member_code,
-            "member_name": member_name,
-            "enrolled_at": e.enrolled_at,
-        })
+    if include_enrollments:
+        for e in s.enrollments:
+            member_name = e.member.full_name if e.member else None
+            member_code = e.member.member_code if e.member else None
+            enrollments.append({
+                "id": e.id,
+                "member_id": e.member_id,
+                "member_code": member_code,
+                "member_name": member_name,
+                "enrolled_at": e.enrolled_at,
+            })
 
     return {
         "id": s.id,
@@ -91,7 +92,7 @@ async def list_class_sessions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List class sessions with optional filters."""
+    """List class sessions with optional filters (redacts attendee PII for regular members)."""
     stmt = (
         select(ClassSession)
         .options(
@@ -114,7 +115,8 @@ async def list_class_sessions(
 
     result = await db.execute(stmt)
     sessions = result.scalars().all()
-    return [_format_session(s) for s in sessions]
+    include_roster = current_user.role in (UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER)
+    return [_format_session(s, include_enrollments=include_roster) for s in sessions]
 
 
 @router.get("/{session_id}", response_model=ClassSessionResponse)
@@ -127,7 +129,8 @@ async def get_class_session(
     session = await _load_session(session_id, db)
     if not session:
         raise HTTPException(status_code=404, detail="Class session not found.")
-    return _format_session(session)
+    include_roster = current_user.role in (UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER)
+    return _format_session(session, include_enrollments=include_roster)
 
 
 @router.patch("/{session_id}", response_model=ClassSessionResponse)

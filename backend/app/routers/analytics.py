@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, Request, status
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import require_roles
+from app.core.rate_limit import rate_limit_ai
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
@@ -23,6 +24,7 @@ from app.schemas.analytics import (
     AtRiskMemberItem,
     MemberChurnDetailResponse,
 )
+from app.services.audit import record_audit_log
 from app.services.churn_ml import train_baseline_model
 from app.services.churn_pipeline import (
     refresh_all_predictions,
@@ -334,13 +336,25 @@ async def get_member_churn_detail(
 @router.post(
     "/api/churn/retrain",
     summary="Retrain XGBoost churn model and recalculate all member risk scores",
+    dependencies=[Depends(rate_limit_ai)],
 )
 async def retrain_churn_pipeline(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
     train_stats = train_baseline_model(save=True)
     count = await refresh_all_predictions(db)
+    await record_audit_log(
+        db,
+        action="CHURN_MODEL_RETRAINED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="ml_model",
+        request=request,
+        details=f"Retrained XGBoost churn model (accuracy={train_stats.get('accuracy')}, updated={count} members).",
+    )
+    await db.commit()
     return {
         "status": "success",
         "message": f"XGBoost model retrained successfully and {count} member predictions updated.",

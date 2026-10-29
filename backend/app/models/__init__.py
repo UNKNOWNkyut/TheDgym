@@ -14,6 +14,19 @@ from app.models.member_membership import (
 from app.models.visit import (
     Visit,
     VisitType,
+    EntryMethod,
+)
+from app.models.member_keycard import (
+    MemberKeycard,
+    KeycardStatus,
+)
+from app.models.access_scanner import (
+    AccessScanner,
+    ScannerTapMode,
+)
+from app.models.keycard_tap_log import (
+    KeycardTapLog,
+    TapDecision,
 )
 from app.models.class_session import (
     ClassSession,
@@ -32,6 +45,7 @@ from app.models.processed_customer import ProcessedCustomer
 from app.models.prediction import Prediction
 from app.models.retention_strategy import RetentionStrategy
 from app.models.notification import Notification
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -46,6 +60,13 @@ __all__ = [
     "PaymentMethod",
     "Visit",
     "VisitType",
+    "EntryMethod",
+    "MemberKeycard",
+    "KeycardStatus",
+    "AccessScanner",
+    "ScannerTapMode",
+    "KeycardTapLog",
+    "TapDecision",
     "ClassSession",
     "ClassEnrollment",
     "ClassType",
@@ -59,4 +80,5 @@ __all__ = [
     "Prediction",
     "RetentionStrategy",
     "Notification",
+    "AuditLog",
 ]

@@ -204,6 +204,7 @@ export interface Visit {
   member_code: string | null
   member_name: string | null
   visit_type: VisitType
+  entry_method?: 'manual' | 'rfid_tap' | 'qr_scan'
   checked_in_at: string
   checked_out_at: string | null
   notes: string | null
@@ -454,9 +455,119 @@ export interface AppNotification {
   member_id: number | null
   title: string
   message: string
-  type: 'retention' | 'offer' | 'booking' | 'announcement'
+  type:
+    | 'retention'
+    | 'offer'
+    | 'booking'
+    | 'announcement'
+    | 'churn_alert'
+    | 'enrollment'
+    | 'registration'
+    | 'pt_booking'
+    | 'session_alert'
   action_text: string | null
   action_url: string | null
   is_read: boolean
   created_at: string
+}
+
+
+// ─── Smart Keycard Access Control Types ──────────────────────────────────────
+
+export type KeycardStatus = 'active' | 'inactive' | 'lost' | 'stolen' | 'revoked'
+
+export type TapDecision =
+  | 'granted_check_in'
+  | 'granted_check_out'
+  | 'already_checked_in'
+  | 'already_checked_out'
+  | 'paired_card'
+  | 'denied_unregistered_card'
+  | 'denied_card_lost_or_stolen'
+  | 'denied_card_revoked'
+  | 'denied_member_suspended'
+  | 'denied_member_inactive'
+  | 'denied_no_membership'
+  | 'denied_membership_expired'
+  | 'denied_payment_pending'
+  | 'denied_cooldown_duplicate'
+
+export interface MemberKeycard {
+  id: number
+  member_id: number
+  card_uid_masked: string
+  card_label: string
+  status: KeycardStatus
+  issued_at: string
+  revoked_at: string | null
+  revoked_reason: string | null
+  last_tapped_at: string | null
+  created_at: string
+}
+
+export interface TapVerificationResult {
+  granted: boolean
+  decision: TapDecision
+  reason_message: string
+  privacy_safe_message: string
+  card_uid_masked: string
+  member_id: number | null
+  member_code: string | null
+  member_name: string | null
+  member_status: string | null
+  plan_name: string | null
+  membership_end_date: string | null
+  days_remaining: number | null
+  warning_banner: string | null
+  visit_id: number | null
+  visit_type: string | null
+  checked_in_at: string | null
+  checked_out_at: string | null
+  latency_ms: number
+  tapped_at: string
+}
+
+export interface KeycardTapLog {
+  id: number
+  keycard_id: number | null
+  member_id: number | null
+  member_code: string | null
+  member_name: string | null
+  scanner_name: string | null
+  visit_id: number | null
+  card_uid_masked: string
+  decision: TapDecision
+  granted: boolean
+  reason_message: string
+  plan_name: string | null
+  days_remaining: number | null
+  warning_banner: string | null
+  latency_ms: number
+  tapped_at: string
+}
+
+export interface SimulatorPreset {
+  id: string
+  label: string
+  description: string
+  badge_tone: string
+  card_uid: string
+  expected_outcome: string
+}
+
+export interface PairingSessionStatus {
+  active: boolean
+  member_id: number | null
+  member_code: string | null
+  member_name: string | null
+  card_label: string | null
+  expires_at: string | null
+}
+
+export interface AccessControlSettings {
+  demo_fast_cooldown: boolean
+  checkin_cooldown_seconds: number
+  post_checkout_cooldown_seconds: number
+  weekday_sat_hours?: string
+  sunday_hours?: string
 }

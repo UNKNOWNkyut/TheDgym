@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.visit import VisitType
 from app.models.class_session import ClassType, ClassStatus
@@ -12,12 +12,16 @@ from app.models.pt_session import PTSessionStatus
 # ──────────────────────────────────────────────────────────────────────────────
 
 class VisitCreate(BaseModel):
-    member_id: int
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: int = Field(..., ge=1)
     visit_type: VisitType = VisitType.WALK_IN
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=1000)
 
 
 class VisitCheckOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     checked_out_at: Optional[datetime] = None  # defaults to now if omitted
 
 
@@ -27,6 +31,7 @@ class VisitResponse(BaseModel):
     member_code: Optional[str] = None
     member_name: Optional[str] = None
     visit_type: VisitType
+    entry_method: Optional[str] = "manual"
     checked_in_at: datetime
     checked_out_at: Optional[datetime] = None
     notes: Optional[str] = None
@@ -42,28 +47,32 @@ class VisitResponse(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class ClassSessionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(..., min_length=1, max_length=150)
-    description: Optional[str] = None
-    coach_id: Optional[int] = None
+    description: Optional[str] = Field(None, max_length=2000)
+    coach_id: Optional[int] = Field(None, ge=1)
     class_type: ClassType = ClassType.OPEN_GYM
     scheduled_at: datetime
     duration_minutes: int = Field(default=60, ge=15, le=480)
     max_capacity: int = Field(default=20, ge=1, le=200)
-    location: Optional[str] = None
-    notes: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=150)
+    notes: Optional[str] = Field(None, max_length=1000)
 
 
 class ClassSessionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(None, min_length=1, max_length=150)
-    description: Optional[str] = None
-    coach_id: Optional[int] = None
+    description: Optional[str] = Field(None, max_length=2000)
+    coach_id: Optional[int] = Field(None, ge=1)
     class_type: Optional[ClassType] = None
     scheduled_at: Optional[datetime] = None
     duration_minutes: Optional[int] = Field(None, ge=15, le=480)
     max_capacity: Optional[int] = Field(None, ge=1, le=200)
     status: Optional[ClassStatus] = None
-    location: Optional[str] = None
-    notes: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=150)
+    notes: Optional[str] = Field(None, max_length=1000)
 
 
 class EnrollmentResponse(BaseModel):
@@ -99,8 +108,10 @@ class ClassSessionResponse(BaseModel):
 
 
 class EnrollMemberCreate(BaseModel):
-    member_id: int
-    notes: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: int = Field(..., ge=1)
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -108,38 +119,48 @@ class EnrollMemberCreate(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class PTSessionCreate(BaseModel):
-    trainer_id: Optional[int] = None
-    member_id: int
+    model_config = ConfigDict(extra="forbid")
+
+    trainer_id: Optional[int] = Field(None, ge=1)
+    member_id: int = Field(..., ge=1)
     scheduled_at: datetime
     duration_minutes: int = Field(default=60, ge=15, le=240)
-    notes: Optional[str] = None
-    coach_notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=1000)
+    coach_notes: Optional[str] = Field(None, max_length=1000)
 
 
 class PTSessionBookCreate(BaseModel):
     """Schema for a Member submitting a PT booking request."""
-    trainer_id: int
+    model_config = ConfigDict(extra="forbid")
+
+    trainer_id: int = Field(..., ge=1)
     scheduled_at: datetime
     duration_minutes: int = Field(default=60, ge=15, le=240)
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=1000)
 
 
 class PTSessionApprove(BaseModel):
-    coach_notes: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    coach_notes: Optional[str] = Field(None, max_length=1000)
 
 
 class PTSessionReject(BaseModel):
-    reason: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Optional[str] = Field(None, max_length=1000)
 
 
 class PTSessionUpdate(BaseModel):
-    trainer_id: Optional[int] = None
+    model_config = ConfigDict(extra="forbid")
+
+    trainer_id: Optional[int] = Field(None, ge=1)
     scheduled_at: Optional[datetime] = None
     duration_minutes: Optional[int] = Field(None, ge=15, le=240)
     status: Optional[PTSessionStatus] = None
-    notes: Optional[str] = None
-    coach_notes: Optional[str] = None
-    rejection_reason: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=1000)
+    coach_notes: Optional[str] = Field(None, max_length=1000)
+    rejection_reason: Optional[str] = Field(None, max_length=1000)
 
 
 class PTSessionResponse(BaseModel):

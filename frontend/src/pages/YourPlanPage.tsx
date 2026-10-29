@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   Dumbbell,
   Flame,
@@ -192,6 +192,8 @@ const FREQUENCY_OPTIONS = [
 export function YourPlanPage() {
   void React;
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Strict role guarding: Admins always route to /manage, Trainers always route to /dashboard
   if (user?.role === 'admin') {
@@ -280,10 +282,21 @@ export function YourPlanPage() {
         setBirthDay(parsed.birthDate?.day || 15);
         setBirthMonth(parsed.birthDate?.month || 6);
         setBirthYear(parsed.birthDate?.year || 1998);
-        setIsWizardOpen(false);
+
+        if (!isVerifiedMember) {
+          // Unsubscribed user who already completed Personalization:
+          // Go directly to the "Membership Plan Required" prompt instead of repeating Step 1!
+          setIsWizardOpen(false);
+          setWizardStep(9);
+          setShowMembershipModal(true);
+        } else {
+          setIsWizardOpen(false);
+          setShowMembershipModal(false);
+        }
       } else {
         // First time entering Your Plan for this user: prompt wizard automatically
         setUserPlan(null);
+        setShowMembershipModal(false);
         setIsWizardOpen(true);
         setWizardStep(1);
       }
@@ -299,7 +312,7 @@ export function YourPlanPage() {
       setIsWizardOpen(true);
       setWizardStep(1);
     }
-  }, [planStorageKey, routinesStorageKey]);
+  }, [planStorageKey, routinesStorageKey, isVerifiedMember, location.key]);
 
   // Fetch exercises dataset
   useEffect(() => {
@@ -429,8 +442,8 @@ export function YourPlanPage() {
     };
   }, [birthYear, weightKg, heightCm, goal, experience, frequency]);
 
-  // Finalize Wizard & Save Plan (User-isolated)
-  const handleCompleteSetup = () => {
+  // Persist personalized plan setup to user-specific localStorage
+  const persistPlanData = (): UserPlanData => {
     const newPlan: UserPlanData = {
       birthDate: { day: birthDay, month: birthMonth, year: birthYear },
       weightUnit,
@@ -449,12 +462,21 @@ export function YourPlanPage() {
     } catch (err) {
       console.error('Failed to save user plan', err);
     }
+    return newPlan;
+  };
+
+  // Finalize Wizard & Save Plan (User-isolated)
+  const handleCompleteSetup = () => {
+    persistPlanData();
     setIsWizardOpen(false);
   };
 
   // Guard Start Now: Registered users without active membership cannot proceed into dashboard
   const handleStartNowClick = async () => {
+    // Always save the user's completed Personalization so they never have to repeat Steps 1-7
+    persistPlanData();
     if (!isVerifiedMember) {
+      setIsWizardOpen(false);
       setShowMembershipModal(true);
       return;
     }
@@ -462,6 +484,15 @@ export function YourPlanPage() {
     await new Promise((resolve) => setTimeout(resolve, 850));
     handleCompleteSetup();
     setIsStartingNow(false);
+  };
+
+  // Close floating Personalization / Membership Required modals
+  const handleCloseFloatingPrompt = () => {
+    setIsWizardOpen(false);
+    setShowMembershipModal(false);
+    if (!isVerifiedMember || !userPlan) {
+      navigate('/dashboard');
+    }
   };
 
   // Filter exercises for library tab with precise body part matching & search anti-bleed
@@ -747,6 +778,7 @@ export function YourPlanPage() {
         description="Your personalized fitness program, 3D animated exercises, and macro nutrition plan."
       />
 
+      {isVerifiedMember && userPlan ? (
       <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in text-white">
         {/* =========================================================================
             HEADER & QUICK ACTIONS
@@ -1579,6 +1611,9 @@ export function YourPlanPage() {
           )}
         </div>
       </div>
+      ) : (
+        <div className="min-h-[80vh]" />
+      )}
 
       {/* =========================================================================
           EXERCISE DETAIL MODAL WITH 3D GIF & ENGLISH INSTRUCTIONS
@@ -1683,15 +1718,13 @@ export function YourPlanPage() {
       {isWizardOpen && (
         <div
           className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in"
-          onClick={() => {
-            if (userPlan) setIsWizardOpen(false);
-          }}
+          onClick={handleCloseFloatingPrompt}
         >
           <div
             className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl border border-white/15 bg-[#0f0f13] p-5 sm:p-6 shadow-2xl space-y-4 relative"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top Bar with Step Indicator */}
+            {/* Top Bar with Step Indicator & Close X Button */}
             {wizardStep <= 7 && (
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2">
@@ -1702,15 +1735,14 @@ export function YourPlanPage() {
                   <span className="text-xs font-mono text-white/40">Personalization</span>
                 </div>
 
-                {userPlan && (
-                  <button
-                    type="button"
-                    onClick={() => setIsWizardOpen(false)}
-                    className="text-white/40 hover:text-white transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleCloseFloatingPrompt}
+                  aria-label="Close prompt"
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             )}
 
@@ -2246,7 +2278,10 @@ export function YourPlanPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setWizardStep(8)}
+                    onClick={() => {
+                      persistPlanData();
+                      setWizardStep(8);
+                    }}
                     className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-lg"
                   >
                     <span>Generate My Plan</span>
@@ -2333,6 +2368,16 @@ export function YourPlanPage() {
             ─────────────────────────────────────────────────────────────────── */}
             {wizardStep === 9 && (
               <div className="space-y-6 animate-fade-in">
+                <div className="flex justify-end -mb-4">
+                  <button
+                    type="button"
+                    onClick={handleCloseFloatingPrompt}
+                    aria-label="Close prompt"
+                    className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
                 <div className="text-center space-y-1">
                   <div className="inline-flex p-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-2">
                     <Sparkles className="w-6 h-6" />
@@ -2453,7 +2498,7 @@ export function YourPlanPage() {
                 </div>
 
                 {/* Start Now Button (Guarded for Active Members) */}
-                <div className="pt-2">
+                <div className="pt-2 space-y-2.5">
                   <button
                     type="button"
                     onClick={handleStartNowClick}
@@ -2461,6 +2506,13 @@ export function YourPlanPage() {
                   >
                     <span>Start Now</span>
                     <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(1)}
+                    className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-xs font-mono transition-colors cursor-pointer"
+                  >
+                    Re-calibrate Personalization
                   </button>
                 </div>
               </div>
@@ -2475,12 +2527,22 @@ export function YourPlanPage() {
       {showMembershipModal && (
         <div
           className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in"
-          onClick={() => setShowMembershipModal(false)}
+          onClick={handleCloseFloatingPrompt}
         >
           <div
             className="w-full max-w-md rounded-3xl border border-red/40 bg-[#121216] p-6 sm:p-7 shadow-2xl space-y-5 text-center relative"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Card Corner Close X Button */}
+            <button
+              type="button"
+              onClick={handleCloseFloatingPrompt}
+              aria-label="Close modal"
+              className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
             <div className="w-16 h-16 rounded-2xl bg-red/10 border border-red/30 text-red flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(239,68,68,0.25)]">
               <Lock className="w-8 h-8" />
             </div>
@@ -2520,7 +2582,11 @@ export function YourPlanPage() {
               </Link>
               <button
                 type="button"
-                onClick={() => setShowMembershipModal(false)}
+                onClick={() => {
+                  setShowMembershipModal(false);
+                  setWizardStep(9);
+                  setIsWizardOpen(true);
+                }}
                 className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-xs font-mono transition-colors cursor-pointer"
               >
                 Review Calculated Setup

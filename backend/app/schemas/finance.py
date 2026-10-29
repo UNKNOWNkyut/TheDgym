@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # =========================================================
@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 # =========================================================
 
 class ExpenseCategoryCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(
         ...,
         min_length=1,
@@ -23,6 +25,8 @@ class ExpenseCategoryCreate(BaseModel):
 
 
 class ExpenseCategoryUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = Field(
         None,
         min_length=1,
@@ -55,6 +59,8 @@ class ExpenseCategoryResponse(BaseModel):
 # =========================================================
 
 class ExpenseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category_id: int = Field(
         ...,
         ge=1,
@@ -63,6 +69,7 @@ class ExpenseCreate(BaseModel):
     amount: Decimal = Field(
         ...,
         gt=0,
+        le=Decimal("100000000.00"),
         max_digits=12,
         decimal_places=2,
     )
@@ -82,6 +89,8 @@ class ExpenseCreate(BaseModel):
 
 
 class ExpenseUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category_id: Optional[int] = Field(
         None,
         ge=1,
@@ -90,6 +99,7 @@ class ExpenseUpdate(BaseModel):
     amount: Optional[Decimal] = Field(
         None,
         gt=0,
+        le=Decimal("100000000.00"),
         max_digits=12,
         decimal_places=2,
     )

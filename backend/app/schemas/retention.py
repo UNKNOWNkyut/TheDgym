@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RetentionStrategyResponse(BaseModel):
@@ -24,12 +24,24 @@ class RetentionStrategyResponse(BaseModel):
 
 
 class DispatchOfferRequest(BaseModel):
-    strategy_id: Optional[int] = None
-    member_id: int
-    title: str
-    message: str
-    action_text: Optional[str] = "Claim Offer"
-    action_url: Optional[str] = "/membership"
+    model_config = ConfigDict(extra="forbid")
+
+    strategy_id: Optional[int] = Field(None, ge=1)
+    member_id: int = Field(..., ge=1)
+    title: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=2000)
+    action_text: Optional[str] = Field(default="Claim Offer", max_length=60)
+    action_url: Optional[str] = Field(default="/membership", max_length=255)
+
+    @field_validator("action_url")
+    @classmethod
+    def validate_safe_internal_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return "/membership"
+        cleaned = value.strip()
+        if not cleaned.startswith("/") or cleaned.startswith("//") or "javascript:" in cleaned.lower():
+            raise ValueError("action_url must be a safe internal relative route starting with '/'")
+        return cleaned
 
 
 class NotificationResponse(BaseModel):

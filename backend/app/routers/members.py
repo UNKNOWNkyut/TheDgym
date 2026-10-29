@@ -3,12 +3,14 @@ Members router — CRUD endpoints for gym member management.
 Access: Admin and Staff only (read + create + update), Admin only (delete).
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_roles
+from app.core.deps import require_roles
+from app.core.rate_limit import rate_limit_sensitive
+from app.core.security import revoke_user_sessions
 from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership
@@ -23,6 +25,7 @@ from app.models.raw_transaction import RawTransaction
 from app.models.user import User, UserRole
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
 from app.seed_members import generate_member_code
+from app.services.audit import record_audit_log
 
 router = APIRouter(prefix="/api/members", tags=["Members"])
 
@@ -83,7 +86,7 @@ def _member_to_response(member: Member) -> MemberResponse:
 async def list_members(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
-    search: Optional[str] = Query(None, description="Search by name, email, phone, or member code"),
+    search: Optional[str] = Query(None, max_length=120, description="Search by name, email, phone, or member code"),
     status_filter: Optional[MemberStatus] = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -158,6 +161,7 @@ async def get_member(
 @router.post("", response_model=MemberResponse, status_code=status.HTTP_201_CREATED)
 async def create_member(
     member_in: MemberCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -200,6 +204,18 @@ async def create_member(
         status=MemberStatus.ACTIVE,
     )
     db.add(new_member)
+    await db.flush()
+
+    await record_audit_log(
+        db,
+        action="MEMBER_CREATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=new_member.id,
+        request=request,
+        details=f"Registered member {new_member.member_code} ({new_member.full_name}).",
+    )
     await db.commit()
 
     # Re-fetch with relationships loaded
@@ -217,6 +233,7 @@ async def create_member(
 async def update_member(
     member_id: int,
     member_update: MemberUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -230,6 +247,15 @@ async def update_member(
     for field, value in update_data.items():
         setattr(member, field, value)
 
+    await record_audit_log(
+        db,
+        action="MEMBER_UPDATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=member.id,
+        request=request,
+    )
     await db.commit()
 
     stmt = (
@@ -242,9 +268,14 @@ async def update_member(
     return _member_to_response(loaded_member)
 
 
-@router.delete("/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{member_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def deactivate_member(
     member_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -256,12 +287,35 @@ async def deactivate_member(
 
     member.is_active = False
     member.status = MemberStatus.INACTIVE
+
+    # If linked User account exists, revoke active sessions (Check 25)
+    if member.email:
+        u_res = await db.execute(select(User).where(User.email == member.email.lower().strip()))
+        linked_user = u_res.scalar_one_or_none()
+        if linked_user:
+            revoke_user_sessions(linked_user.id)
+
+    await record_audit_log(
+        db,
+        action="MEMBER_DEACTIVATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=member.id,
+        request=request,
+        details=f"Deactivated member {member.member_code} ({member.full_name}).",
+    )
     await db.commit()
 
 
-@router.delete("/{member_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{member_id}/permanent",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def delete_member_permanent(
     member_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -270,6 +324,14 @@ async def delete_member_permanent(
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
+
+    member_code = member.member_code
+    member_name = member.full_name
+    if member.email:
+        u_res = await db.execute(select(User).where(User.email == member.email.lower().strip()))
+        linked_user = u_res.scalar_one_or_none()
+        if linked_user:
+            revoke_user_sessions(linked_user.id)
 
     # Delete referencing child records across dependent tables to ensure clean CASCADE deletion
     await db.execute(delete(Notification).where(Notification.member_id == member_id))
@@ -282,12 +344,28 @@ async def delete_member_permanent(
     await db.execute(delete(Visit).where(Visit.member_id == member_id))
     await db.execute(delete(MemberMembership).where(MemberMembership.member_id == member_id))
     await db.execute(delete(Member).where(Member.id == member_id))
+
+    await record_audit_log(
+        db,
+        action="MEMBER_DELETED_PERMANENT",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=member_id,
+        request=request,
+        details=f"Permanently deleted member {member_code} ({member_name}).",
+    )
     await db.commit()
 
 
-@router.post("/{member_id}/reactivate", response_model=MemberResponse)
+@router.post(
+    "/{member_id}/reactivate",
+    response_model=MemberResponse,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def reactivate_member(
     member_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -299,6 +377,17 @@ async def reactivate_member(
 
     member.is_active = True
     member.status = MemberStatus.ACTIVE
+
+    await record_audit_log(
+        db,
+        action="MEMBER_REACTIVATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=member.id,
+        request=request,
+        details=f"Reactivated member {member.member_code} ({member.full_name}).",
+    )
     await db.commit()
 
     stmt = (

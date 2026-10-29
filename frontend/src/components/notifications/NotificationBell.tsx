@@ -253,8 +253,57 @@ export function NotificationBell({ user }: NotificationBellProps) {
   useEffect(() => {
     fetchServerNotifications()
     const interval = window.setInterval(fetchServerNotifications, 30000)
-    return () => window.clearInterval(interval)
-  }, [fetchServerNotifications])
+    const handleInstantRefresh = () => {
+      fetchServerNotifications()
+    }
+    window.addEventListener('dgym:refresh-notifications', handleInstantRefresh)
+
+    // Real-time WebSocket push for Admin Check-In notifications across all portal pages
+    let ws: WebSocket | null = null
+    let reconnectTimer: number | undefined
+    let unmounted = false
+
+    const connectAdminNotifWs = () => {
+      if (unmounted || user.role !== 'admin') return
+      try {
+        ws = new WebSocket(api.getAccessLiveFeedWsUrl())
+        ws.onmessage = (evt) => {
+          try {
+            const packet = JSON.parse(evt.data)
+            if (
+              packet?.event === 'admin_notification' ||
+              (packet?.event === 'keycard_tap' &&
+                packet?.data?.decision === 'granted_check_in')
+            ) {
+              fetchServerNotifications()
+            }
+          } catch {
+            // ignore malformed frame
+          }
+        }
+        ws.onclose = () => {
+          if (!unmounted) {
+            reconnectTimer = window.setTimeout(connectAdminNotifWs, 5000)
+          }
+        }
+        ws.onerror = () => ws?.close()
+      } catch {
+        // ignore WS error
+      }
+    }
+
+    if (user.role === 'admin') {
+      connectAdminNotifWs()
+    }
+
+    return () => {
+      unmounted = true
+      window.clearInterval(interval)
+      window.removeEventListener('dgym:refresh-notifications', handleInstantRefresh)
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+      ws?.close()
+    }
+  }, [fetchServerNotifications, user.role])
 
   // Re-fetch when opened to ensure fresh status
   useEffect(() => {

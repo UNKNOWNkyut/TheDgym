@@ -7,6 +7,7 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Request,
     UploadFile,
     status,
 )
@@ -14,9 +15,11 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_roles
+from app.core.deps import get_current_user
+from app.core.rate_limit import rate_limit_sensitive
 from app.core.security import (
     hash_password,
+    revoke_user_sessions,
     verify_password,
 )
 
@@ -24,7 +27,6 @@ from app.database import get_db
 
 from app.models.user import (
     User,
-    UserRole,
 )
 
 from app.models.user_profile import UserProfile
@@ -36,6 +38,7 @@ from app.schemas.account import (
     MessageResponse,
     ProfilePictureResponse,
 )
+from app.services.audit import record_audit_log
 
 
 router = APIRouter(
@@ -76,6 +79,20 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+
+
+def _detect_image_extension_from_magic_bytes(header: bytes) -> Optional[str]:
+    """
+    Check 21: Inspect actual file magic bytes rather than trusting the client-supplied
+    Content-Type or filename extension.
+    """
+    if len(header) >= 3 and header[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if len(header) >= 8 and header[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return ".webp"
+    return None
 
 
 # =========================================================
@@ -233,7 +250,7 @@ def _delete_picture_file(
 
 
 # =========================================================
-# GET MEMBER PROFILE
+# GET ACCOUNT PROFILE
 # =========================================================
 
 @router.get(
@@ -245,9 +262,7 @@ async def get_account_profile(
         get_db
     ),
     current_user: User = Depends(
-        require_roles([
-            UserRole.MEMBER
-        ])
+        get_current_user
     ),
 ):
 
@@ -263,22 +278,22 @@ async def get_account_profile(
 
 
 # =========================================================
-# EDIT MEMBER PROFILE
+# EDIT ACCOUNT PROFILE
 # =========================================================
 
 @router.patch(
     "/profile",
     response_model=AccountProfileResponse,
+    dependencies=[Depends(rate_limit_sensitive)],
 )
 async def update_account_profile(
     data: AccountProfileUpdate,
+    request: Request,
     db: AsyncSession = Depends(
         get_db
     ),
     current_user: User = Depends(
-        require_roles([
-            UserRole.MEMBER
-        ])
+        get_current_user
     ),
 ):
 
@@ -394,6 +409,16 @@ async def update_account_profile(
         )
 
 
+    await record_audit_log(
+        db,
+        action="ACCOUNT_PROFILE_UPDATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="user",
+        target_id=current_user.id,
+        request=request,
+    )
+
     await db.commit()
 
     await db.refresh(
@@ -420,6 +445,7 @@ async def update_account_profile(
 @router.post(
     "/profile-picture",
     response_model=ProfilePictureResponse,
+    dependencies=[Depends(rate_limit_sensitive)],
 )
 async def upload_profile_picture(
     file: UploadFile = File(...),
@@ -427,20 +453,18 @@ async def upload_profile_picture(
         get_db
     ),
     current_user: User = Depends(
-        require_roles([
-            UserRole.MEMBER
-        ])
+        get_current_user
     ),
 ):
 
-    extension = (
+    declared_extension = (
         ALLOWED_IMAGE_TYPES.get(
             file.content_type or ""
         )
     )
 
 
-    if not extension:
+    if not declared_extension:
 
         raise HTTPException(
             status_code=(
@@ -453,11 +477,28 @@ async def upload_profile_picture(
         )
 
 
+    # Read first chunk and verify magic bytes (Check 21)
+    first_chunk = await file.read(1024 * 1024)
+    if not first_chunk:
+        await file.close()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded image file is empty.",
+        )
+
+    detected_extension = _detect_image_extension_from_magic_bytes(first_chunk[:16])
+    if not detected_extension:
+        await file.close()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image file content. Only genuine JPG, PNG, or WEBP images are allowed.",
+        )
+
     filename = (
         f"user_"
         f"{current_user.id}_"
         f"{uuid4().hex}"
-        f"{extension}"
+        f"{detected_extension}"
     )
 
 
@@ -467,7 +508,13 @@ async def upload_profile_picture(
     )
 
 
-    total_size = 0
+    total_size = len(first_chunk)
+    if total_size > MAX_PROFILE_PICTURE_SIZE:
+        await file.close()
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Profile picture must be 5 MB or smaller.",
+        )
 
 
     try:
@@ -475,6 +522,7 @@ async def upload_profile_picture(
         with destination.open(
             "wb"
         ) as output:
+            output.write(first_chunk)
 
             while chunk := await file.read(
                 1024 * 1024
@@ -577,9 +625,7 @@ async def delete_profile_picture(
         get_db
     ),
     current_user: User = Depends(
-        require_roles([
-            UserRole.MEMBER
-        ])
+        get_current_user
     ),
 ):
 
@@ -627,16 +673,16 @@ async def delete_profile_picture(
 @router.post(
     "/change-password",
     response_model=MessageResponse,
+    dependencies=[Depends(rate_limit_sensitive)],
 )
 async def change_password(
     data: ChangePasswordRequest,
+    request: Request,
     db: AsyncSession = Depends(
         get_db
     ),
     current_user: User = Depends(
-        require_roles([
-            UserRole.MEMBER
-        ])
+        get_current_user
     ),
 ):
 
@@ -644,6 +690,17 @@ async def change_password(
         data.current_password,
         current_user.hashed_password,
     ):
+        await record_audit_log(
+            db,
+            action="ACCOUNT_PASSWORD_CHANGE_FAILED",
+            outcome="FAILURE",
+            actor=current_user,
+            target_type="user",
+            target_id=current_user.id,
+            request=request,
+            details="Incorrect current password supplied.",
+        )
+        await db.commit()
 
         raise HTTPException(
             status_code=(
@@ -677,6 +734,18 @@ async def change_password(
         )
     )
 
+    # Check 25: Revoke any previously issued sessions for this user
+    revoke_user_sessions(current_user.id)
+
+    await record_audit_log(
+        db,
+        action="ACCOUNT_PASSWORD_CHANGED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="user",
+        target_id=current_user.id,
+        request=request,
+    )
 
     await db.commit()
 

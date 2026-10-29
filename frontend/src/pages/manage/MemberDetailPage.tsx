@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { api } from '@/services/api'
 import type { Member, MemberStatus, MembershipPlan } from '@/types/auth'
 import { AssignMembershipModal } from '@/components/manage/AssignMembershipModal'
+import { MemberKeycardsCard } from '@/components/manage/MemberKeycardsCard'
 import { UserCheck, X, AlertTriangle } from 'lucide-react'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 
@@ -313,6 +314,13 @@ export function MemberDetailPage() {
             )}
           </Card>
         </div>
+
+        {/* Smart Keycard Access Management */}
+        <MemberKeycardsCard
+          memberId={member.id}
+          memberCode={member.member_code}
+          memberName={member.full_name}
+        />
 
         {/* Membership History */}
         <div>

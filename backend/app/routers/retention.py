@@ -2,12 +2,13 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import require_roles
+from app.core.rate_limit import rate_limit_ai, rate_limit_sensitive
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member
@@ -19,6 +20,7 @@ from app.schemas.retention import (
     RetentionStrategyResponse,
     DispatchOfferRequest,
 )
+from app.services.audit import record_audit_log
 from app.services.retention_ai import generate_ai_retention_strategy
 from app.services.churn_pipeline import refresh_member_churn_prediction
 
@@ -29,9 +31,11 @@ router = APIRouter(prefix="/api/retention", tags=["AI Retention Strategies"])
     "/generate/{member_id}",
     response_model=RetentionStrategyResponse,
     summary="Generate or re-generate an AI retention strategy for a member",
+    dependencies=[Depends(rate_limit_ai)],
 )
 async def generate_strategy_endpoint(
     member_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -108,6 +112,16 @@ async def generate_strategy_endpoint(
         )
         db.add(strat_record)
 
+    await record_audit_log(
+        db,
+        action="AI_RETENTION_STRATEGY_GENERATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=member_id,
+        request=request,
+        details=f"Generated AI retention strategy for member #{member_id} (risk={pred.risk_tier}).",
+    )
     await db.commit()
     await db.refresh(strat_record)
 
@@ -178,9 +192,11 @@ async def get_member_strategy(
 @router.post(
     "/dispatch-offer",
     summary="Dispatch a personalized retention offer to a member's in-app notification bell",
+    dependencies=[Depends(rate_limit_sensitive)],
 )
 async def dispatch_retention_offer(
     payload: DispatchOfferRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -219,6 +235,16 @@ async def dispatch_retention_offer(
             strat.status = "dispatched"
             strat.dispatched_at = datetime.now(timezone.utc)
 
+    await record_audit_log(
+        db,
+        action="RETENTION_OFFER_DISPATCHED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="member",
+        target_id=member.id,
+        request=request,
+        details=f"Dispatched retention offer '{payload.title}' to member #{member.id}.",
+    )
     await db.commit()
     await db.refresh(notif)
 

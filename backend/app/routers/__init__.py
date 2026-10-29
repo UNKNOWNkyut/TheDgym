@@ -10,6 +10,7 @@ from app.routers.finance import router as finance_router
 from app.routers.analytics import router as analytics_router
 from app.routers.retention import router as retention_router
 from app.routers.notifications import router as notifications_router
+from app.routers.access_control import router as access_control_router
 
 __all__ = [
     "auth_router",
@@ -24,4 +25,5 @@ __all__ = [
     "analytics_router",
     "retention_router",
     "notifications_router",
+    "access_control_router",
 ]

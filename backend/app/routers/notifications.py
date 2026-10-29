@@ -168,6 +168,19 @@ async def mark_notification_read(
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
 
+    # Check 06 / Check 33: Verify notification belongs to current_user or their linked Member
+    stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
+    mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
+
+    owns_notification = (notif.user_id == current_user.id) or (
+        mem_id is not None and notif.member_id == mem_id
+    )
+    if not owns_notification:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to modify this notification.",
+        )
+
     notif.is_read = True
     await db.commit()
 

@@ -154,6 +154,12 @@ const ManageVisitsPage = lazy(() =>
   })),
 )
 
+const MobileScannerPage = lazy(() =>
+  import('@/pages/manage/MobileScannerPage').then((module) => ({
+    default: module.MobileScannerPage,
+  })),
+)
+
 const ManageClassesPage = lazy(() =>
   import('@/pages/manage/ManageClassesPage').then((module) => ({
     default: module.ManageClassesPage,
@@ -481,6 +487,22 @@ export function App() {
                     ]}
                   >
                     <ManageVisitsPage />
+                  </ProtectedRoute>
+                }
+              />
+
+
+              <Route
+                path="/manage/scanner"
+                element={
+                  <ProtectedRoute
+                    allowedRoles={[
+                      'admin',
+                      'staff',
+                      'trainer',
+                    ]}
+                  >
+                    <MobileScannerPage />
                   </ProtectedRoute>
                 }
               />

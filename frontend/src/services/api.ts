@@ -32,6 +32,13 @@ import type {
   MemberChurnDetail,
   RetentionStrategy,
   AppNotification,
+  KeycardStatus,
+  MemberKeycard,
+  TapVerificationResult,
+  KeycardTapLog,
+  SimulatorPreset,
+  PairingSessionStatus,
+  AccessControlSettings,
 } from '@/types/auth'
 
 
@@ -724,6 +731,95 @@ export const api = {
     return request('/api/notifications/read-all', {
       method: 'POST',
     })
+  },
+
+  // ─── Smart Keycard Access Control ────────────────────────────────────────
+
+  async verifyKeycardTap(cardUid: string, scannerId?: number): Promise<TapVerificationResult> {
+    return request<TapVerificationResult>('/api/access/tap', {
+      method: 'POST',
+      body: JSON.stringify({
+        card_uid: cardUid,
+        ...(scannerId ? { scanner_id: scannerId } : {}),
+      }),
+    })
+  },
+
+  async getKeycardTapLogs(params?: {
+    granted_only?: boolean
+    limit?: number
+  }): Promise<KeycardTapLog[]> {
+    const query = new URLSearchParams()
+    if (params?.granted_only !== undefined) query.set('granted_only', String(params.granted_only))
+    if (params?.limit !== undefined) query.set('limit', String(params.limit))
+    const qs = query.toString()
+    return request<KeycardTapLog[]>(`/api/access/logs${qs ? `?${qs}` : ''}`)
+  },
+
+  async getMemberKeycards(memberId: number): Promise<MemberKeycard[]> {
+    return request<MemberKeycard[]>(`/api/members/${memberId}/keycards`)
+  },
+
+  async pairMemberKeycard(
+    memberId: number,
+    data: { card_uid: string; card_label?: string },
+  ): Promise<MemberKeycard> {
+    return request<MemberKeycard>(`/api/members/${memberId}/keycards`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updateKeycardStatus(
+    keycardId: number,
+    data: { status: KeycardStatus; reason?: string },
+  ): Promise<MemberKeycard> {
+    return request<MemberKeycard>(`/api/keycards/${keycardId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async getSimulatorPresets(): Promise<SimulatorPreset[]> {
+    return request<SimulatorPreset[]>('/api/access/simulator-presets')
+  },
+
+  async getAccessSettings(): Promise<AccessControlSettings> {
+    return request<AccessControlSettings>('/api/access/settings')
+  },
+
+  async updateAccessSettings(demoFastCooldown: boolean): Promise<AccessControlSettings> {
+    return request<AccessControlSettings>('/api/access/settings', {
+      method: 'POST',
+      body: JSON.stringify({ demo_fast_cooldown: demoFastCooldown }),
+    })
+  },
+
+  async getPairingSession(): Promise<PairingSessionStatus> {
+    return request<PairingSessionStatus>('/api/access/pairing-session')
+  },
+
+  async startPairingSession(
+    memberId: number,
+    cardLabel = 'NFC Smart Keycard',
+  ): Promise<PairingSessionStatus> {
+    return request<PairingSessionStatus>('/api/access/pairing-session', {
+      method: 'POST',
+      body: JSON.stringify({ member_id: memberId, card_label: cardLabel }),
+    })
+  },
+
+  async cancelPairingSession(): Promise<PairingSessionStatus> {
+    return request<PairingSessionStatus>('/api/access/pairing-session', {
+      method: 'DELETE',
+    })
+  },
+
+  getAccessLiveFeedWsUrl(): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const token = getStoredToken()
+    const qs = token ? `?token=${encodeURIComponent(token)}` : ''
+    return `${protocol}//${window.location.host}/api/access/ws/live-feed${qs}`
   },
 }
 

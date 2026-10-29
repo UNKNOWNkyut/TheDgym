@@ -1,15 +1,21 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.deps import get_current_user
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.deps import extract_token_from_request, get_current_user
+from app.core.rate_limit import rate_limit_auth, rate_limit_sensitive
+from app.core.security import (
+    create_access_token,
+    hash_password,
+    revoke_token,
+    verify_password,
+)
 from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
@@ -24,12 +30,15 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.seed_members import generate_member_code
+from app.services.audit import record_audit_log
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 class AvailPlanRequest(BaseModel):
-    plan_slug: str
+    model_config = ConfigDict(extra="forbid")
+
+    plan_slug: str = Field(..., min_length=1, max_length=100)
 
 
 async def _build_user_response(user: User, db: AsyncSession) -> UserResponse:
@@ -97,19 +106,36 @@ async def _build_user_response(user: User, db: AsyncSession) -> UserResponse:
     )
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit_auth)],
+)
 async def register(
     user_in: UserRegister,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Register a new user account with optional initial plan."""
+    normalized_email = user_in.email.lower().strip()
+
     # Check if user already exists
-    stmt = select(User).where(User.email == user_in.email.lower().strip())
+    stmt = select(User).where(User.email == normalized_email)
     result = await db.execute(stmt)
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
+        await record_audit_log(
+            db,
+            action="AUTH_REGISTER_DUPLICATE",
+            outcome="FAILURE",
+            actor_email=normalized_email,
+            request=request,
+            details="Registration attempted with an already registered email.",
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email address already exists.",
@@ -117,7 +143,7 @@ async def register(
 
     # Create new user
     new_user = User(
-        email=user_in.email.lower().strip(),
+        email=normalized_email,
         hashed_password=hash_password(user_in.password),
         full_name=user_in.full_name.strip(),
         phone=user_in.phone.strip() if user_in.phone else None,
@@ -142,9 +168,9 @@ async def register(
             member_code=member_code,
             first_name=first_name,
             last_name=last_name,
-            email=user_in.email.lower().strip(),
+            email=normalized_email,
             phone=user_in.phone.strip() if user_in.phone else None,
-            status=MemberStatus.ACTIVE,
+            status=MemberStatus.ACTIVE if plan else MemberStatus.INACTIVE,
             is_active=True,
         )
         db.add(new_mem)
@@ -170,13 +196,23 @@ async def register(
             member_code=member_code,
             first_name=first_name,
             last_name=last_name,
-            email=user_in.email.lower().strip(),
+            email=normalized_email,
             phone=user_in.phone.strip() if user_in.phone else None,
             status=MemberStatus.INACTIVE,
             is_active=True,
         )
         db.add(new_mem)
 
+    await record_audit_log(
+        db,
+        action="AUTH_REGISTER_SUCCESS",
+        outcome="SUCCESS",
+        actor=new_user,
+        target_type="user",
+        target_id=new_user.id,
+        request=request,
+        details=f"Registered account (plan_slug={user_in.plan_slug or 'none'}).",
+    )
     await db.commit()
     await db.refresh(new_user)
 
@@ -202,18 +238,39 @@ async def register(
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit_auth)],
+)
 async def login(
     credentials: UserLogin,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """Authenticate with email and password."""
-    stmt = select(User).where(User.email == credentials.email.lower().strip())
+    """Authenticate with email and password using constant-time verification."""
+    normalized_email = credentials.email.lower().strip()
+    stmt = select(User).where(User.email == normalized_email)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    # Check 26: Always run Argon2 verification even when user is None to prevent timing enumeration
+    password_valid = verify_password(
+        credentials.password,
+        user.hashed_password if user else None,
+    )
+
+    if not user or not password_valid:
+        await record_audit_log(
+            db,
+            action="AUTH_LOGIN_FAILED",
+            outcome="FAILURE",
+            actor_email=normalized_email,
+            request=request,
+            details="Invalid email or password.",
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
@@ -221,10 +278,30 @@ async def login(
         )
 
     if not user.is_active:
+        await record_audit_log(
+            db,
+            action="AUTH_LOGIN_DEACTIVATED",
+            outcome="FAILURE",
+            actor=user,
+            request=request,
+            details="Login blocked because account is deactivated.",
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated. Please contact gym administration.",
         )
+
+    await record_audit_log(
+        db,
+        action="AUTH_LOGIN_SUCCESS",
+        outcome="SUCCESS",
+        actor=user,
+        target_type="user",
+        target_id=user.id,
+        request=request,
+    )
+    await db.commit()
 
     # Generate token
     token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
@@ -248,9 +325,14 @@ async def login(
     )
 
 
-@router.post("/google", response_model=TokenResponse)
+@router.post(
+    "/google",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit_auth)],
+)
 async def google_auth(
     payload: GoogleLoginRequest,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
@@ -279,13 +361,20 @@ async def google_auth(
                     detail="Invalid or expired Google token.",
                 )
             google_data = resp.json()
-    except httpx.RequestError as e:
+    except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Unable to connect to Google authentication service: {str(e)}",
+            detail="Unable to connect to Google authentication service.",
         )
 
-    # 2. Check audience if GOOGLE_CLIENT_ID is configured in environment
+    # 2. Check issuer and audience (Check 30)
+    token_iss = google_data.get("iss")
+    if token_iss and token_iss not in ("accounts.google.com", "https://accounts.google.com"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token issuer.",
+        )
+
     if settings.GOOGLE_CLIENT_ID:
         token_aud = google_data.get("aud")
         if token_aud != settings.GOOGLE_CLIENT_ID:
@@ -293,6 +382,14 @@ async def google_auth(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Google token was not issued for this application client.",
             )
+
+    # Ensure Google email is verified before trusting it for account linking
+    email_verified = google_data.get("email_verified")
+    if str(email_verified).lower() != "true":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google account email address is not verified.",
+        )
 
     email = (google_data.get("email") or "").lower().strip()
     full_name = (google_data.get("name") or "").strip() or email.split("@")[0].title()
@@ -314,7 +411,7 @@ async def google_auth(
         user = User(
             email=email,
             hashed_password=hash_password(random_pwd),
-            full_name=full_name,
+            full_name=full_name[:255],
             role=UserRole.MEMBER,
             is_active=True,
         )
@@ -327,8 +424,8 @@ async def google_auth(
         mem_res = await db.execute(stmt_mem)
         if not mem_res.scalar_one_or_none():
             name_parts = full_name.split()
-            first_name = name_parts[0] if name_parts else "Member"
-            last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "Client"
+            first_name = (name_parts[0] if name_parts else "Member")[:100]
+            last_name = (" ".join(name_parts[1:]) if len(name_parts) > 1 else "Client")[:100]
             member_code = await generate_member_code(db)
             new_mem = Member(
                 member_code=member_code,
@@ -346,6 +443,17 @@ async def google_auth(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated. Please contact gym administration.",
         )
+
+    await record_audit_log(
+        db,
+        action="AUTH_GOOGLE_LOGIN_SUCCESS",
+        outcome="SUCCESS",
+        actor=user,
+        target_type="user",
+        target_id=user.id,
+        request=request,
+    )
+    await db.commit()
 
     # 4. Generate DGym JWT access token
     token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
@@ -369,18 +477,26 @@ async def google_auth(
     )
 
 
-@router.post("/avail-plan", response_model=UserResponse)
+@router.post(
+    "/avail-plan",
+    response_model=UserResponse,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def avail_plan(
     payload: AvailPlanRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Avail and activate a membership plan for the currently logged in user."""
-    stmt_plan = select(MembershipPlan).where(MembershipPlan.slug == payload.plan_slug.strip().lower())
+    stmt_plan = select(MembershipPlan).where(
+        MembershipPlan.slug == payload.plan_slug.strip().lower(),
+        MembershipPlan.is_active == True,  # noqa: E712
+    )
     res_plan = await db.execute(stmt_plan)
     plan = res_plan.scalar_one_or_none()
     if not plan:
-        raise HTTPException(status_code=404, detail="Membership plan not found.")
+        raise HTTPException(status_code=404, detail="Active membership plan not found.")
 
     stmt_mem = select(Member).where(Member.email == current_user.email.lower().strip())
     res_mem = await db.execute(stmt_mem)
@@ -419,14 +535,28 @@ async def avail_plan(
         notes=f"User availed plan {plan.name}",
     )
     db.add(mem_ship)
+
+    await record_audit_log(
+        db,
+        action="MEMBERSHIP_AVAIL_PLAN",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="membership_plan",
+        target_id=plan.id,
+        request=request,
+        details=f"User availed plan '{plan.name}' (PHP {plan.price_php}).",
+    )
     await db.commit()
 
     return await _build_user_response(current_user, db)
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    """Clear session cookie and log out."""
+async def logout(request: Request, response: Response):
+    """Revoke active JWT token and clear session cookie (Check 25)."""
+    token = extract_token_from_request(request)
+    if token:
+        revoke_token(token)
     response.delete_cookie(key="access_token", httponly=True, samesite="lax")
     return {"message": "Successfully logged out."}
 

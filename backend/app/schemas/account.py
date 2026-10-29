@@ -3,6 +3,7 @@ from typing import Optional
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     EmailStr,
     Field,
     field_validator,
@@ -39,6 +40,8 @@ class AccountProfileResponse(BaseModel):
 
 
 class AccountProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     full_name: Optional[str] = Field(
         None,
         min_length=2,
@@ -54,7 +57,7 @@ class AccountProfileUpdate(BaseModel):
 
     # Required only if the member wants
     # to change their email address.
-    current_password: Optional[str] = None
+    current_password: Optional[str] = Field(None, max_length=128)
 
 
     @field_validator("full_name")
@@ -97,7 +100,9 @@ class AccountProfileUpdate(BaseModel):
 # =========================================================
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(..., min_length=1, max_length=128)
 
     new_password: str = Field(
         ...,

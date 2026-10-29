@@ -29,8 +29,9 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Redirect destination after login
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
+  // Redirect destination after login (validated against open redirects)
+  const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
+  const from = rawFrom.startsWith('/') && !rawFrom.startsWith('//') ? rawFrom : '/dashboard'
 
   // Animate card entrance
   useGSAP(() => {
@@ -382,45 +383,47 @@ export function LoginPage() {
             </Link>
           </p>
 
-          {/* Quick Demo Accounts Selection */}
-          <div className="mt-8 pt-6 border-t border-white/8">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-white/40 text-center mb-3">
-              One-Click Role Demo Logins
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((acc, idx) => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  onClick={() => fillDemo(acc.email, acc.pass)}
-                  disabled={isLoading || showLoading}
-                  className={`p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group disabled:opacity-50 cursor-pointer ${
-                    idx === 4 ? 'col-span-2' : ''
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-white group-hover:text-red transition-colors">
-                      {acc.role}
-                    </span>
-                    <span
-                      className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-mono ${
-                        acc.badge === 'Verified Plan'
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/25'
-                          : acc.badge === 'No Plan'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
-                          : 'bg-white/5 text-white/40'
-                      }`}
-                    >
-                      {acc.badge}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-white/40 font-mono truncate mt-0.5">
-                    {acc.email}
-                  </p>
-                </button>
-              ))}
+          {/* Quick Demo Accounts Selection (Development Only - Check 10 & 36) */}
+          {import.meta.env.DEV && (
+            <div className="mt-8 pt-6 border-t border-white/8">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-white/40 text-center mb-3">
+                One-Click Role Demo Logins
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEMO_ACCOUNTS.map((acc, idx) => (
+                  <button
+                    key={acc.role}
+                    type="button"
+                    onClick={() => fillDemo(acc.email, acc.pass)}
+                    disabled={isLoading || showLoading}
+                    className={`p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group disabled:opacity-50 cursor-pointer ${
+                      idx === 4 ? 'col-span-2' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white group-hover:text-red transition-colors">
+                        {acc.role}
+                      </span>
+                      <span
+                        className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-mono ${
+                          acc.badge === 'Verified Plan'
+                            ? 'bg-green-500/10 text-green-400 border border-green-500/25'
+                            : acc.badge === 'No Plan'
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
+                            : 'bg-white/5 text-white/40'
+                        }`}
+                      >
+                        {acc.badge}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/40 font-mono truncate mt-0.5">
+                      {acc.email}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </>

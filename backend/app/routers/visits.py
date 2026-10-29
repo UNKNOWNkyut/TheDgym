@@ -11,6 +11,7 @@ from app.models.user import User, UserRole
 from app.models.member import Member
 from app.models.visit import Visit
 from app.schemas.phase5 import VisitCreate, VisitCheckOut, VisitResponse
+from app.services.visit_sweeper import notify_admins_on_checkin, sweep_overdue_open_visits
 
 router = APIRouter(prefix="/api/visits", tags=["Visits"])
 
@@ -23,12 +24,15 @@ def _format_visit(v: Visit) -> dict:
         member_name = v.member.full_name
         member_code = v.member.member_code
 
+    entry_val = v.entry_method.value if hasattr(v.entry_method, "value") else (v.entry_method or "manual")
+
     return {
         "id": v.id,
         "member_id": v.member_id,
         "member_code": member_code,
         "member_name": member_name,
         "visit_type": v.visit_type,
+        "entry_method": entry_val,
         "checked_in_at": v.checked_in_at,
         "checked_out_at": v.checked_out_at,
         "notes": v.notes,
@@ -56,6 +60,14 @@ async def check_in_member(
         recorded_by_user_id=current_user.id,
     )
     db.add(visit)
+    await db.flush()
+    await notify_admins_on_checkin(
+        db,
+        member=member,
+        plan_name=None,
+        method_label="Manual Check-In",
+        checkin_utc=visit.checked_in_at or datetime.now(timezone.utc),
+    )
     await db.commit()
     await db.refresh(visit)
 
@@ -103,6 +115,7 @@ async def list_visits(
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
     """List all gym visits with optional filters."""
+    await sweep_overdue_open_visits(db)
     stmt = (
         select(Visit)
         .options(selectinload(Visit.member))
@@ -141,10 +154,18 @@ async def get_member_visits(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all visits for a specific member."""
+    """Get all visits for a specific member (with BOLA/ownership check for MEMBER role)."""
     member = await db.get(Member, member_id)
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
+
+    # Check 06 / Check 33: Members may only view their own visit history
+    if current_user.role == UserRole.MEMBER:
+        if not member.email or member.email.lower().strip() != current_user.email.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own visit history.",
+            )
 
     stmt = (
         select(Visit)

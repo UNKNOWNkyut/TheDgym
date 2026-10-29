@@ -1,13 +1,16 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_roles
-from app.core.security import hash_password
+from app.core.deps import require_roles
+from app.core.rate_limit import rate_limit_sensitive
+from app.core.security import hash_password, revoke_user_sessions
 from app.database import get_db
+from app.models.audit_log import AuditLog
 from app.models.user import User, UserRole
-from app.schemas.auth import UserCreateAdmin, UserResponse, UserUpdate
+from app.schemas.auth import AuditLogResponse, UserCreateAdmin, UserResponse, UserUpdate
+from app.services.audit import record_audit_log
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -24,9 +27,28 @@ async def list_users(
     return [UserResponse.model_validate(u) for u in users]
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.get("/audit-logs", response_model=List[AuditLogResponse])
+async def list_audit_logs(
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    """List recent security audit log entries. Admin only (Check 42)."""
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+    return [AuditLogResponse.model_validate(item) for item in logs]
+
+
+@router.post(
+    "",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def create_user_by_admin(
     user_in: UserCreateAdmin,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -48,15 +70,32 @@ async def create_user_by_admin(
         is_active=True,
     )
     db.add(new_user)
+    await db.flush()
+
+    await record_audit_log(
+        db,
+        action="ADMIN_USER_CREATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="user",
+        target_id=new_user.id,
+        request=request,
+        details=f"Created user '{new_user.email}' with role '{new_user.role.value}'.",
+    )
     await db.commit()
     await db.refresh(new_user)
     return UserResponse.model_validate(new_user)
 
 
-@router.patch("/{user_id}", response_model=UserResponse)
+@router.patch(
+    "/{user_id}",
+    response_model=UserResponse,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def update_user(
     user_id: int,
     user_update: UserUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -68,23 +107,46 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    should_revoke_sessions = False
     if user_update.full_name is not None:
-        user.full_name = user_update.full_name
+        user.full_name = user_update.full_name.strip()
     if user_update.phone is not None:
-        user.phone = user_update.phone
+        user.phone = user_update.phone.strip() if user_update.phone else None
     if user_update.is_active is not None:
+        if user.is_active and not user_update.is_active:
+            should_revoke_sessions = True
         user.is_active = user_update.is_active
     if user_update.role is not None:
+        if user.role != user_update.role:
+            should_revoke_sessions = True
         user.role = user_update.role
 
+    if should_revoke_sessions:
+        revoke_user_sessions(user.id)
+
+    await record_audit_log(
+        db,
+        action="ADMIN_USER_UPDATED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="user",
+        target_id=user.id,
+        request=request,
+        details=f"Updated user '{user.email}' (role={user.role.value}, is_active={user.is_active}).",
+    )
     await db.commit()
     await db.refresh(user)
     return UserResponse.model_validate(user)
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(rate_limit_sensitive)],
+)
 async def delete_user(
     user_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -99,6 +161,19 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    deleted_email = user.email
+    revoke_user_sessions(user.id)
     await db.delete(user)
+
+    await record_audit_log(
+        db,
+        action="ADMIN_USER_DELETED",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="user",
+        target_id=user_id,
+        request=request,
+        details=f"Deleted user account '{deleted_email}'.",
+    )
     await db.commit()
 
