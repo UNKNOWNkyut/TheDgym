@@ -95,10 +95,11 @@ export function MembershipPage() {
     setSuccessMessage(null)
     try {
       await availPlan(slug)
-      setSuccessMessage('Membership plan activated successfully! Redirecting to your dashboard...')
+      // Plan stays PENDING (₱0 paid) until front-desk staff verify payment
+      setSuccessMessage('Plan request received! Please settle your payment at the front desk to activate your membership. Redirecting to your dashboard...')
       setTimeout(() => {
         navigate('/dashboard')
-      }, 1200)
+      }, 2500)
     } catch {
       setLoadingSlug(null)
     }

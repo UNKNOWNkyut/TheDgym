@@ -11,7 +11,7 @@ export interface User {
   is_active: boolean
   created_at: string
   has_active_membership?: boolean
-  membership_status?: 'active' | 'inactive' | 'suspended' | 'expired' | 'none'
+  membership_status?: 'active' | 'pending' | 'inactive' | 'suspended' | 'expired' | 'none'
   plan_name?: string | null
   profile_picture_url?: string | null
 }

@@ -104,7 +104,7 @@ export function RegisterPage() {
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
-      // If user chose a plan, they are an active member -> send to /dashboard
+      // If user chose a plan, they are an active member -> send to /dashboard (plan stays pending until front-desk payment verification)
       // If user skipped, they are a registered user -> send to public home page
       if (withPlan && planSlugToSubmit) {
         navigate('/dashboard', { replace: true })
@@ -182,7 +182,7 @@ export function RegisterPage() {
                   Start Your Training Plan?
                 </h1>
                 <p className="text-xs uppercase tracking-widest text-white/40 mt-1 max-w-md mx-auto">
-                  Choose a membership plan to activate your gym access, or skip to finish creating your registered account.
+                  Choose a membership plan to request your gym access (it activates once the front desk confirms your payment), or skip to finish creating your registered account.
                 </p>
               </>
             )}
