@@ -96,25 +96,13 @@ export function ManageUsersPage() {
     setError(null)
 
     try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('dgym_access_token') || ''}`,
-        },
-        body: JSON.stringify({
-          email: form.email.trim(),
-          password: form.password,
-          full_name: form.full_name.trim(),
-          phone: form.phone.trim() || undefined,
-          role: form.role,
-        }),
+      await api.createUser({
+        email: form.email.trim(),
+        password: form.password,
+        full_name: form.full_name.trim(),
+        phone: form.phone.trim() || undefined,
+        role: form.role,
       })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.detail || 'Failed to create user.')
-      }
 
       setShowAddModal(false)
       setForm({

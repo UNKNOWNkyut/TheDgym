@@ -546,15 +546,6 @@ export interface KeycardTapLog {
   tapped_at: string
 }
 
-export interface SimulatorPreset {
-  id: string
-  label: string
-  description: string
-  badge_tone: string
-  card_uid: string
-  expected_outcome: string
-}
-
 export interface PairingSessionStatus {
   active: boolean
   member_id: number | null
@@ -562,12 +553,4 @@ export interface PairingSessionStatus {
   member_name: string | null
   card_label: string | null
   expires_at: string | null
-}
-
-export interface AccessControlSettings {
-  demo_fast_cooldown: boolean
-  checkin_cooldown_seconds: number
-  post_checkout_cooldown_seconds: number
-  weekday_sat_hours?: string
-  sunday_hours?: string
 }

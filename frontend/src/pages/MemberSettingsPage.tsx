@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { accountApi } from '@/services/accountApi'
+import { api } from '@/services/api'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -108,7 +108,7 @@ export function MemberSettingsPage() {
       setPageError('')
 
       try {
-        const data = await accountApi.getProfile()
+        const data = await api.getProfile()
         if (!active) return
 
         setProfile(data)
@@ -254,7 +254,7 @@ export function MemberSettingsPage() {
     setProfileSaving(true)
 
     try {
-      const updated = await accountApi.updateProfile({
+      const updated = await api.updateProfile({
         full_name: fullName.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -315,7 +315,7 @@ export function MemberSettingsPage() {
     setPictureUploading(true)
 
     try {
-      const result = await accountApi.uploadProfilePicture(file)
+      const result = await api.uploadProfilePicture(file)
       setProfile((current) =>
         current ? { ...current, profile_picture_url: result.profile_picture_url } : current,
       )
@@ -356,7 +356,7 @@ export function MemberSettingsPage() {
     setPasswordSaving(true)
 
     try {
-      const response = await accountApi.changePassword({
+      const response = await api.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
         confirm_new_password: confirmPassword,

@@ -15,8 +15,8 @@ import type {
 
 import {
   api,
-  getStoredToken,
-  clearStoredToken,
+  hasSessionHint,
+  clearSessionHint,
 } from '@/services/api'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 
@@ -71,7 +71,7 @@ export function AuthProvider({
 
     async function initializeAuth() {
       const token =
-        getStoredToken()
+        hasSessionHint()
 
 
       if (!token) {
@@ -94,7 +94,7 @@ export function AuthProvider({
       } catch {
 
         if (isMounted) {
-          clearStoredToken()
+          clearSessionHint()
 
           setUser(null)
         }
@@ -125,7 +125,7 @@ export function AuthProvider({
       Promise<User | null> => {
 
       const token =
-        getStoredToken()
+        hasSessionHint()
 
 
       if (!token) {
@@ -147,7 +147,7 @@ export function AuthProvider({
 
       } catch {
 
-        clearStoredToken()
+        clearSessionHint()
 
         setUser(null)
 

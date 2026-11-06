@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/Badge'
 
 import {
-  accountApi,
-} from '@/services/accountApi'
+  api,
+} from '@/services/api'
 
 import type {
   AccountProfile,
@@ -92,7 +92,7 @@ export function MemberAccountMenu({
     async function loadProfile() {
       try {
         const data =
-          await accountApi
+          await api
             .getProfile()
 
 
@@ -130,7 +130,7 @@ export function MemberAccountMenu({
     const refreshProfile =
       () => {
 
-        accountApi
+        api
           .getProfile()
           .then(
             setProfile,

@@ -1,66 +1,73 @@
 import type {
-  LoginCredentials,
-  RegisterCredentials,
-  TokenResponse,
-  User,
-  Member,
-  MemberCreate,
-  MemberUpdate,
-  MemberStats,
-  MembershipPlan,
-  MembershipPlanCreate,
+  AccountProfile,
+  AccountProfileUpdate,
+  ChangePasswordPayload,
+  MessageResponse,
+  ProfilePictureResponse,
+} from '@/types/account'
+import type {
+  AnalyticsOverview,
+  AppNotification,
   AssignMembershipCreate,
-  MembershipSummary,
-  Visit,
-  VisitCreate,
+  AtRiskMemberItem,
+  ChurnOverview,
   ClassSession,
   ClassSessionCreate,
-  PTSession,
-  PTSessionCreate,
-  PTSessionBookCreate,
-  TrainerProfile,
+  Expense,
   ExpenseCategory,
   ExpenseCategoryCreate,
-  ExpenseCategoryUpdate,
-  Expense,
   ExpenseCreate,
   ExpenseUpdate,
   FinanceSummary,
-  AnalyticsOverview,
-  ChurnOverview,
-  AtRiskMemberItem,
-  MemberChurnDetail,
-  RetentionStrategy,
-  AppNotification,
   KeycardStatus,
-  MemberKeycard,
-  TapVerificationResult,
   KeycardTapLog,
-  SimulatorPreset,
+  LoginCredentials,
+  Member,
+  MemberChurnDetail,
+  MemberCreate,
+  MemberKeycard,
+  MembershipPlan,
+  MembershipPlanCreate,
+  MembershipSummary,
+  MemberStats,
   PairingSessionStatus,
-  AccessControlSettings,
+  PTSession,
+  PTSessionBookCreate,
+  PTSessionCreate,
+  RegisterCredentials,
+  RetentionStrategy,
+  TapVerificationResult,
+  TokenResponse,
+  TrainerProfile,
+  User,
+  Visit,
+  VisitCreate,
 } from '@/types/auth'
 
+const LEGACY_TOKEN_STORAGE_KEY = 'dgym_access_token'
+const SESSION_HINT_KEY = 'dgym_session_active'
 
-const TOKEN_STORAGE_KEY = 'dgym_access_token'
-
-
-export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_STORAGE_KEY)
+// Non-sensitive boolean marker so anonymous visits skip /api/auth/me while JWT lives only in httpOnly cookie
+export function hasSessionHint(): boolean {
+  if (localStorage.getItem(LEGACY_TOKEN_STORAGE_KEY)) {
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
+    localStorage.setItem(SESSION_HINT_KEY, '1')
+    return true
+  }
+  return localStorage.getItem(SESSION_HINT_KEY) === '1'
 }
 
-
-export function setStoredToken(token: string): void {
-  localStorage.setItem(TOKEN_STORAGE_KEY, token)
+export function setSessionHint(): void {
+  localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
+  localStorage.setItem(SESSION_HINT_KEY, '1')
 }
 
-
-export function clearStoredToken(): void {
-  localStorage.removeItem(TOKEN_STORAGE_KEY)
+export function clearSessionHint(): void {
+  localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
+  localStorage.removeItem(SESSION_HINT_KEY)
 }
 
-
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number
 
   constructor(message: string, status: number) {
@@ -70,9 +77,19 @@ class ApiError extends Error {
   }
 }
 
-
-export { ApiError }
-
+function buildQuery(
+  params?: Record<string, string | number | boolean | undefined | null>,
+): string {
+  if (!params) return ''
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value))
+    }
+  }
+  const qs = query.toString()
+  return qs ? `?${qs}` : ''
+}
 
 async function request<T>(
   endpoint: string,
@@ -83,11 +100,8 @@ async function request<T>(
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
-
-  const token = getStoredToken()
-
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`)
+  if (!headers.has('X-Requested-With')) {
+    headers.set('X-Requested-With', 'XMLHttpRequest')
   }
 
   let response: Response
@@ -108,8 +122,7 @@ async function request<T>(
     return undefined as unknown as T
   }
 
-  let data: any
-
+  let data: unknown = null
   try {
     data = await response.json()
   } catch {
@@ -118,15 +131,21 @@ async function request<T>(
 
   if (!response.ok) {
     let message = 'An unexpected error occurred'
+    const detail =
+      data && typeof data === 'object' && 'detail' in data
+        ? (data as { detail?: unknown }).detail
+        : undefined
 
-    if (data?.detail) {
-      if (typeof data.detail === 'string') {
-        message = data.detail
-      } else if (Array.isArray(data.detail)) {
-        message = data.detail
-          .map((err: any) => err.msg || JSON.stringify(err))
-          .join(', ')
-      }
+    if (typeof detail === 'string') {
+      message = detail
+    } else if (Array.isArray(detail)) {
+      message = detail
+        .map((err) =>
+          err && typeof err === 'object' && 'msg' in err && (err as { msg?: unknown }).msg
+            ? String((err as { msg: unknown }).msg)
+            : JSON.stringify(err),
+        )
+        .join(', ')
     } else if (response.status === 502 || response.status === 503 || response.status === 504) {
       message = 'Backend server is temporarily unreachable. Please ensure port 8000 is active.'
     }
@@ -137,7 +156,6 @@ async function request<T>(
   return data as T
 }
 
-
 export const api = {
   // ─── Authentication ───────────────────────────────────────────────────────
 
@@ -146,11 +164,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(credentials),
     })
-
-    if (data?.access_token) {
-      setStoredToken(data.access_token)
-    }
-
+    setSessionHint()
     return data
   },
 
@@ -159,11 +173,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ credential }),
     })
-
-    if (data?.access_token) {
-      setStoredToken(data.access_token)
-    }
-
+    setSessionHint()
     return data
   },
 
@@ -172,11 +182,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(credentials),
     })
-
-    if (data?.access_token) {
-      setStoredToken(data.access_token)
-    }
-
+    setSessionHint()
     return data
   },
 
@@ -189,11 +195,9 @@ export const api = {
 
   async logout(): Promise<void> {
     try {
-      await request<void>('/api/auth/logout', {
-        method: 'POST',
-      })
+      await request<void>('/api/auth/logout', { method: 'POST' })
     } finally {
-      clearStoredToken()
+      clearSessionHint()
     }
   },
 
@@ -218,24 +222,38 @@ export const api = {
     })
   },
 
-  async updateUser(
-    id: number,
-    data: {
-      role?: string
-      is_active?: boolean
-      full_name?: string
-      phone?: string
-    },
-  ): Promise<User> {
-    return request<User>(`/api/users/${id}`, {
+  // ─── Account Profile & Security ──────────────────────────────────────────
+
+  async getProfile(): Promise<AccountProfile> {
+    return request<AccountProfile>('/api/account/profile')
+  },
+
+  async updateProfile(data: AccountProfileUpdate): Promise<AccountProfile> {
+    return request<AccountProfile>('/api/account/profile', {
       method: 'PATCH',
       body: JSON.stringify(data),
     })
   },
 
-  async deleteUser(id: number): Promise<void> {
-    return request<void>(`/api/users/${id}`, {
+  async uploadProfilePicture(file: File): Promise<ProfilePictureResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request<ProfilePictureResponse>('/api/account/profile-picture', {
+      method: 'POST',
+      body: formData,
+    })
+  },
+
+  async removeProfilePicture(): Promise<ProfilePictureResponse> {
+    return request<ProfilePictureResponse>('/api/account/profile-picture', {
       method: 'DELETE',
+    })
+  },
+
+  async changePassword(data: ChangePasswordPayload): Promise<MessageResponse> {
+    return request<MessageResponse>('/api/account/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   },
 
@@ -247,29 +265,7 @@ export const api = {
     skip?: number
     limit?: number
   }): Promise<Member[]> {
-    const query = new URLSearchParams()
-
-    if (params?.search) {
-      query.set('search', params.search)
-    }
-
-    if (params?.status) {
-      query.set('status', params.status)
-    }
-
-    if (params?.skip !== undefined) {
-      query.set('skip', String(params.skip))
-    }
-
-    if (params?.limit !== undefined) {
-      query.set('limit', String(params.limit))
-    }
-
-    const queryString = query.toString()
-
-    return request<Member[]>(
-      `/api/members${queryString ? `?${queryString}` : ''}`,
-    )
+    return request<Member[]>(`/api/members${buildQuery(params)}`)
   },
 
   async getMemberStats(): Promise<MemberStats> {
@@ -287,29 +283,16 @@ export const api = {
     })
   },
 
-  async updateMember(id: number, data: MemberUpdate): Promise<Member> {
-    return request<Member>(`/api/members/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    })
-  },
-
   async deactivateMember(id: number): Promise<void> {
-    return request<void>(`/api/members/${id}`, {
-      method: 'DELETE',
-    })
+    return request<void>(`/api/members/${id}`, { method: 'DELETE' })
   },
 
   async deleteMember(id: number): Promise<void> {
-    return request<void>(`/api/members/${id}/permanent`, {
-      method: 'DELETE',
-    })
+    return request<void>(`/api/members/${id}/permanent`, { method: 'DELETE' })
   },
 
   async reactivateMember(id: number): Promise<Member> {
-    return request<Member>(`/api/members/${id}/reactivate`, {
-      method: 'POST',
-    })
+    return request<Member>(`/api/members/${id}/reactivate`, { method: 'POST' })
   },
 
   // ─── Membership Plans ────────────────────────────────────────────────────
@@ -325,10 +308,7 @@ export const api = {
     })
   },
 
-  async updatePlan(
-    id: number,
-    data: Partial<MembershipPlanCreate>,
-  ): Promise<MembershipPlan> {
+  async updatePlan(id: number, data: Partial<MembershipPlanCreate>): Promise<MembershipPlan> {
     return request<MembershipPlan>(`/api/plans/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -336,16 +316,12 @@ export const api = {
   },
 
   async deactivatePlan(id: number): Promise<void> {
-    return request<void>(`/api/plans/${id}`, {
-      method: 'DELETE',
-    })
+    return request<void>(`/api/plans/${id}`, { method: 'DELETE' })
   },
 
   // ─── Membership Assignments ──────────────────────────────────────────────
 
-  async assignMembership(
-    data: AssignMembershipCreate,
-  ): Promise<MembershipSummary> {
+  async assignMembership(data: AssignMembershipCreate): Promise<MembershipSummary> {
     return request<MembershipSummary>('/api/memberships', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -375,18 +351,7 @@ export const api = {
     skip?: number
     limit?: number
   }): Promise<Visit[]> {
-    const query = new URLSearchParams()
-    if (params?.member_id !== undefined) query.set('member_id', String(params.member_id))
-    if (params?.date_from) query.set('date_from', params.date_from)
-    if (params?.date_to) query.set('date_to', params.date_to)
-    if (params?.skip !== undefined) query.set('skip', String(params.skip))
-    if (params?.limit !== undefined) query.set('limit', String(params.limit))
-    const qs = query.toString()
-    return request<Visit[]>(`/api/visits${qs ? `?${qs}` : ''}`)
-  },
-
-  async getMemberVisits(memberId: number): Promise<Visit[]> {
-    return request<Visit[]>(`/api/visits/member/${memberId}`)
+    return request<Visit[]>(`/api/visits${buildQuery(params)}`)
   },
 
   // ─── Class Sessions ─────────────────────────────────────────────────────────
@@ -397,13 +362,7 @@ export const api = {
     skip?: number
     limit?: number
   }): Promise<ClassSession[]> {
-    const query = new URLSearchParams()
-    if (params?.status) query.set('status', params.status)
-    if (params?.class_type) query.set('class_type', params.class_type)
-    if (params?.skip !== undefined) query.set('skip', String(params.skip))
-    if (params?.limit !== undefined) query.set('limit', String(params.limit))
-    const qs = query.toString()
-    return request<ClassSession[]>(`/api/classes${qs ? `?${qs}` : ''}`)
+    return request<ClassSession[]>(`/api/classes${buildQuery(params)}`)
   },
 
   async createClassSession(data: ClassSessionCreate): Promise<ClassSession> {
@@ -445,14 +404,7 @@ export const api = {
     skip?: number
     limit?: number
   }): Promise<PTSession[]> {
-    const query = new URLSearchParams()
-    if (params?.trainer_id !== undefined) query.set('trainer_id', String(params.trainer_id))
-    if (params?.member_id !== undefined) query.set('member_id', String(params.member_id))
-    if (params?.status) query.set('status', params.status)
-    if (params?.skip !== undefined) query.set('skip', String(params.skip))
-    if (params?.limit !== undefined) query.set('limit', String(params.limit))
-    const qs = query.toString()
-    return request<PTSession[]>(`/api/pt-sessions${qs ? `?${qs}` : ''}`)
+    return request<PTSession[]>(`/api/pt-sessions${buildQuery(params)}`)
   },
 
   async createPTSession(data: PTSessionCreate): Promise<PTSession> {
@@ -510,39 +462,21 @@ export const api = {
 
   // ─── Finance: Categories ─────────────────────────────────────────────────
 
-  async getExpenseCategories(
-    includeInactive = false,
-  ): Promise<ExpenseCategory[]> {
-    const query = new URLSearchParams()
-    query.set('include_inactive', String(includeInactive))
+  async getExpenseCategories(includeInactive = false): Promise<ExpenseCategory[]> {
     return request<ExpenseCategory[]>(
-      `/api/finance/categories?${query.toString()}`,
+      `/api/finance/categories${buildQuery({ include_inactive: includeInactive })}`,
     )
   },
 
-  async createExpenseCategory(
-    data: ExpenseCategoryCreate,
-  ): Promise<ExpenseCategory> {
+  async createExpenseCategory(data: ExpenseCategoryCreate): Promise<ExpenseCategory> {
     return request<ExpenseCategory>('/api/finance/categories', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   },
 
-  async updateExpenseCategory(
-    id: number,
-    data: ExpenseCategoryUpdate,
-  ): Promise<ExpenseCategory> {
-    return request<ExpenseCategory>(`/api/finance/categories/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    })
-  },
-
   async deactivateExpenseCategory(id: number): Promise<void> {
-    return request<void>(`/api/finance/categories/${id}`, {
-      method: 'DELETE',
-    })
+    return request<void>(`/api/finance/categories/${id}`, { method: 'DELETE' })
   },
 
   // ─── Finance: Expenses ───────────────────────────────────────────────────
@@ -556,44 +490,7 @@ export const api = {
     skip?: number
     limit?: number
   }): Promise<Expense[]> {
-    const query = new URLSearchParams()
-
-    if (params?.search) {
-      query.set('search', params.search)
-    }
-
-    if (params?.category_id !== undefined) {
-      query.set('category_id', String(params.category_id))
-    }
-
-    if (params?.year !== undefined) {
-      query.set('year', String(params.year))
-    }
-
-    if (params?.month !== undefined) {
-      query.set('month', String(params.month))
-    }
-
-    if (params?.include_archived !== undefined) {
-      query.set('include_archived', String(params.include_archived))
-    }
-
-    if (params?.skip !== undefined) {
-      query.set('skip', String(params.skip))
-    }
-
-    if (params?.limit !== undefined) {
-      query.set('limit', String(params.limit))
-    }
-
-    const qs = query.toString()
-    return request<Expense[]>(
-      `/api/finance/expenses${qs ? `?${qs}` : ''}`,
-    )
-  },
-
-  async getExpense(id: number): Promise<Expense> {
-    return request<Expense>(`/api/finance/expenses/${id}`)
+    return request<Expense[]>(`/api/finance/expenses${buildQuery(params)}`)
   },
 
   async createExpense(data: ExpenseCreate): Promise<Expense> {
@@ -611,39 +508,23 @@ export const api = {
   },
 
   async archiveExpense(id: number): Promise<void> {
-    return request<void>(`/api/finance/expenses/${id}`, {
-      method: 'DELETE',
-    })
+    return request<void>(`/api/finance/expenses/${id}`, { method: 'DELETE' })
   },
 
   // ─── Finance Summary ─────────────────────────────────────────────────────
 
-  async getFinanceSummary(
-    year: number,
-    month?: number,
-  ): Promise<FinanceSummary> {
-    const query = new URLSearchParams()
-    query.set('year', String(year))
-
-    if (month !== undefined) {
-      query.set('month', String(month))
-    }
-
-    return request<FinanceSummary>(
-      `/api/finance/summary?${query.toString()}`,
-    )
+  async getFinanceSummary(year: number, month?: number): Promise<FinanceSummary> {
+    return request<FinanceSummary>(`/api/finance/summary${buildQuery({ year, month })}`)
   },
 
-  async getAnnualFinanceSummary(
-    year: number,
-  ): Promise<{
+  async getAnnualFinanceSummary(year: number): Promise<{
     month: number
     month_name: string
     revenue: number
     expenses: number
     net_income: number
   }[]> {
-    return request(`/api/finance/annual?year=${year}`)
+    return request(`/api/finance/annual${buildQuery({ year })}`)
   },
 
   // ─── Analytics & Churn Prediction (Phase 6) ──────────────────────────────
@@ -662,13 +543,7 @@ export const api = {
     skip?: number
     limit?: number
   }): Promise<AtRiskMemberItem[]> {
-    const query = new URLSearchParams()
-    if (params?.risk_tier) query.set('risk_tier', params.risk_tier)
-    if (params?.search) query.set('search', params.search)
-    if (params?.skip !== undefined) query.set('skip', String(params.skip))
-    if (params?.limit !== undefined) query.set('limit', String(params.limit))
-    const qs = query.toString()
-    return request<AtRiskMemberItem[]>(`/api/churn/members${qs ? `?${qs}` : ''}`)
+    return request<AtRiskMemberItem[]>(`/api/churn/members${buildQuery(params)}`)
   },
 
   async getMemberChurnDetail(memberId: number): Promise<MemberChurnDetail> {
@@ -681,9 +556,7 @@ export const api = {
     model_accuracy: number
     total_members_updated: number
   }> {
-    return request('/api/churn/retrain', {
-      method: 'POST',
-    })
+    return request('/api/churn/retrain', { method: 'POST' })
   },
 
   // ─── AI Retention Strategies & Notifications (Phase 7) ───────────────────
@@ -721,16 +594,22 @@ export const api = {
     return request<AppNotification[]>('/api/notifications')
   },
 
-  async markNotificationRead(notificationId: number): Promise<{ status: string; id: number; is_read: boolean }> {
-    return request(`/api/notifications/${notificationId}/read`, {
-      method: 'PATCH',
-    })
+  async markNotificationRead(
+    notificationId: number,
+  ): Promise<{ status: string; id: number; is_read: boolean }> {
+    return request(`/api/notifications/${notificationId}/read`, { method: 'PATCH' })
   },
 
   async markAllNotificationsRead(): Promise<{ status: string; updated_count: number }> {
-    return request('/api/notifications/read-all', {
-      method: 'POST',
-    })
+    return request('/api/notifications/read-all', { method: 'POST' })
+  },
+
+  async deleteNotification(notificationId: number): Promise<{ status: string; id: number }> {
+    return request(`/api/notifications/${notificationId}`, { method: 'DELETE' })
+  },
+
+  async clearAllNotifications(): Promise<{ status: string; deleted_count: number }> {
+    return request('/api/notifications/clear-all', { method: 'DELETE' })
   },
 
   // ─── Smart Keycard Access Control ────────────────────────────────────────
@@ -749,11 +628,7 @@ export const api = {
     granted_only?: boolean
     limit?: number
   }): Promise<KeycardTapLog[]> {
-    const query = new URLSearchParams()
-    if (params?.granted_only !== undefined) query.set('granted_only', String(params.granted_only))
-    if (params?.limit !== undefined) query.set('limit', String(params.limit))
-    const qs = query.toString()
-    return request<KeycardTapLog[]>(`/api/access/logs${qs ? `?${qs}` : ''}`)
+    return request<KeycardTapLog[]>(`/api/access/logs${buildQuery(params)}`)
   },
 
   async getMemberKeycards(memberId: number): Promise<MemberKeycard[]> {
@@ -780,21 +655,6 @@ export const api = {
     })
   },
 
-  async getSimulatorPresets(): Promise<SimulatorPreset[]> {
-    return request<SimulatorPreset[]>('/api/access/simulator-presets')
-  },
-
-  async getAccessSettings(): Promise<AccessControlSettings> {
-    return request<AccessControlSettings>('/api/access/settings')
-  },
-
-  async updateAccessSettings(demoFastCooldown: boolean): Promise<AccessControlSettings> {
-    return request<AccessControlSettings>('/api/access/settings', {
-      method: 'POST',
-      body: JSON.stringify({ demo_fast_cooldown: demoFastCooldown }),
-    })
-  },
-
   async getPairingSession(): Promise<PairingSessionStatus> {
     return request<PairingSessionStatus>('/api/access/pairing-session')
   },
@@ -817,9 +677,6 @@ export const api = {
 
   getAccessLiveFeedWsUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const token = getStoredToken()
-    const qs = token ? `?token=${encodeURIComponent(token)}` : ''
-    return `${protocol}//${window.location.host}/api/access/ws/live-feed${qs}`
+    return `${protocol}//${window.location.host}/api/access/ws/live-feed`
   },
 }
-
