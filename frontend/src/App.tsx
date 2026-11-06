@@ -1,15 +1,5 @@
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useState,
-} from 'react'
-
-import {
-  BrowserRouter,
-  Route,
-  Routes,
-} from 'react-router-dom'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { AuthProvider } from '@/context/AuthContext'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
@@ -21,175 +11,36 @@ import { QuarterRing } from '@/components/ui/quarter-ring'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
-
 // ─── Public Pages ─────────────────────────────────────────────────────────────
-
-const AboutPage = lazy(() =>
-  import('@/pages/AboutPage').then((module) => ({
-    default: module.AboutPage,
-  })),
-)
-
-const MembershipPage = lazy(() =>
-  import('@/pages/MembershipPage').then((module) => ({
-    default: module.MembershipPage,
-  })),
-)
-
-const ClassesPage = lazy(() =>
-  import('@/pages/ClassesPage').then((module) => ({
-    default: module.ClassesPage,
-  })),
-)
-
-const TrainersPage = lazy(() =>
-  import('@/pages/TrainersPage').then((module) => ({
-    default: module.TrainersPage,
-  })),
-)
-
-const ContactPage = lazy(() =>
-  import('@/pages/ContactPage').then((module) => ({
-    default: module.ContactPage,
-  })),
-)
-
-const FAQPage = lazy(() =>
-  import('@/pages/FAQPage').then((module) => ({
-    default: module.FAQPage,
-  })),
-)
-
-const PrivacyPolicyPage = lazy(() =>
-  import('@/pages/PrivacyPolicyPage').then((module) => ({
-    default: module.PrivacyPolicyPage,
-  })),
-)
-
-const TermsOfUsePage = lazy(() =>
-  import('@/pages/TermsOfUsePage').then((module) => ({
-    default: module.TermsOfUsePage,
-  })),
-)
-
-const LoginPage = lazy(() =>
-  import('@/pages/LoginPage').then((module) => ({
-    default: module.LoginPage,
-  })),
-)
-
-
-const RegisterPage = lazy(() =>
-  import('@/pages/RegisterPage').then((module) => ({
-    default: module.RegisterPage,
-  })),
-)
-
+const AboutPage = lazy(() => import('@/pages/AboutPage').then((m) => ({ default: m.AboutPage })))
+const MembershipPage = lazy(() => import('@/pages/MembershipPage').then((m) => ({ default: m.MembershipPage })))
+const ClassesPage = lazy(() => import('@/pages/ClassesPage').then((m) => ({ default: m.ClassesPage })))
+const TrainersPage = lazy(() => import('@/pages/TrainersPage').then((m) => ({ default: m.TrainersPage })))
+const ContactPage = lazy(() => import('@/pages/ContactPage').then((m) => ({ default: m.ContactPage })))
+const FAQPage = lazy(() => import('@/pages/FAQPage').then((m) => ({ default: m.FAQPage })))
+const PrivacyPolicyPage = lazy(() => import('@/pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })))
+const TermsOfUsePage = lazy(() => import('@/pages/TermsOfUsePage').then((m) => ({ default: m.TermsOfUsePage })))
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
 
 // ─── Portal & Management Pages ────────────────────────────────────────────────
-
-const DashboardPage = lazy(() =>
-  import('@/pages/DashboardPage').then((module) => ({
-    default: module.DashboardPage,
-  })),
-)
-
-const MemberSettingsPage = lazy(() =>
-  import('@/pages/MemberSettingsPage').then((module) => ({
-    default: module.MemberSettingsPage,
-  })),
-)
-
-const YourPlanPage = lazy(() =>
-  import('@/pages/YourPlanPage').then((module) => ({
-    default: module.YourPlanPage,
-  })),
-)
-
-const BookTrainerPage = lazy(() =>
-  import('@/pages/manage/BookTrainerPage').then((module) => ({
-    default: module.BookTrainerPage,
-  })),
-)
-
-const ManageOverviewPage = lazy(() =>
-  import('@/pages/manage/ManageOverviewPage').then((module) => ({
-    default: module.ManageOverviewPage,
-  })),
-)
-
-const ManageMembersPage = lazy(() =>
-  import('@/pages/manage/ManageMembersPage').then((module) => ({
-    default: module.ManageMembersPage,
-  })),
-)
-
-const MemberFormPage = lazy(() =>
-  import('@/pages/manage/MemberFormPage').then((module) => ({
-    default: module.MemberFormPage,
-  })),
-)
-
-const MemberDetailPage = lazy(() =>
-  import('@/pages/manage/MemberDetailPage').then((module) => ({
-    default: module.MemberDetailPage,
-  })),
-)
-
-const ManagePlansPage = lazy(() =>
-  import('@/pages/manage/ManagePlansPage').then((module) => ({
-    default: module.ManagePlansPage,
-  })),
-)
-
-const ManageUsersPage = lazy(() =>
-  import('@/pages/manage/ManageUsersPage').then((module) => ({
-    default: module.ManageUsersPage,
-  })),
-)
-
-const ManageVisitsPage = lazy(() =>
-  import('@/pages/manage/ManageVisitsPage').then((module) => ({
-    default: module.ManageVisitsPage,
-  })),
-)
-
-const MobileScannerPage = lazy(() =>
-  import('@/pages/manage/MobileScannerPage').then((module) => ({
-    default: module.MobileScannerPage,
-  })),
-)
-
-const ManageClassesPage = lazy(() =>
-  import('@/pages/manage/ManageClassesPage').then((module) => ({
-    default: module.ManageClassesPage,
-  })),
-)
-
-const ManagePTSessionsPage = lazy(() =>
-  import('@/pages/manage/ManagePTSessionsPage').then((module) => ({
-    default: module.ManagePTSessionsPage,
-  })),
-)
-
-const ManageFinancePage = lazy(() =>
-  import('@/pages/manage/ManageFinancePage').then((module) => ({
-    default: module.ManageFinancePage,
-  })),
-)
-
-const ManageExpensesPage = lazy(() =>
-  import('@/pages/manage/ManageExpensesPage').then((module) => ({
-    default: module.ManageExpensesPage,
-  })),
-)
-
-const ManageAnalyticsPage = lazy(() =>
-  import('@/pages/manage/ManageAnalyticsPage').then((module) => ({
-    default: module.ManageAnalyticsPage,
-  })),
-)
-
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
+const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then((m) => ({ default: m.MemberSettingsPage })))
+const YourPlanPage = lazy(() => import('@/pages/YourPlanPage').then((m) => ({ default: m.YourPlanPage })))
+const BookTrainerPage = lazy(() => import('@/pages/manage/BookTrainerPage').then((m) => ({ default: m.BookTrainerPage })))
+const ManageOverviewPage = lazy(() => import('@/pages/manage/ManageOverviewPage').then((m) => ({ default: m.ManageOverviewPage })))
+const ManageMembersPage = lazy(() => import('@/pages/manage/ManageMembersPage').then((m) => ({ default: m.ManageMembersPage })))
+const MemberFormPage = lazy(() => import('@/pages/manage/MemberFormPage').then((m) => ({ default: m.MemberFormPage })))
+const MemberDetailPage = lazy(() => import('@/pages/manage/MemberDetailPage').then((m) => ({ default: m.MemberDetailPage })))
+const ManagePlansPage = lazy(() => import('@/pages/manage/ManagePlansPage').then((m) => ({ default: m.ManagePlansPage })))
+const ManageUsersPage = lazy(() => import('@/pages/manage/ManageUsersPage').then((m) => ({ default: m.ManageUsersPage })))
+const ManageVisitsPage = lazy(() => import('@/pages/manage/ManageVisitsPage').then((m) => ({ default: m.ManageVisitsPage })))
+const MobileScannerPage = lazy(() => import('@/pages/manage/MobileScannerPage').then((m) => ({ default: m.MobileScannerPage })))
+const ManageClassesPage = lazy(() => import('@/pages/manage/ManageClassesPage').then((m) => ({ default: m.ManageClassesPage })))
+const ManagePTSessionsPage = lazy(() => import('@/pages/manage/ManagePTSessionsPage').then((m) => ({ default: m.ManagePTSessionsPage })))
+const ManageFinancePage = lazy(() => import('@/pages/manage/ManageFinancePage').then((m) => ({ default: m.ManageFinancePage })))
+const ManageExpensesPage = lazy(() => import('@/pages/manage/ManageExpensesPage').then((m) => ({ default: m.ManageExpensesPage })))
+const ManageAnalyticsPage = lazy(() => import('@/pages/manage/ManageAnalyticsPage').then((m) => ({ default: m.ManageAnalyticsPage })))
 
 function PageFallback() {
   return (
@@ -200,8 +51,6 @@ function PageFallback() {
     </div>
   )
 }
-
-
 
 function IntroLoader() {
   const [visible, setVisible] = useState(() => {
@@ -218,15 +67,12 @@ function IntroLoader() {
 
     try {
       sessionStorage.setItem('dgym_intro_shown', 'true')
-    } catch {}
+    } catch {
+      // Ignore sessionStorage restrictions in private browsing
+    }
 
-    const fadeTimer = window.setTimeout(() => {
-      setFading(true)
-    }, 1200)
-
-    const removeTimer = window.setTimeout(() => {
-      setVisible(false)
-    }, 1600)
+    const fadeTimer = window.setTimeout(() => setFading(true), 1200)
+    const removeTimer = window.setTimeout(() => setVisible(false), 1600)
 
     return () => {
       window.clearTimeout(fadeTimer)
@@ -239,9 +85,7 @@ function IntroLoader() {
   return (
     <div
       className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black text-white transition-opacity duration-500 ${
-        fading
-          ? "opacity-0 pointer-events-none"
-          : "opacity-100"
+        fading ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       role="status"
       aria-label="Loading DGym"
@@ -251,18 +95,11 @@ function IntroLoader() {
         alt="The DGym"
         className="mb-8 h-32 w-auto object-contain"
       />
-
       <QuarterRing className="size-12 text-red-600" />
-
-      <p className="mt-5 text-sm tracking-widest text-gray-400">
-        LOADING...
-      </p>
+      <p className="mt-5 text-sm tracking-widest text-gray-400">LOADING...</p>
     </div>
   )
 }
-
-
-
 
 export function App() {
   return (
@@ -270,97 +107,40 @@ export function App() {
       <AuthProvider>
         <Suspense fallback={<PageFallback />}>
           <Routes>
-
             {/* ============================================================
                 STANDALONE MEMBER SETTINGS
                 No ManagementLayout = no left sidebar
             ============================================================ */}
-
             <Route
               path="/settings"
               element={
-                <ProtectedRoute
-                  allowedRoles={['member']}
-                >
+                <ProtectedRoute allowedRoles={['member']}>
                   <MemberSettingsPage />
                 </ProtectedRoute>
               }
             />
 
-
             {/* ============================================================
                 PUBLIC WEBSITE
             ============================================================ */}
-
             <Route element={<RootLayout />}>
-
-              <Route
-                path="/"
-                element={<HomePage />}
-              />
-
-              <Route
-                path="/about"
-                element={<AboutPage />}
-              />
-
-              <Route
-                path="/membership"
-                element={<MembershipPage />}
-              />
-
-              <Route
-                path="/classes"
-                element={<ClassesPage />}
-              />
-
-              <Route
-                path="/trainers"
-                element={<TrainersPage />}
-              />
-
-              <Route
-                path="/contact"
-                element={<ContactPage />}
-              />
-
-              <Route
-                path="/faq"
-                element={<FAQPage />}
-              />
-
-              <Route
-                path="/privacy"
-                element={<PrivacyPolicyPage />}
-              />
-
-              <Route
-                path="/terms"
-                element={<TermsOfUsePage />}
-              />
-
-              <Route
-                path="/login"
-                element={<LoginPage />}
-              />
-
-              <Route
-                path="/register"
-                element={<RegisterPage />}
-              />
-
-              <Route
-                path="*"
-                element={<NotFoundPage />}
-              />
-
+              <Route path="/" element={<HomePage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/membership" element={<MembershipPage />} />
+              <Route path="/classes" element={<ClassesPage />} />
+              <Route path="/trainers" element={<TrainersPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+              <Route path="/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms" element={<TermsOfUsePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
-
 
             {/* ============================================================
                 AUTHENTICATED DASHBOARD / MANAGEMENT PORTAL
             ============================================================ */}
-
             <Route
               element={
                 <ProtectedRoute>
@@ -368,19 +148,8 @@ export function App() {
                 </ProtectedRoute>
               }
             >
-
-              <Route
-                path="/dashboard"
-                element={<DashboardPage />}
-              />
-
-
-              <Route
-                path="/dashboard/book"
-                element={<BookTrainerPage />}
-              />
-
-
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard/book" element={<BookTrainerPage />} />
               <Route
                 path="/dashboard/plan"
                 element={
@@ -389,215 +158,125 @@ export function App() {
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageOverviewPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/members"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'trainer',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'trainer']}>
                     <ManageMembersPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/members/new"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <MemberFormPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/members/:id"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'trainer',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'trainer']}>
                     <MemberDetailPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/plans"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManagePlansPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/users"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageUsersPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/visits"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'trainer',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'trainer']}>
                     <ManageVisitsPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/scanner"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'staff',
-                      'trainer',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
                     <MobileScannerPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/classes"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'trainer',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'trainer']}>
                     <ManageClassesPage />
                   </ProtectedRoute>
                 }
               />
-
-
               <Route
                 path="/manage/pt-sessions"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                      'trainer',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin', 'trainer']}>
                     <ManagePTSessionsPage />
                   </ProtectedRoute>
                 }
               />
 
-
               {/* Finance — Admin Only */}
-
               <Route
                 path="/manage/finance"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageFinancePage />
                   </ProtectedRoute>
                 }
               />
 
-
               {/* Expenses — Admin Only */}
-
               <Route
                 path="/manage/expenses"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageExpensesPage />
                   </ProtectedRoute>
                 }
               />
 
-
               {/* Analytics & Churn Prediction — Admin Only */}
-
               <Route
                 path="/manage/analytics"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={[
-                      'admin',
-                    ]}
-                  >
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <ManageAnalyticsPage />
                   </ProtectedRoute>
                 }
               />
-
             </Route>
-
           </Routes>
         </Suspense>
 
         <IntroLoader />
-
         <CookieBanner />
-
       </AuthProvider>
     </BrowserRouter>
   )
 }
-
 
 export default App
