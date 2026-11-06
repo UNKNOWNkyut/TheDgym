@@ -1,6 +1,7 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, desc
+from sqlalchemy import desc, func, insert, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,9 +19,7 @@ router = APIRouter(prefix="/api/classes", tags=["Classes"])
 
 
 def _format_session(s: ClassSession, include_enrollments: bool = True) -> dict:
-    coach_name = None
-    if s.coach:
-        coach_name = s.coach.full_name
+    coach_name = s.coach.full_name if s.coach else None
 
     enrollments = []
     if include_enrollments:
@@ -54,7 +53,7 @@ def _format_session(s: ClassSession, include_enrollments: bool = True) -> dict:
     }
 
 
-async def _load_session(session_id: int, db: AsyncSession) -> ClassSession:
+async def _load_session(session_id: int, db: AsyncSession) -> Optional[ClassSession]:
     stmt = (
         select(ClassSession)
         .where(ClassSession.id == session_id)
@@ -77,7 +76,6 @@ async def create_class_session(
     session = ClassSession(**payload.model_dump())
     db.add(session)
     await db.commit()
-    await db.refresh(session)
 
     loaded = await _load_session(session.id, db)
     return _format_session(loaded)
@@ -150,8 +148,9 @@ async def update_class_session(
         setattr(session, key, val)
 
     await db.commit()
-    loaded = await _load_session(session_id, db)
-    return _format_session(loaded)
+    if "coach_id" in update_data:
+        session = await _load_session(session_id, db)
+    return _format_session(session)
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -176,42 +175,97 @@ async def enroll_member(
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
     """Enroll a member into a class session."""
-    session = await _load_session(session_id, db)
-    if not session:
+    session_row = (
+        await db.execute(
+            select(ClassSession.id, ClassSession.status, ClassSession.max_capacity)
+            .where(ClassSession.id == session_id)
+        )
+    ).one_or_none()
+    if not session_row:
         raise HTTPException(status_code=404, detail="Class session not found.")
-    if session.status == ClassStatus.CANCELLED:
+    if session_row.status == ClassStatus.CANCELLED:
         raise HTTPException(status_code=400, detail="Cannot enroll in a cancelled class.")
-    if session.enrolled_count >= session.max_capacity:
-        raise HTTPException(status_code=400, detail="Class is at full capacity.")
-
-    # Check not already enrolled
-    existing_stmt = select(ClassEnrollment).where(
-        ClassEnrollment.class_session_id == session_id,
-        ClassEnrollment.member_id == payload.member_id,
-    )
-    existing_result = await db.execute(existing_stmt)
-    if existing_result.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Member is already enrolled in this class.")
 
     member = await db.get(Member, payload.member_id)
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
 
-    enrollment = ClassEnrollment(
-        class_session_id=session_id,
-        member_id=payload.member_id,
-        notes=payload.notes,
+    # Atomic conditional INSERT prevents concurrent over-capacity or duplicate enrollments
+    now = datetime.now(timezone.utc)
+    dup_exists = (
+        select(ClassEnrollment.id)
+        .where(
+            ClassEnrollment.class_session_id == session_id,
+            ClassEnrollment.member_id == payload.member_id,
+        )
+        .exists()
     )
-    db.add(enrollment)
+    enrolled_count_subq = (
+        select(func.count(ClassEnrollment.id))
+        .where(ClassEnrollment.class_session_id == session_id)
+        .scalar_subquery()
+    )
+    insert_select = (
+        select(
+            literal(session_id),
+            literal(payload.member_id),
+            literal(now),
+            literal(payload.notes),
+        )
+        .select_from(ClassSession)
+        .where(
+            ClassSession.id == session_id,
+            ClassSession.status != ClassStatus.CANCELLED,
+            ~dup_exists,
+            enrolled_count_subq < ClassSession.max_capacity,
+        )
+    )
+    stmt_insert = (
+        insert(ClassEnrollment)
+        .from_select(
+            ["class_session_id", "member_id", "enrolled_at", "notes"],
+            insert_select,
+        )
+        .returning(ClassEnrollment.id, ClassEnrollment.enrolled_at)
+    )
+    inserted = (await db.execute(stmt_insert)).one_or_none()
+
+    if inserted is None:
+        latest_session = (
+            await db.execute(
+                select(ClassSession.status, ClassSession.max_capacity)
+                .where(ClassSession.id == session_id)
+            )
+        ).one_or_none()
+        if not latest_session:
+            raise HTTPException(status_code=404, detail="Class session not found.")
+        if latest_session.status == ClassStatus.CANCELLED:
+            raise HTTPException(status_code=400, detail="Cannot enroll in a cancelled class.")
+
+        # Check not already enrolled
+        already_enrolled = (
+            await db.execute(
+                select(ClassEnrollment.id)
+                .where(
+                    ClassEnrollment.class_session_id == session_id,
+                    ClassEnrollment.member_id == payload.member_id,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if already_enrolled is not None:
+            raise HTTPException(status_code=409, detail="Member is already enrolled in this class.")
+
+        raise HTTPException(status_code=400, detail="Class is at full capacity.")
+
     await db.commit()
-    await db.refresh(enrollment)
 
     return {
-        "id": enrollment.id,
-        "member_id": enrollment.member_id,
+        "id": inserted.id,
+        "member_id": payload.member_id,
         "member_code": member.member_code,
         "member_name": member.full_name,
-        "enrolled_at": enrollment.enrolled_at,
+        "enrolled_at": inserted.enrolled_at,
     }
 
 
