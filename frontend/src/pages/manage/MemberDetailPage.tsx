@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { api } from '@/services/api'
+import { useAuth } from '@/context/AuthContext'
+import { markMemberSeenLocally } from '@/utils/memberSeen'
 import type { Member, MemberStatus, MembershipPlan } from '@/types/auth'
 import { AssignMembershipModal } from '@/components/manage/AssignMembershipModal'
 import { MemberKeycardsCard } from '@/components/manage/MemberKeycardsCard'
@@ -36,6 +38,7 @@ function getMembershipStatusVariant(status: string) {
 
 export function MemberDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const { user } = useAuth()
   const location = useLocation()
   const fromAnalytics = (location.state as { from?: string } | null)?.from === 'analytics'
   const backTo = fromAnalytics ? '/manage/analytics' : '/manage/members'
@@ -78,6 +81,12 @@ export function MemberDetailPage() {
     }
     load()
   }, [id])
+
+  useEffect(() => {
+    if (member && user?.role === 'admin') {
+      markMemberSeenLocally(user.id, member.id)
+    }
+  }, [member, user?.id, user?.role])
 
   const refreshMember = async () => {
     if (!id) return

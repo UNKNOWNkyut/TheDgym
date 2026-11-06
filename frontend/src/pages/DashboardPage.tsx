@@ -1,14 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Settings,
   ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  AlertCircle,
   Lock,
-  QrCode,
   Flame,
   Dumbbell,
   Clock,
@@ -21,6 +17,8 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { SEO } from '@/components/ui/SEO';
 import { TrainerDashboard } from '@/components/dashboard/TrainerDashboard';
+import { PUBLIC_PLANS } from '@/constants/plans';
+import { getInitials } from '@/utils/formatters';
 
 interface GroupClass {
   id: string;
@@ -65,19 +63,13 @@ export function DashboardPage() {
 }
 
 function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
+  const navigate = useNavigate();
 
   // Derive viewMode directly from user's active membership status
   const viewMode: 'ACTIVE' | 'INACTIVE' = user?.has_active_membership ? 'ACTIVE' : 'INACTIVE';
 
   // Modals & Popovers State
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<string | null>(null);
-  const [paymentCopiedToast, setPaymentCopiedToast] = useState(false);
-
-  // Rotating Gate Pass PIN
-  const [pinCode, setPinCode] = useState('849-201');
 
   // Mock Users paired with viewMode
   const mockUsers = useMemo(
@@ -89,14 +81,12 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
         phone: '+63 917 555 0192',
         emergencyContact: 'Elena Cruz (+63 918 222 3344)',
         roleBadge: 'ACTIVE MEMBER',
-        membershipPlan: 'Monthly Unlimited Barbell Access',
+        membershipPlan: user?.plan_name || 'Monthly Unlimited Barbell Access',
         daysRemaining: 18,
         totalPlanDays: 30,
         attendanceStreak: '12 Visits • 3-Week Consistency Streak',
         coachingCreditsRemaining: 4,
         totalCoachingCredits: 10,
-        gatePassStatus: 'ACCESS GRANTED',
-        floorTraffic: 'LOW',
         prs: [
           { lift: 'Squat', weight: '140 kg', date: 'Oct 12' },
           { lift: 'Bench Press', weight: '100 kg', date: 'Oct 04' },
@@ -116,12 +106,10 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
         attendanceStreak: '0 Visits • Account Created',
         coachingCreditsRemaining: 0,
         totalCoachingCredits: 0,
-        gatePassStatus: 'PASS INACTIVE',
-        floorTraffic: 'LOW',
         prs: [],
       },
     }),
-    [],
+    [user?.plan_name],
   );
 
   const currentUserData = useMemo(() => {
@@ -133,13 +121,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
     };
   }, [mockUsers, viewMode, user]);
 
-  const userInitials = (currentUserData.name || 'DG')
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const userInitials = getInitials(currentUserData.name);
 
   // Interactive Group Conditioning Classes (Active member feature)
   const [groupClasses, setGroupClasses] = useState<GroupClass[]>([
@@ -209,49 +191,11 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
 
   const completedChecklistCount = checklist.filter((i) => i.done).length;
 
-  // Plan Pricing Data for Registered User
-  const pricingPlans = [
-    {
-      name: 'Day Pass',
-      price: '₱150',
-      period: 'per visit',
-      description: 'Single day full facility pass. Locker room & shower included.',
-      highlight: false,
-    },
-    {
-      name: 'Monthly Unlimited',
-      price: '₱1,500',
-      period: 'per month',
-      description: 'Unlimited 24/7 keycard access, free class bookings, 1 free coaching check-in.',
-      highlight: true,
-      badge: 'Most Popular',
-    },
-    {
-      name: 'Quarterly Athlete',
-      price: '₱4,000',
-      period: '3 months',
-      description: 'Maximum savings with 3 months upfront. Includes 3 personal coaching sessions.',
-      highlight: false,
-      badge: 'Best Value',
-    },
-  ];
-
-  // Rotate PIN every 30 seconds
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const randomPin = `${Math.floor(100 + Math.random() * 900)}-${Math.floor(
-        100 + Math.random() * 900,
-      )}`;
-      setPinCode(randomPin);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <div className="min-h-screen bg-[#070709] text-white font-sans antialiased">
       <SEO
         title={`${currentUserData.name} — Member Portal`}
-        description="The DGym member dashboard & digital gate pass."
+        description="The DGym member dashboard & training portal."
       />
 
       {/* Top Demo Navigation Bar */}
@@ -321,22 +265,10 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
           </div>
 
           {/* Quick Action in Header */}
-          {viewMode === 'ACTIVE' ? (
+          {viewMode === 'INACTIVE' && (
             <button
               type="button"
-              onClick={() => setIsQrModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(229,32,26,0.35)] cursor-pointer self-start sm:self-center"
-            >
-              <QrCode className="w-4 h-4" />
-              <span>Digital Gate Pass QR</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedPlanForPayment('Monthly Unlimited');
-                setIsPaymentModalOpen(true);
-              }}
+              onClick={() => navigate('/payment?plan=monthly')}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(229,32,26,0.35)] cursor-pointer self-start sm:self-center"
             >
               <CreditCard className="w-4 h-4" />
@@ -346,7 +278,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
         </div>
 
         {/* =========================================================================
-            CONDITIONAL VIEW: ACTIVE MEMBER (Alex Cruz)
+            CONDITIONAL VIEW: ACTIVE MEMBER
         ========================================================================= */}
         {viewMode === 'ACTIVE' && (
           <div className="space-y-8 animate-fade-in">
@@ -372,7 +304,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                   />
                 </div>
                 <p className="text-[11px] text-white/40 font-mono">
-                  Renews on 1st of next month • Auto-renewal active
+                  NFC Smart Keycard Active • Unlimited Facility Entry
                 </p>
               </div>
 
@@ -405,141 +337,87 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
               </div>
             </div>
 
-            {/* Digital Gate Pass Card & Personal Coaching PRs */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Digital Gate Pass Interface (1 col) */}
-              <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
-                    <span className="text-xs font-mono uppercase tracking-widest text-white/50 font-bold">
-                      Digital Gate Access
-                    </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      ACCESS GRANTED
-                    </span>
+            {/* Group Conditioning Reservations & Big 3 PRs */}
+            <div className="space-y-6">
+              {/* Group Conditioning Reservation Section */}
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono">
+                      Group Conditioning &amp; Class Reservations
+                    </h2>
+                    <p className="text-xs text-white/40">
+                      Exclusive complimentary athlete bookings included in your plan
+                    </p>
                   </div>
-
-                  <div className="text-center py-4 space-y-3">
-                    <div className="w-28 h-28 mx-auto rounded-2xl bg-white p-2.5 flex items-center justify-center shadow-lg">
-                      <QrCode className="w-full h-full text-black" />
-                    </div>
-
-                    <div>
-                      <p className="text-[10px] uppercase font-mono tracking-widest text-white/40">
-                        Rotating Fast-Pass PIN:
-                      </p>
-                      <p className="text-2xl font-mono font-black tracking-widest text-white">
-                        {pinCode}
-                      </p>
-                      <p className="text-[10px] text-white/30 font-mono mt-0.5">
-                        Rotates automatically every 30 seconds
-                      </p>
-                    </div>
-                  </div>
+                  <span className="text-xs font-mono text-emerald-400">
+                    {groupClasses.filter((c) => c.isReserved).length} Active Booking
+                  </span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-white/50">Floor Traffic Status:</span>
-                    <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      LOW CROWD
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsQrModalOpen(true)}
-                    className="w-full py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-mono transition-colors text-center flex items-center justify-center gap-1"
-                  >
-                    <span>View Large Turnstile Pass</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                <div className="space-y-3">
+                  {groupClasses.map((cls) => {
+                    const spotsRemaining = Math.max(0, cls.capacity - cls.bookedCount);
+                    return (
+                      <div
+                        key={cls.id}
+                        className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm text-white">
+                              {cls.name}
+                            </span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-white/60">
+                              {cls.instructor}
+                            </span>
+                          </div>
+                          <p className="text-xs text-white/50 font-mono mt-1">
+                            {cls.schedule}
+                          </p>
+                          <p className="text-[11px] text-white/30 font-mono mt-0.5">
+                            Capacity: {cls.bookedCount} / {cls.capacity} ({spotsRemaining} spots left)
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleReservation(cls.id)}
+                          className={`px-3 py-2 rounded-xl text-xs font-mono transition-all shrink-0 cursor-pointer ${
+                            cls.isReserved
+                              ? 'bg-red/20 text-red border border-red/40 hover:bg-red/30'
+                              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+                          }`}
+                        >
+                          {cls.isReserved ? 'Cancel Reservation' : 'Reserve Spot'}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Group Conditioning Reservations & Big 3 PRs (2 cols) */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Group Conditioning Reservation Section */}
-                <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                    <div>
-                      <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono">
-                        Group Conditioning &amp; Class Reservations
-                      </h2>
-                      <p className="text-xs text-white/40">
-                        Exclusive complimentary athlete bookings included in your plan
-                      </p>
-                    </div>
-                    <span className="text-xs font-mono text-emerald-400">
-                      {groupClasses.filter((c) => c.isReserved).length} Active Booking
-                    </span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {groupClasses.map((cls) => {
-                      const spotsRemaining = Math.max(0, cls.capacity - cls.bookedCount);
-                      return (
-                        <div
-                          key={cls.id}
-                          className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-sm text-white">
-                                {cls.name}
-                              </span>
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-white/60">
-                                {cls.instructor}
-                              </span>
-                            </div>
-                            <p className="text-xs text-white/50 font-mono mt-1">
-                              {cls.schedule}
-                            </p>
-                            <p className="text-[11px] text-white/30 font-mono mt-0.5">
-                              Capacity: {cls.bookedCount} / {cls.capacity} ({spotsRemaining} spots left)
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleToggleReservation(cls.id)}
-                            className={`px-3 py-2 rounded-xl text-xs font-mono transition-all shrink-0 cursor-pointer ${
-                              cls.isReserved
-                                ? 'bg-red/20 text-red border border-red/40 hover:bg-red/30'
-                                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
-                            }`}
-                          >
-                            {cls.isReserved ? 'Cancel Reservation' : 'Reserve Spot'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* Big 3 Personal Records (PRs) */}
+              <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    Verified Powerlifting PRs (Big 3)
+                  </h2>
+                  <span className="text-xs font-mono text-white/40">Verified by Coach</span>
                 </div>
 
-                {/* Big 3 Personal Records (PRs) */}
-                <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      Verified Powerlifting PRs (Big 3)
-                    </h2>
-                    <span className="text-xs font-mono text-white/40">Verified by Coach</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {currentUserData.prs.map((pr) => (
-                      <div
-                        key={pr.lift}
-                        className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center space-y-1"
-                      >
-                        <p className="text-xs uppercase font-mono text-white/40">{pr.lift}</p>
-                        <p className="text-xl font-mono font-black text-white">{pr.weight}</p>
-                        <p className="text-[10px] font-mono text-emerald-400">Logged {pr.date}</p>
-                      </div>
-                    ))}
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {currentUserData.prs.map((pr) => (
+                    <div
+                      key={pr.lift}
+                      className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center space-y-1"
+                    >
+                      <p className="text-xs uppercase font-mono text-white/40">{pr.lift}</p>
+                      <p className="text-xl font-mono font-black text-white">{pr.weight}</p>
+                      <p className="text-[10px] font-mono text-emerald-400">Logged {pr.date}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -547,7 +425,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
         )}
 
         {/* =========================================================================
-            CONDITIONAL VIEW: REGISTERED USER (Jordan Ramos)
+            CONDITIONAL VIEW: REGISTERED USER
         ========================================================================= */}
         {viewMode === 'INACTIVE' && (
           <div className="space-y-8 animate-fade-in">
@@ -627,7 +505,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                     Ready to Start Training?
                   </h3>
                   <p className="text-xs text-white/60 mt-1 leading-relaxed">
-                    Your athlete profile is registered at our Rosario facility. Choose a pass below to unlock turnstile gate access, lockers, and coaching sessions.
+                    Your athlete profile is registered at our Rosario facility. Choose a pass below to unlock NFC smart keycard access, lockers, and coaching sessions.
                   </p>
                 </div>
 
@@ -636,7 +514,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                     <Clock className="w-3.5 h-3.5 text-white/30" />
                     Facility Hours:
                   </p>
-                  <p className="text-white">Monday - Sunday: 06:00 AM - 10:00 PM</p>
+                  <p className="text-white">Mon–Sat: 6:00 AM – 11:00 PM • Sun: 2:00 PM – 10:00 PM</p>
                   <p className="text-emerald-400 pt-1">🟢 Floor Traffic: Currently Low</p>
                 </div>
               </div>
@@ -649,14 +527,14 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                   Select a Training Pass
                 </h2>
                 <p className="text-xs text-white/40">
-                  Instant activation via OTC Cash or GCash counter verification
+                  Automatic membership activation upon payment
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {pricingPlans.map((plan) => (
+                {PUBLIC_PLANS.map((plan) => (
                   <div
-                    key={plan.name}
+                    key={plan.slug}
                     className={`rounded-2xl border p-6 flex flex-col justify-between space-y-5 transition-all ${
                       plan.highlight
                         ? 'border-red/40 bg-gradient-to-b from-red/10 to-[#0d0d11] shadow-[0_0_20px_rgba(229,32,26,0.15)]'
@@ -670,9 +548,9 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                         </span>
                       )}
                       <h3 className="text-lg font-bold text-white">{plan.name}</h3>
-                      <div className="mt-2 flex items-baseline gap-1">
+                      <div className="mt-2 flex items-baseline gap-1.5">
                         <span className="text-3xl font-black font-mono text-white">
-                          {plan.price}
+                          {plan.priceFormatted}
                         </span>
                         <span className="text-xs font-mono text-white/40">
                           {plan.period}
@@ -685,17 +563,14 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedPlanForPayment(plan.name);
-                        setIsPaymentModalOpen(true);
-                      }}
+                      onClick={() => navigate(`/payment?plan=${encodeURIComponent(plan.slug)}`)}
                       className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer ${
                         plan.highlight
                           ? 'bg-red hover:bg-red-hover text-white shadow-md'
                           : 'bg-white/10 hover:bg-white/20 text-white'
                       }`}
                     >
-                      Avail {plan.name} &rarr;
+                      Avail This Plan
                     </button>
                   </div>
                 ))}
@@ -741,138 +616,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
         )}
       </main>
 
-      {/* =========================================================================
-          MODALS & POPOVERS (Pure Tailwind with Strict Escape Hatches)
-      ========================================================================= */}
-
-      {/* 1. Large QR Code Gate Pass Modal */}
-      {isQrModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={() => setIsQrModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#111114] p-6 shadow-2xl space-y-5 text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="text-xs uppercase font-mono font-bold text-white/60">
-                Digital Turnstile Pass
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsQrModalOpen(false)}
-                className="text-white/40 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="w-48 h-48 mx-auto bg-white p-3 rounded-2xl shadow-xl flex items-center justify-center">
-              <QrCode className="w-full h-full text-black" />
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-xs uppercase font-mono tracking-widest text-white/40">
-                Athlete Access Code:
-              </p>
-              <p className="text-3xl font-mono font-black tracking-widest text-white">
-                {pinCode}
-              </p>
-              <p className="text-xs text-emerald-400 font-mono">
-                Valid today at Rosario Facility turnstiles
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsQrModalOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-mono font-bold uppercase transition-colors"
-            >
-              Close Pass
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 2. OTC / GCash Pending Payment Verification Modal */}
-      {isPaymentModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={() => setIsPaymentModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-white/15 bg-[#111114] p-6 shadow-2xl space-y-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-red" />
-                <h3 className="font-bold text-sm uppercase text-white font-mono">
-                  Pending Payment Verification
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPaymentModalOpen(false)}
-                className="text-white/40 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/40">Selected Plan:</span>
-                <span className="text-white font-bold">{selectedPlanForPayment}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/40">Transaction Reference:</span>
-                <span className="text-emerald-400 font-mono font-bold">DGYM-2026-8841</span>
-              </div>
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/40">Status:</span>
-                <span className="text-amber-400 font-mono font-bold flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  AWAITING COUNTER OTC
-                </span>
-              </div>
-            </div>
-
-            <div className="text-xs text-white/60 space-y-2 leading-relaxed">
-              <p>
-                Present this reference code <strong className="text-white">DGYM-2026-8841</strong> at the DGym Rosario front desk, or send GCash payment to our registered merchant:
-              </p>
-              <div className="p-3 rounded-lg bg-black/40 border border-white/10 font-mono text-[11px] text-white/80 space-y-1">
-                <p>GCash Merchant: The DGym Rosario</p>
-                <p>Account No.: 0917-882-9912</p>
-              </div>
-            </div>
-
-            <div className="pt-2 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentCopiedToast(true);
-                  setTimeout(() => setPaymentCopiedToast(false), 2000);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-mono transition-colors"
-              >
-                {paymentCopiedToast ? 'Copied Reference!' : 'Copy Reference'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPaymentModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase transition-colors"
-              >
-                Got It
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Account Settings Modal (Houses Credentials) */}
+      {/* Account Settings Modal (Houses Credentials) */}
       {isSettingsOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"

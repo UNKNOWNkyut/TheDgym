@@ -190,14 +190,14 @@ async def register(
         )
         plan = (await db.execute(stmt_plan)).scalar_one_or_none()
 
-    # SKIP & REGISTER: Registered user without an active plan
+    # SKIP & REGISTER: Registered user remains INACTIVE until payment is confirmed
     new_mem = Member(
         member_code=member_code,
         first_name=first_name,
         last_name=last_name,
         email=normalized_email,
         phone=clean_phone,
-        status=MemberStatus.ACTIVE if plan else MemberStatus.INACTIVE,
+        status=MemberStatus.INACTIVE,
         is_active=True,
     )
     db.add(new_mem)

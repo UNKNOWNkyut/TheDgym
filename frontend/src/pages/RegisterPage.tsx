@@ -8,33 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { QuarterRing } from '@/components/ui/quarter-ring'
-
-const PLANS_OPTIONS = [
-  {
-    slug: 'day-pass',
-    name: 'Day Pass',
-    period: 'per visit',
-    badge: null,
-    description: 'Full gym access for one day. No commitment.',
-    features: ['Full equipment access', 'Locker use', 'No sign-up required'],
-  },
-  {
-    slug: 'monthly',
-    name: 'Monthly',
-    period: 'per month',
-    badge: 'Most Popular',
-    description: 'Unlimited access, billed monthly. Cancel anytime.',
-    features: ['Unlimited gym access', 'Group class access', 'Locker use', 'Flexible month-to-month'],
-  },
-  {
-    slug: 'quarterly',
-    name: 'Quarterly',
-    period: 'per quarter',
-    badge: 'Best Value',
-    description: 'Three months upfront. Best value per session.',
-    features: ['Everything in Monthly', 'Better rate per session', 'Priority class booking', 'One PT session included'],
-  },
-]
+import { PUBLIC_PLANS } from '@/constants/plans'
 
 export function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1)
@@ -90,7 +64,7 @@ export function RegisterPage() {
     clearError()
     setShowLoading(true)
 
-    const planSlugToSubmit = withPlan ? selectedPlan || undefined : undefined
+    const chosenSlug = withPlan ? selectedPlan : null
 
     try {
       await Promise.all([
@@ -99,15 +73,12 @@ export function RegisterPage() {
           email: email.trim(),
           phone: phone.trim() || undefined,
           password,
-          plan_slug: planSlugToSubmit,
         }),
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
-      // If user chose a plan, they are an active member -> send to /dashboard (plan stays pending until front-desk payment verification)
-      // If user skipped, they are a registered user -> send to public home page
-      if (withPlan && planSlugToSubmit) {
-        navigate('/dashboard', { replace: true })
+      if (chosenSlug) {
+        navigate(`/payment?plan=${encodeURIComponent(chosenSlug)}`, { replace: true })
       } else {
         navigate('/', { replace: true })
       }
@@ -182,7 +153,7 @@ export function RegisterPage() {
                   Start Your Training Plan?
                 </h1>
                 <p className="text-xs uppercase tracking-widest text-white/40 mt-1 max-w-md mx-auto">
-                  Choose a membership plan to request your gym access (it activates once the front desk confirms your payment), or skip to finish creating your registered account.
+                  Select a membership plan to proceed to payment, or skip to finish creating your registered account.
                 </p>
               </>
             )}
@@ -291,7 +262,7 @@ export function RegisterPage() {
             <div className="space-y-6">
               {/* Plan Options Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                {PLANS_OPTIONS.map((plan) => {
+                {PUBLIC_PLANS.map((plan) => {
                   const isSelected = selectedPlan === plan.slug
                   return (
                     <div
@@ -306,7 +277,7 @@ export function RegisterPage() {
                       {/* Badge or Selected Indicator */}
                       <div className="flex items-center justify-between mb-3">
                         {plan.badge ? (
-                          <Badge variant={plan.slug === 'monthly' ? 'red' : 'default'} size="sm">
+                          <Badge variant={plan.highlight ? 'red' : 'default'} size="sm">
                             {plan.badge}
                           </Badge>
                         ) : <span />}
@@ -322,9 +293,14 @@ export function RegisterPage() {
                         <h3 className="font-display text-lg font-bold uppercase text-white tracking-wide">
                           {plan.name}
                         </h3>
-                        <p className="text-[11px] text-white/40 font-mono mt-0.5">
-                          {plan.period}
-                        </p>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <span className="font-mono font-bold text-xl text-white">
+                            {plan.priceFormatted}
+                          </span>
+                          <span className="text-[11px] text-white/40 font-mono">
+                            {plan.period}
+                          </span>
+                        </div>
                         <p className="text-xs text-white/60 mt-2 leading-relaxed">
                           {plan.description}
                         </p>
@@ -352,7 +328,7 @@ export function RegisterPage() {
                   onClick={() => handleCompleteRegistration(true)}
                   className="w-full py-3.5 px-4 rounded-xl bg-[#141416] hover:bg-[#1c1c20] border border-white/20 hover:border-white/40 text-white font-bold text-xs uppercase tracking-widest transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-white/20 disabled:hover:bg-[#141416] cursor-pointer shadow-md flex items-center justify-center gap-2"
                 >
-                  <span>Continue</span>
+                  <span>Continue to Payment</span>
                   {selectedPlan && <span>→</span>}
                 </button>
 

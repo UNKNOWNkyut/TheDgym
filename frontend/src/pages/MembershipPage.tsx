@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -7,61 +7,13 @@ import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { PUBLIC_PLANS } from '@/constants/plans'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const PLANS = [
-  {
-    name: 'Day Pass',
-    slug: 'day-pass',
-    price: null,
-    period: 'per visit',
-    description: 'Full gym access for one day. No commitment.',
-    features: [
-      'Full equipment access',
-      'Locker use',
-      'No sign-up required',
-    ],
-    highlight: false,
-    badge: null,
-  },
-  {
-    name: 'Monthly',
-    slug: 'monthly',
-    price: null,
-    period: 'per month',
-    description: 'Unlimited access, billed monthly. Cancel anytime.',
-    features: [
-      'Unlimited gym access',
-      'Group class access',
-      'Locker use',
-      'Flexible — month to month',
-    ],
-    highlight: true,
-    badge: 'Most Popular',
-  },
-  {
-    name: 'Quarterly',
-    slug: 'quarterly',
-    price: null,
-    period: 'per quarter',
-    description: 'Three months upfront. Best value per session.',
-    features: [
-      'Everything in Monthly',
-      'Better rate per session',
-      'Priority class booking',
-      'One PT session included',
-    ],
-    highlight: false,
-    badge: 'Best Value',
-  },
-]
-
 export function MembershipPage() {
-  const { user, isAuthenticated, availPlan } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
-  const [loadingSlug, setLoadingSlug] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const heroRef = useRef<HTMLDivElement>(null)
   const plansRef = useRef<HTMLDivElement>(null)
@@ -85,24 +37,8 @@ export function MembershipPage() {
     })
   }, { scope: plansRef })
 
-  const handleAvailPlan = async (slug: string) => {
-    if (!isAuthenticated) {
-      navigate('/register')
-      return
-    }
-
-    setLoadingSlug(slug)
-    setSuccessMessage(null)
-    try {
-      await availPlan(slug)
-      // Plan stays PENDING (₱0 paid) until front-desk staff verify payment
-      setSuccessMessage('Plan request received! Please settle your payment at the front desk to activate your membership. Redirecting to your dashboard...')
-      setTimeout(() => {
-        navigate('/dashboard')
-      }, 2500)
-    } catch {
-      setLoadingSlug(null)
-    }
+  const handleAvailPlan = (slug: string) => {
+    navigate(`/payment?plan=${encodeURIComponent(slug)}`)
   }
 
   return (
@@ -124,32 +60,7 @@ export function MembershipPage() {
             Plans That Fit<br />Your Training
           </h1>
           <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
-            Simple, transparent options for lifters and fitness enthusiasts in Rosario, Batangas. Contact us for current pricing.
-          </p>
-        </div>
-      </div>
-
-      {/* Success Notification */}
-      {successMessage && (
-        <div className="bg-green-500/10 border-b border-green-500/20 py-3 text-center text-sm text-green-400 font-medium animate-fade-in">
-          ✓ {successMessage}
-        </div>
-      )}
-
-      {/* Pricing notice */}
-      <div className="border-b border-white/8 bg-surface">
-        <div className="container-dgym py-4">
-          <p className="text-sm text-white/40">
-            <span className="text-warning font-medium">Note:</span>{' '}
-            Pricing is not yet listed online. Reach out via{' '}
-            <a href="https://www.facebook.com/profile.php?id=61577169056417" target="_blank" rel="noopener noreferrer" className="text-white/70 hover:text-white underline underline-offset-2 transition-colors">
-              The DGym Rosario Batangas Facebook Page
-            </a>{' '}
-            or our{' '}
-            <Link to="/contact" className="text-white/70 hover:text-white underline underline-offset-2 transition-colors">
-              contact form
-            </Link>{' '}
-            to get current rates.
+            Simple, transparent options for lifters and fitness enthusiasts in Rosario, Batangas.
           </p>
         </div>
       </div>
@@ -157,11 +68,13 @@ export function MembershipPage() {
       {/* Plans */}
       <div ref={plansRef} className="container-dgym section-padding">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
-          {PLANS.map((plan) => {
-            const isUserCurrentPlan = user?.has_active_membership && user?.plan_name?.toLowerCase().includes(plan.slug)
+          {PUBLIC_PLANS.map((plan) => {
+            const isUserCurrentPlan = Boolean(
+              user?.has_active_membership && user.plan_name?.toLowerCase().includes(plan.name.toLowerCase()),
+            )
             return (
               <div
-                key={plan.name}
+                key={plan.slug}
                 className={[
                   'plan-card relative flex flex-col rounded-2xl border p-8 transition-all duration-200',
                   plan.highlight
@@ -182,12 +95,11 @@ export function MembershipPage() {
                   <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-2">
                     {plan.name}
                   </h2>
-                  {/* Price placeholder */}
                   <div className="flex items-baseline gap-2 mb-3">
-                    <span className="text-4xl font-bold text-white/20 font-mono tracking-tight">
-                      —
+                    <span className="text-4xl font-bold text-white font-mono tracking-tight">
+                      {plan.priceFormatted}
                     </span>
-                    <span className="text-sm text-white/30">{plan.period}</span>
+                    <span className="text-sm text-white/40">{plan.period}</span>
                   </div>
                   <p className="text-sm text-white/50 leading-relaxed">
                     {plan.description}
@@ -206,33 +118,18 @@ export function MembershipPage() {
                   ))}
                 </ul>
 
-                {isAuthenticated && !user?.has_active_membership ? (
+                {isUserCurrentPlan ? (
+                  <Button fullWidth variant="secondary" disabled>
+                    Current Active Plan ✓
+                  </Button>
+                ) : (
                   <Button
                     fullWidth
                     variant={plan.highlight ? 'primary' : 'secondary'}
-                    loading={loadingSlug === plan.slug}
-                    disabled={loadingSlug !== null}
                     onClick={() => handleAvailPlan(plan.slug)}
                   >
                     Avail This Plan
                   </Button>
-                ) : isUserCurrentPlan ? (
-                  <Button
-                    fullWidth
-                    variant="secondary"
-                    disabled
-                  >
-                    Current Active Plan ✓
-                  </Button>
-                ) : (
-                  <Link to={isAuthenticated ? "/contact" : "/register"} className="block">
-                    <Button
-                      fullWidth
-                      variant={plan.highlight ? 'primary' : 'secondary'}
-                    >
-                      {isAuthenticated ? "Inquire Plan" : "Join Now"}
-                    </Button>
-                  </Link>
                 )}
               </div>
             )

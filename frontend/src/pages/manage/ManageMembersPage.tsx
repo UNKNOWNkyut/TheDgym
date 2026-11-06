@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import type { Member, MemberStatus } from '@/types/auth'
+import { isNewMemberBadgeVisible, loadSeenMemberIds, markMemberSeenLocally } from '@/utils/memberSeen'
 import { AlertCircle, X, Trash2, UserX, UserCheck } from 'lucide-react'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 
@@ -33,10 +34,13 @@ function getStatusBadgeVariant(status: MemberStatus) {
 
 export function ManageMembersPage() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
 
   const [members, setMembers] = useState<Member[]>([])
+  const [seenMemberIds, setSeenMemberIds] = useState<Set<number>>(() => loadSeenMemberIds(user?.id))
+  const [nowMs, setNowMs] = useState<number>(() => Date.now())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -76,6 +80,19 @@ export function ManageMembersPage() {
     const timer = setTimeout(fetchMembers, 350)
     return () => clearTimeout(timer)
   }, [fetchMembers])
+
+  // Refresh 24-hour "new" badge expiration check every minute
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const handleOpenMemberProfile = (memberId: number) => {
+    if (isAdmin) {
+      setSeenMemberIds(markMemberSeenLocally(user?.id, memberId))
+    }
+    navigate(`/manage/members/${memberId}`)
+  }
 
   const confirmDeactivate = async () => {
     if (!deactivateTarget) return
@@ -257,10 +274,33 @@ export function ManageMembersPage() {
                   </tr>
                 ) : members.map((member) => {
                   const activePlan = getActiveMembership(member)
+                  const showNewBadge = isNewMemberBadgeVisible(member, seenMemberIds, nowMs)
                   return (
-                    <tr key={member.id} className="hover:bg-white/5 transition-colors">
+                    <tr
+                      key={member.id}
+                      onClick={() => handleOpenMemberProfile(member.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleOpenMemberProfile(member.id)
+                        }
+                      }}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Open profile for ${member.full_name}`}
+                      className="group cursor-pointer hover:bg-white/5 focus:bg-white/5 focus:outline-none transition-colors"
+                    >
                       <td className="py-3 px-4">
-                        <p className="font-semibold text-white">{member.full_name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-white group-hover:text-red transition-colors">
+                            {member.full_name}
+                          </span>
+                          {showNewBadge && (
+                            <span className="px-1.5 py-0.5 rounded bg-red/15 border border-red/30 text-[10px] font-mono font-bold uppercase tracking-widest text-red leading-none">
+                              new
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-white/40">{member.email || 'No email'}</p>
                       </td>
                       <td className="py-3 px-4">
@@ -284,16 +324,15 @@ export function ManageMembersPage() {
                       <td className="py-3 px-4 text-white/40 text-xs font-mono">
                         {new Date(member.joined_at).toLocaleDateString()}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
-                          <Link to={`/manage/members/${member.id}`}>
-                            <button
-                              type="button"
-                              className="px-3 py-1.5 text-xs text-white/60 hover:text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors cursor-pointer"
-                            >
-                              View
-                            </button>
-                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMemberProfile(member.id)}
+                            className="px-3 py-1.5 text-xs text-white/60 hover:text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors cursor-pointer"
+                          >
+                            View
+                          </button>
 
                           {isAdmin && (
                             <>

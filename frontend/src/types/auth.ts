@@ -123,6 +123,7 @@ export interface Member {
   joined_at: string
   created_at: string
   updated_at: string
+  admin_viewed_at?: string | null
   memberships: MembershipSummary[]
 }
 

@@ -35,3 +35,10 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
                     text("ALTER TABLE visits ADD COLUMN scanner_id INTEGER NULL")
                 )
                 logger.info("[MIGRATION] Added column visits.scanner_id")
+
+        members_cols = await conn.run_sync(_get_existing_columns, "members")
+        if members_cols and "admin_viewed_at" not in members_cols:
+            await conn.execute(
+                text("ALTER TABLE members ADD COLUMN admin_viewed_at TIMESTAMP NULL")
+            )
+            logger.info("[MIGRATION] Added column members.admin_viewed_at")

@@ -2,6 +2,7 @@
 Members router — CRUD endpoints for gym member management.
 Access: Admin and Staff only (read + create + update), Admin only (delete).
 """
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, func, or_, delete
@@ -74,6 +75,7 @@ def _member_to_response(member: Member) -> MemberResponse:
         joined_at=member.joined_at,
         created_at=member.created_at,
         updated_at=member.updated_at,
+        admin_viewed_at=member.admin_viewed_at,
         memberships=memberships,
     )
 
@@ -155,6 +157,11 @@ async def get_member(
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
+
+    if current_user.role == UserRole.ADMIN and member.admin_viewed_at is None:
+        member.admin_viewed_at = datetime.now(timezone.utc)
+        await db.commit()
+
     return _member_to_response(member)
 
 

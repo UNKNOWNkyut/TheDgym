@@ -1,6 +1,6 @@
 """
-Seed placeholder membership plans for The DGym.
-TODO: Replace prices and descriptions with real data from the company.
+Seed official membership plans for The DGym Rosario, Batangas.
+Rates sourced from the official TDGGYM client survey.
 """
 from decimal import Decimal
 from sqlalchemy import select
@@ -8,33 +8,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.membership_plan import MembershipPlan
 
+LEGACY_PLACEHOLDER_PRICES = {
+    "day-pass": Decimal("80.00"),
+    "monthly": Decimal("600.00"),
+    "quarterly": Decimal("1500.00"),
+    "annual": Decimal("5000.00"),
+    "student-monthly": Decimal("450.00"),
+}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PLACEHOLDER DATA — Replace with real company pricing once gathered
-# ─────────────────────────────────────────────────────────────────────────────
 DEFAULT_PLANS = [
     {
         "name": "Day Pass",
         "slug": "day-pass",
-        "description": "Single-day access to all gym facilities. Perfect for drop-ins and visitors.",
+        "description": "Full gym access for one day. No commitment.",
         "duration_days": 1,
-        "price_php": Decimal("80.00"),  # PLACEHOLDER
+        "price_php": Decimal("400.00"),
         "sort_order": 1,
     },
     {
         "name": "Monthly",
         "slug": "monthly",
-        "description": "Full 30-day unlimited access to all equipment and open gym sessions.",
+        "description": "Full 30-day unlimited access to all equipment and group classes.",
         "duration_days": 30,
-        "price_php": Decimal("600.00"),  # PLACEHOLDER
+        "price_php": Decimal("1999.00"),
         "sort_order": 2,
     },
     {
         "name": "Quarterly",
         "slug": "quarterly",
-        "description": "3-month membership for serious athletes committed to consistent training.",
+        "description": "3-month membership upfront. Best value per session.",
         "duration_days": 90,
-        "price_php": Decimal("1500.00"),  # PLACEHOLDER
+        "price_php": Decimal("5400.00"),
         "sort_order": 3,
     },
     {
@@ -42,7 +46,7 @@ DEFAULT_PLANS = [
         "slug": "annual",
         "description": "Full-year unlimited access — best value for dedicated members.",
         "duration_days": 365,
-        "price_php": Decimal("5000.00"),  # PLACEHOLDER
+        "price_php": Decimal("13000.00"),
         "sort_order": 4,
     },
     {
@@ -50,21 +54,31 @@ DEFAULT_PLANS = [
         "slug": "student-monthly",
         "description": "Discounted monthly plan for students with valid school ID.",
         "duration_days": 30,
-        "price_php": Decimal("450.00"),  # PLACEHOLDER
+        "price_php": Decimal("1500.00"),
         "sort_order": 5,
     },
 ]
 
 
 async def seed_plans(session: AsyncSession) -> None:
-    """Seed default membership plans if none exist."""
-    result = await session.execute(select(MembershipPlan).limit(1))
-    if result.scalar_one_or_none():
-        return  # Plans already seeded
+    """Seed default membership plans if missing, and upgrade legacy placeholder prices."""
+    existing_rows = (await session.execute(select(MembershipPlan))).scalars().all()
+    by_slug = {plan.slug: plan for plan in existing_rows}
 
+    mutated = False
     for plan_data in DEFAULT_PLANS:
-        plan = MembershipPlan(**plan_data)
-        session.add(plan)
+        slug = plan_data["slug"]
+        existing = by_slug.get(slug)
+        if existing is None:
+            session.add(MembershipPlan(**plan_data))
+            mutated = True
+            continue
 
-    await session.commit()
-    print("[SEED] Membership plans seeded (placeholder pricing — replace with real data).")
+        legacy_price = LEGACY_PLACEHOLDER_PRICES.get(slug)
+        if legacy_price is not None and Decimal(str(existing.price_php)) == legacy_price:
+            existing.price_php = plan_data["price_php"]
+            existing.description = plan_data["description"]
+            mutated = True
+
+    if mutated:
+        await session.commit()

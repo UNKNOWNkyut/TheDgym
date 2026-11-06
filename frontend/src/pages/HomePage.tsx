@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { PUBLIC_PLANS } from '@/constants/plans'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -353,13 +354,10 @@ export function HomePage() {
 
             {/* Membership tier preview cards */}
             <div className="space-y-3">
-              {[
-                { name: 'Day Pass', desc: 'Drop in and train on your schedule.', highlight: false },
-                { name: 'Monthly', desc: 'Unlimited access, billed monthly. Flexible.', highlight: true },
-                { name: 'Quarterly', desc: 'Commit and save. Best value per session.', highlight: false },
-              ].map((plan) => (
-                <div
-                  key={plan.name}
+              {PUBLIC_PLANS.map((plan) => (
+                <Link
+                  key={plan.slug}
+                  to={`/payment?plan=${plan.slug}`}
                   className={[
                     'flex items-center justify-between',
                     'p-5 rounded-xl border transition-all duration-200',
@@ -379,12 +377,18 @@ export function HomePage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-white/50">{plan.desc}</p>
+                    <p className="text-sm text-white/50">{plan.shortDesc}</p>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30 shrink-0 ml-4" aria-hidden="true">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-4">
+                    <div className="text-right">
+                      <p className="font-mono font-bold text-base text-white">{plan.priceFormatted}</p>
+                      <p className="text-[11px] text-white/40">{plan.period}</p>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </Link>
               ))}
             </div>
           </div>

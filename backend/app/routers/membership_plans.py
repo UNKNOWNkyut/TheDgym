@@ -3,6 +3,7 @@ Membership Plans router — manage gym plan tiers and pricing.
 Membership Assignment router — assign plans to members, track payments.
 """
 from datetime import timedelta, timezone, datetime
+from decimal import Decimal
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -21,6 +22,11 @@ from app.schemas.gym import (
     AssignMembershipCreate,
     MembershipResponse,
     MembershipUpdate,
+)
+from app.services.membership_activation import (
+    activate_member_and_notify_on_payment,
+    broadcast_admin_member_notification,
+    count_prior_paid_memberships,
 )
 
 router = APIRouter(tags=["Membership Plans & Assignments"])
@@ -149,7 +155,7 @@ async def assign_membership(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
 
-    if not member.is_active or member.status in [MemberStatus.INACTIVE, MemberStatus.SUSPENDED]:
+    if not member.is_active or member.status == MemberStatus.SUSPENDED:
         raise HTTPException(
             status_code=400,
             detail="Cannot assign a membership plan to a deactivated member. Please reactivate the member first."
@@ -162,6 +168,8 @@ async def assign_membership(
         raise HTTPException(status_code=404, detail="Membership plan not found.")
     if not plan.is_active:
         raise HTTPException(status_code=400, detail="This membership plan is no longer active.")
+
+    prior_paid = await count_prior_paid_memberships(db, member_id=member.id)
 
     # Calculate end_date from plan duration
     start = data.start_date
@@ -184,11 +192,19 @@ async def assign_membership(
     )
     db.add(new_ms)
 
-    # Update member status to active
-    member.status = "active"
-    member.is_active = True
+    admin_notified = await activate_member_and_notify_on_payment(
+        db,
+        membership=new_ms,
+        member=member,
+        plan=plan,
+        paid_amount=paid,
+        payment_method=data.payment_method,
+        is_new_member_activation=(prior_paid == 0),
+    )
 
     await db.commit()
+    if admin_notified:
+        await broadcast_admin_member_notification(member)
     await db.refresh(new_ms)
     # Reload with relationship for plan name
     result2 = await db.execute(select(MemberMembership).where(MemberMembership.id == new_ms.id))
@@ -223,10 +239,52 @@ async def update_membership(
     if not ms:
         raise HTTPException(status_code=404, detail="Membership record not found.")
 
+    was_active = ms.status == MembershipStatus.ACTIVE
     update_data = update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(ms, field, value)
 
+    payment_recorded = (
+        not was_active
+        and ms.status not in (MembershipStatus.CANCELLED, MembershipStatus.EXPIRED)
+        and (
+            update_data.get("status") == MembershipStatus.ACTIVE
+            or (
+                update_data.get("paid_amount") is not None
+                and Decimal(str(update_data["paid_amount"])) > Decimal("0.00")
+            )
+            or update_data.get("payment_method") is not None
+        )
+    )
+
+    admin_notified = False
+    member = None
+    if payment_recorded:
+        member = await db.get(Member, ms.member_id)
+        plan = await db.get(MembershipPlan, ms.plan_id)
+        if member and plan:
+            prior_paid = await count_prior_paid_memberships(
+                db,
+                member_id=member.id,
+                exclude_membership_id=ms.id,
+            )
+            paid_val = (
+                ms.paid_amount
+                if ms.paid_amount is not None and Decimal(str(ms.paid_amount)) > Decimal("0.00")
+                else plan.price_php
+            )
+            admin_notified = await activate_member_and_notify_on_payment(
+                db,
+                membership=ms,
+                member=member,
+                plan=plan,
+                paid_amount=paid_val,
+                payment_method=ms.payment_method,
+                is_new_member_activation=(prior_paid == 0),
+            )
+
     await db.commit()
+    if admin_notified and member:
+        await broadcast_admin_member_notification(member)
     await db.refresh(ms)
     return _build_membership_response(ms)

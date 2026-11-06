@@ -71,6 +71,10 @@ class Member(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    admin_viewed_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # Relationships
     memberships = relationship("MemberMembership", back_populates="member", lazy="selectin")

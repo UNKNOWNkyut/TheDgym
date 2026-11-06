@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.member import MemberStatus, Gender
 from app.models.member_membership import MembershipStatus, PaymentMethod
+from app.schemas.common_types import UtcDatetime
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -70,9 +71,10 @@ class MemberResponse(BaseModel):
     status: MemberStatus
     is_active: bool
     notes: Optional[str] = None
-    joined_at: datetime
-    created_at: datetime
-    updated_at: datetime
+    joined_at: UtcDatetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    admin_viewed_at: Optional[UtcDatetime] = None
     memberships: List["MembershipResponse"] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -157,7 +159,7 @@ class MembershipResponse(BaseModel):
     payment_method: Optional[PaymentMethod] = None
     payment_reference: Optional[str] = None
     notes: Optional[str] = None
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = ConfigDict(from_attributes=True)
 

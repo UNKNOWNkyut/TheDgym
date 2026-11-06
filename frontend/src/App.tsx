@@ -22,6 +22,7 @@ const PrivacyPolicyPage = lazy(() => import('@/pages/PrivacyPolicyPage').then((m
 const TermsOfUsePage = lazy(() => import('@/pages/TermsOfUsePage').then((m) => ({ default: m.TermsOfUsePage })))
 const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
+const PaymentPage = lazy(() => import('@/pages/PaymentPage').then((m) => ({ default: m.PaymentPage })))
 
 // ─── Portal & Management Pages ────────────────────────────────────────────────
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
@@ -135,6 +136,7 @@ export function App() {
               <Route path="/terms" element={<TermsOfUsePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/payment" element={<PaymentPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
 
