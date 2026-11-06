@@ -8,21 +8,77 @@ from sqlalchemy.orm import selectinload
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.models.member import Member
+from app.models.member import Member, MemberStatus
+from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.visit import Visit
 from app.schemas.phase5 import VisitCreate, VisitCheckOut, VisitResponse
-from app.services.visit_sweeper import notify_admins_on_checkin, sweep_overdue_open_visits
+from app.services.visit_sweeper import notify_admins_on_checkin, sweep_overdue_open_visits, to_ph_time
 
 router = APIRouter(prefix="/api/visits", tags=["Visits"])
 
 
-def _format_visit(v: Visit) -> dict:
+def _ensure_utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+def _require_active_membership(member: Member, now: datetime) -> MemberMembership:
+    if not member.is_active or member.status == MemberStatus.INACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Member profile ({member.member_code}) is inactive.",
+        )
+    if member.status == MemberStatus.SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Member profile ({member.member_code}) is suspended.",
+        )
+
+    valid_active: List[MemberMembership] = []
+    has_pending = False
+    has_expired = False
+
+    for ms in member.memberships:
+        start_dt = _ensure_utc(ms.start_date)
+        end_ph = to_ph_time(ms.end_date).replace(hour=23, minute=59, second=59, microsecond=999999)
+        effective_end_utc = end_ph.astimezone(timezone.utc)
+
+        if ms.status == MembershipStatus.ACTIVE:
+            if effective_end_utc < now:
+                has_expired = True
+            elif start_dt <= now <= effective_end_utc:
+                valid_active.append(ms)
+        elif ms.status == MembershipStatus.PENDING:
+            has_pending = True
+        elif ms.status == MembershipStatus.EXPIRED:
+            has_expired = True
+
+    if not valid_active:
+        if has_pending:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Membership payment is pending front-desk confirmation.",
+            )
+        if has_expired:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Member's subscription has expired. Please renew before checking in.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Member has no active membership plan.",
+        )
+
+    return max(valid_active, key=lambda m: _ensure_utc(m.end_date))
+
+
+def _format_visit(v: Visit, member_override: Optional[Member] = None) -> dict:
     """Serialize a Visit ORM object to a dict matching VisitResponse."""
+    mem = member_override if member_override is not None else v.member
     member_name = None
     member_code = None
-    if v.member:
-        member_name = v.member.full_name
-        member_code = v.member.member_code
+    if mem:
+        member_name = mem.full_name
+        member_code = mem.member_code
 
     entry_val = v.entry_method.value if hasattr(v.entry_method, "value") else (v.entry_method or "manual")
 
@@ -48,10 +104,33 @@ async def check_in_member(
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
     """Record a gym check-in for a member."""
+    await sweep_overdue_open_visits(db)
+
     # Verify member exists
-    member = await db.get(Member, payload.member_id)
+    stmt_member = (
+        select(Member)
+        .where(Member.id == payload.member_id)
+        .options(selectinload(Member.memberships))
+    )
+    member = (await db.execute(stmt_member)).scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
+
+    now = datetime.now(timezone.utc)
+    active_ms = _require_active_membership(member, now)
+
+    open_visit_id = (
+        await db.execute(
+            select(Visit.id)
+            .where(Visit.member_id == payload.member_id, Visit.checked_out_at.is_(None))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if open_visit_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{member.full_name} ({member.member_code}) is already checked in.",
+        )
 
     visit = Visit(
         member_id=payload.member_id,
@@ -64,19 +143,14 @@ async def check_in_member(
     await notify_admins_on_checkin(
         db,
         member=member,
-        plan_name=None,
+        plan_name=active_ms.plan.name if active_ms.plan else None,
         method_label="Manual Check-In",
-        checkin_utc=visit.checked_in_at or datetime.now(timezone.utc),
+        checkin_utc=visit.checked_in_at or now,
     )
     await db.commit()
-    await db.refresh(visit)
+    await db.refresh(visit, attribute_names=["id", "checked_in_at", "checked_out_at", "created_at"])
 
-    # Reload with selectinload
-    stmt = select(Visit).where(Visit.id == visit.id).options(selectinload(Visit.member))
-    result = await db.execute(stmt)
-    visit = result.scalar_one()
-
-    return _format_visit(visit)
+    return _format_visit(visit, member_override=member)
 
 
 @router.patch("/{visit_id}/checkout", response_model=VisitResponse)
@@ -95,11 +169,7 @@ async def check_out_member(
 
     visit.checked_out_at = payload.checked_out_at or datetime.now(timezone.utc)
     await db.commit()
-    await db.refresh(visit)
-
-    stmt = select(Visit).where(Visit.id == visit.id).options(selectinload(Visit.member))
-    result = await db.execute(stmt)
-    visit = result.scalar_one()
+    await db.refresh(visit, attribute_names=["checked_out_at"])
 
     return _format_visit(visit)
 
