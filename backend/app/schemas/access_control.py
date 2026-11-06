@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models.access_scanner import ScannerTapMode
 from app.models.keycard_tap_log import TapDecision
 from app.models.member_keycard import KeycardStatus, normalize_card_uid
+from app.schemas.common_types import UtcDatetime
 
 
 class TapVerifyRequest(BaseModel):
@@ -50,11 +51,11 @@ class MemberKeycardResponse(BaseModel):
     card_uid_masked: str
     card_label: str
     status: KeycardStatus
-    issued_at: datetime
-    revoked_at: Optional[datetime] = None
+    issued_at: UtcDatetime
+    revoked_at: Optional[UtcDatetime] = None
     revoked_reason: Optional[str] = None
-    last_tapped_at: Optional[datetime] = None
-    created_at: datetime
+    last_tapped_at: Optional[UtcDatetime] = None
+    created_at: UtcDatetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,15 +71,15 @@ class TapVerificationResponse(BaseModel):
     member_name: Optional[str] = None
     member_status: Optional[str] = None
     plan_name: Optional[str] = None
-    membership_end_date: Optional[datetime] = None
+    membership_end_date: Optional[UtcDatetime] = None
     days_remaining: Optional[int] = None
     warning_banner: Optional[str] = None
     visit_id: Optional[int] = None
     visit_type: Optional[str] = None
-    checked_in_at: Optional[datetime] = None
-    checked_out_at: Optional[datetime] = None
+    checked_in_at: Optional[UtcDatetime] = None
+    checked_out_at: Optional[UtcDatetime] = None
     latency_ms: int
-    tapped_at: datetime
+    tapped_at: UtcDatetime
 
 
 class KeycardTapLogResponse(BaseModel):
@@ -97,7 +98,7 @@ class KeycardTapLogResponse(BaseModel):
     days_remaining: Optional[int] = None
     warning_banner: Optional[str] = None
     latency_ms: int
-    tapped_at: datetime
+    tapped_at: UtcDatetime
 
 
 class AccessScannerCreate(BaseModel):

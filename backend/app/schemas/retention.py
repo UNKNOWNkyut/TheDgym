@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.common_types import UtcDatetime
+
 
 class RetentionStrategyResponse(BaseModel):
     id: int
@@ -17,8 +19,8 @@ class RetentionStrategyResponse(BaseModel):
     offer_action_text: str
     offer_action_url: str
     status: str
-    dispatched_at: Optional[datetime] = None
-    created_at: datetime
+    dispatched_at: Optional[UtcDatetime] = None
+    created_at: UtcDatetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,6 +56,6 @@ class NotificationResponse(BaseModel):
     action_text: Optional[str] = None
     action_url: Optional[str] = None
     is_read: bool
-    created_at: datetime
+    created_at: UtcDatetime
 
     model_config = ConfigDict(from_attributes=True)

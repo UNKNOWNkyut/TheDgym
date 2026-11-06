@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import type { User } from '@/types/auth'
 import { api } from '@/services/api'
+import { formatRelativeTime } from '@/utils/dateTime'
 
 export interface GymNotification {
   id: string
@@ -28,193 +29,48 @@ interface NotificationBellProps {
   user: User
 }
 
-function formatRelativeTime(dateString?: string): string {
-  if (!dateString) return 'Just now'
-  try {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    if (isNaN(diffMs) || diffMs < 0) return 'Just now'
-    const diffSec = Math.floor(diffMs / 1000)
-    if (diffSec < 60) return 'Just now'
-    const diffMin = Math.floor(diffSec / 60)
-    if (diffMin < 60) return `${diffMin}m ago`
-    const diffHours = Math.floor(diffMin / 60)
-    if (diffHours < 24) return `${diffHours}h ago`
-    const diffDays = Math.floor(diffHours / 24)
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString()
-  } catch {
-    return 'Recently'
-  }
-}
-
 export function NotificationBell({ user }: NotificationBellProps) {
   const [isOpen, setIsOpen] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
-  // Generate initial contextual notifications based strictly on user role
-  const getInitialNotifications = (): GymNotification[] => {
-    // 1. ADMIN NOTIFICATIONS — No member offers; only operations, churn alerts, and enrollments
-    if (user.role === 'admin') {
-      return [
-        {
-          id: 'admin-churn-1',
-          title: '⚠️ High Churn Risk Alert: Action Needed',
-          message:
-            'AI Model flagged Juan Dela Cruz (Recency: Today, Churn Risk: 88%) with high cancellation velocity. Immediate retention strategy required.',
-          type: 'churn_alert',
-          timestamp: 'Just now',
-          read: false,
-          actionText: 'Review AI Strategy',
-          actionUrl: '/manage/analytics',
-        },
-        {
-          id: 'admin-enroll-1',
-          title: '🎉 New Member Enrollment',
-          message:
-            'Alex Cruz enrolled in 1-Month Unlimited Plan (₱1,500). Payment confirmed via GCash.',
-          type: 'enrollment',
-          timestamp: '2 hours ago',
-          read: false,
-          actionText: 'View Members',
-          actionUrl: '/manage/members',
-        },
-        {
-          id: 'admin-user-1',
-          title: '👤 New User Registered',
-          message:
-            'Jordan Ramos created a DGym account via mobile onboarding. Awaiting membership plan selection.',
-          type: 'registration',
-          timestamp: 'Yesterday',
-          read: true,
-          actionText: 'View Users',
-          actionUrl: '/manage/users',
-        },
-      ]
-    }
+  const storageKey = `dgym_notifs_${user.id}_${user.role || (user.has_active_membership ? 'member' : 'user')}`
+  const dismissedKey = `dgym_dismissed_notifs_${user.id}`
 
-    // 2. TRAINER NOTIFICATIONS — Only PT enrollments & coaching check-ins (no member offers)
-    if (user.role === 'trainer') {
-      return [
-        {
-          id: 'trainer-pt-1',
-          title: '🏋️ New 1-on-1 PT Session Booking',
-          message:
-            'Alex Cruz enrolled and booked a 1-on-1 Powerlifting Assessment session with you for Saturday 9:00 AM.',
-          type: 'pt_booking',
-          timestamp: 'Just now',
-          read: false,
-          actionText: 'View PT Sessions',
-          actionUrl: '/manage/pt-sessions',
-        },
-        {
-          id: 'trainer-checkin-1',
-          title: '📅 PT Client Check-In',
-          message:
-            'Marcus Vance checked in for today\'s 4:00 PM Strength & Hypertrophy session.',
-          type: 'session_alert',
-          timestamp: '3 hours ago',
-          read: true,
-          actionText: 'Open PT Schedule',
-          actionUrl: '/manage/pt-sessions',
-        },
-      ]
-    }
-
-    // 3. ACTIVE MEMBER NOTIFICATIONS — Retention offers, coaching slots, facility news
-    const isMemberActive = Boolean(user.has_active_membership)
-    if (isMemberActive) {
-      return [
-        {
-          id: 'retention-offer-1',
-          title: '🔥 Retention Offer: 20% OFF Renewal',
-          message:
-            'Exclusive loyal athlete rate! Renew your training pass early this week and claim 20% off your next quarter.',
-          type: 'retention',
-          timestamp: 'Just now',
-          read: false,
-          actionText: 'View Renewal Rates',
-          actionUrl: '/membership',
-        },
-        {
-          id: 'coach-pt-1',
-          title: '📅 1-on-1 Coaching Slots Open',
-          message:
-            'Coach Mark and DGym instructors have opened new powerlifting assessment slots. Reserve your 1-on-1 spot.',
-          type: 'booking',
-          timestamp: '2 hours ago',
-          read: false,
-          actionText: 'Book a Coach',
-          actionUrl: '/dashboard/book',
-        },
-        {
-          id: 'gym-announce-1',
-          title: '📢 Competition Turf Calibrated Plates',
-          message:
-            'New IPF-grade calibrated steel plates and deadlift jacks have arrived at Turf A.',
-          type: 'announcement',
-          timestamp: 'Yesterday',
-          read: true,
-        },
-      ]
-    }
-
-    // 4. REGISTERED USER / INACTIVE NOTIFICATIONS — Starter discounts, onboarding, hours
-    return [
-      {
-        id: 'starter-offer-1',
-        title: '⚡ Starter Offer: Free Form Assessment',
-        message:
-          'Activate your gym pass today with a Day Pass or Monthly Unlimited and get a complimentary 1-on-1 technique assessment!',
-        type: 'offer',
-        timestamp: 'Just now',
-        read: false,
-        actionText: 'Avail Training Plan',
-        actionUrl: '/membership',
-      },
-      {
-        id: 'welcome-announce-1',
-        title: '👋 Welcome to The DGym Community',
-        message:
-          'Your athlete account is registered. Explore classes, certified coaches, and facilities before availing your pass.',
-        type: 'announcement',
-        timestamp: '1 hour ago',
-        read: false,
-        actionText: 'Explore Classes',
-        actionUrl: '/classes',
-      },
-      {
-        id: 'hours-notice-1',
-        title: '⏰ Facility Operating Schedule',
-        message:
-          'The DGym Rosario Batangas is open daily from 6:00 AM to 10:00 PM.',
-        type: 'announcement',
-        timestamp: '1 day ago',
-        read: true,
-      },
-    ]
+  const dismissedIdsRef = useRef<Set<string>>(new Set())
+  if (dismissedIdsRef.current.size === 0) {
+    try {
+      const savedDismissed = localStorage.getItem(dismissedKey)
+      if (savedDismissed) {
+        const parsed: string[] = JSON.parse(savedDismissed)
+        parsed.forEach((id) => dismissedIdsRef.current.add(String(id)))
+      }
+    } catch {}
   }
 
-  const storageKey = `dgym_notifs_${user.id}_${user.role || (user.has_active_membership ? 'member' : 'user')}`
+  const persistDismissedIds = useCallback(() => {
+    try {
+      localStorage.setItem(dismissedKey, JSON.stringify(Array.from(dismissedIdsRef.current)))
+    } catch {}
+  }, [dismissedKey])
 
   const [notifications, setNotifications] = useState<GymNotification[]>(() => {
     try {
       const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        return JSON.parse(saved)
+      if (saved !== null) {
+        const parsed: GymNotification[] = JSON.parse(saved)
+        return parsed.filter((n) => !dismissedIdsRef.current.has(String(n.id)))
       }
     } catch {}
-    return getInitialNotifications()
+    return []
   })
 
-  // Synchronize notifications from the backend API with fallback
+  // Synchronize notifications from the backend API (respecting empty/cleared lists)
   const fetchServerNotifications = useCallback(async () => {
     try {
       const serverNotifs = await api.getMyNotifications()
-      if (serverNotifs && serverNotifs.length > 0) {
-        const mapped: GymNotification[] = serverNotifs.map((n) => ({
+      const mapped: GymNotification[] = (serverNotifs ?? [])
+        .filter((n) => !dismissedIdsRef.current.has(String(n.id)))
+        .map((n) => ({
           id: String(n.id),
           title: n.title,
           message: n.message,
@@ -225,26 +81,14 @@ export function NotificationBell({ user }: NotificationBellProps) {
           actionUrl: n.action_url || undefined,
           isServer: true,
         }))
-        setNotifications(mapped)
-      } else {
-        // Fallback to local storage or initial defaults
-        const saved = localStorage.getItem(storageKey)
-        if (saved) {
-          try {
-            setNotifications(JSON.parse(saved))
-          } catch {
-            setNotifications(getInitialNotifications())
-          }
-        } else {
-          setNotifications(getInitialNotifications())
-        }
-      }
+      setNotifications(mapped)
     } catch {
-      // Backend offline or error fallback to saved
+      // Backend offline fallback to saved localStorage mirror only
       try {
         const saved = localStorage.getItem(storageKey)
-        if (saved) {
-          setNotifications(JSON.parse(saved))
+        if (saved !== null) {
+          const parsed: GymNotification[] = JSON.parse(saved)
+          setNotifications(parsed.filter((n) => !dismissedIdsRef.current.has(String(n.id))))
         }
       } catch {}
     }
@@ -359,8 +203,30 @@ export function NotificationBell({ user }: NotificationBellProps) {
     }
   }
 
-  const dismissNotification = (id: string) => {
+  const dismissNotification = async (id: string) => {
+    dismissedIdsRef.current.add(String(id))
+    persistDismissedIds()
     setNotifications((prev) => prev.filter((n) => n.id !== id))
+
+    const numId = Number(id)
+    if (!Number.isNaN(numId) && numId > 0) {
+      try {
+        await api.deleteNotification(numId)
+      } catch (err) {
+        console.warn('Failed to delete notification on server:', err)
+      }
+    }
+  }
+
+  const clearAllNotifications = async () => {
+    notifications.forEach((n) => dismissedIdsRef.current.add(String(n.id)))
+    persistDismissedIds()
+    setNotifications([])
+    try {
+      await api.clearAllNotifications()
+    } catch (err) {
+      console.warn('Failed to clear notifications on server:', err)
+    }
   }
 
   return (
@@ -413,15 +279,26 @@ export function NotificationBell({ user }: NotificationBellProps) {
               )}
             </div>
 
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={markAllAsRead}
-                className="text-[11px] text-white/40 hover:text-white transition-colors cursor-pointer"
-              >
-                Mark all as read
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllAsRead}
+                  className="text-[11px] text-white/40 hover:text-white transition-colors cursor-pointer"
+                >
+                  Mark read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAllNotifications}
+                  className="text-[11px] text-white/40 hover:text-red transition-colors cursor-pointer"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Notification List */}

@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.visit import VisitType
 from app.models.class_session import ClassType, ClassStatus
 from app.models.pt_session import PTSessionStatus
+from app.schemas.common_types import UtcDatetime
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -32,11 +33,11 @@ class VisitResponse(BaseModel):
     member_name: Optional[str] = None
     visit_type: VisitType
     entry_method: Optional[str] = "manual"
-    checked_in_at: datetime
-    checked_out_at: Optional[datetime] = None
+    checked_in_at: UtcDatetime
+    checked_out_at: Optional[UtcDatetime] = None
     notes: Optional[str] = None
     recorded_by_user_id: Optional[int] = None
-    created_at: datetime
+    created_at: UtcDatetime
 
     class Config:
         from_attributes = True

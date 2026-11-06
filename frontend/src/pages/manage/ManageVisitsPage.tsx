@@ -3,6 +3,7 @@ import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { CreditCard } from 'lucide-react'
 import { api } from '@/services/api'
+import { formatPhTime, isTodayPh, parseUtcDate } from '@/utils/dateTime'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import { LiveKeycardMonitor } from '@/components/manage/LiveKeycardMonitor'
 import type { Visit, VisitType, Member, KeycardTapLog } from '@/types/auth'
@@ -136,8 +137,13 @@ function VisitRow({ visit, onCheckOut }: { visit: Visit; onCheckOut: (id: number
   }
 
   const durationStr = visit.checked_out_at
-    ? `${Math.round(
-        (new Date(visit.checked_out_at).getTime() - new Date(visit.checked_in_at).getTime()) / 60000
+    ? `${Math.max(
+        0,
+        Math.round(
+          (parseUtcDate(visit.checked_out_at).getTime() -
+            parseUtcDate(visit.checked_in_at).getTime()) /
+            60000,
+        ),
       )} mins`
     : 'Active'
 
@@ -163,18 +169,10 @@ function VisitRow({ visit, onCheckOut }: { visit: Visit; onCheckOut: (id: number
         </div>
       </td>
       <td className="py-3 px-4 text-sm text-white/70 font-mono">
-        {new Date(visit.checked_in_at).toLocaleTimeString('en-PH', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
+        {formatPhTime(visit.checked_in_at)}
       </td>
       <td className="py-3 px-4 text-sm text-white/50 font-mono">
-        {visit.checked_out_at
-          ? new Date(visit.checked_out_at).toLocaleTimeString('en-PH', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          : '—'}
+        {visit.checked_out_at ? formatPhTime(visit.checked_out_at) : '—'}
       </td>
       <td className="py-3 px-4 text-sm text-white/50">{durationStr}</td>
       <td className="py-3 px-4 text-sm text-white/40 truncate max-w-xs">{visit.notes ?? '—'}</td>
@@ -250,9 +248,8 @@ export function ManageVisitsPage() {
     }
   }
 
-  // Today's stats
-  const today = new Date().toDateString()
-  const todayVisits = visits.filter((v) => new Date(v.checked_in_at).toDateString() === today)
+  // Today's stats (Philippine Standard Time)
+  const todayVisits = visits.filter((v) => isTodayPh(v.checked_in_at))
   const activeNow = visits.filter((v) => !v.checked_out_at).length
 
   return (
@@ -380,11 +377,7 @@ export function ManageVisitsPage() {
                 {tapLogs.map((log) => (
                   <tr key={log.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                     <td className="py-3 px-4 text-xs font-mono text-white/60">
-                      {new Date(log.tapped_at).toLocaleTimeString('en-PH', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })}
+                      {formatPhTime(log.tapped_at, true)}
                     </td>
                     <td className="py-3 px-4 text-xs font-mono text-white/80">{log.card_uid_masked}</td>
                     <td className="py-3 px-4">

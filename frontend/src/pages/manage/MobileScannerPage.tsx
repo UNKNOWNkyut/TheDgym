@@ -15,8 +15,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   CreditCard,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { api, ApiError } from '@/services/api'
+import { formatPhTime } from '@/utils/dateTime'
 import { playAccessChime } from '@/hooks/useRfidScanner'
 import type {
   TapVerificationResult,
@@ -66,6 +69,13 @@ function formatTapBadge(decision: string): string {
 
 export function MobileScannerPage() {
   const [webNfcSupported] = useState<boolean>(() => Boolean(getWebNfcConstructor()))
+  const [isSecureOrigin] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? Boolean(window.isSecureContext) : true,
+  )
+  const [currentOrigin] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.origin : '',
+  )
+  const [copiedField, setCopiedField] = useState<'origin' | 'flag' | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [wakeLockActive, setWakeLockActive] = useState(false)
@@ -351,6 +361,29 @@ export function MobileScannerPage() {
     }
   }, [acquireWakeLock, releaseWakeLock])
 
+  const copyTextSafe = (value: string, field: 'origin' | 'flag') => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(value)
+      } else {
+        const el = document.createElement('textarea')
+        el.value = value
+        el.setAttribute('readonly', '')
+        el.style.position = 'fixed'
+        el.style.opacity = '0'
+        document.body.appendChild(el)
+        el.focus()
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
+      setCopiedField(field)
+      window.setTimeout(() => setCopiedField(null), 2000)
+    } catch {
+      // ignore copy errors
+    }
+  }
+
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!manualUid.trim()) return
@@ -468,6 +501,8 @@ export function MobileScannerPage() {
               ? 'Tap the member’s card on the scanner.'
               : webNfcSupported
               ? 'Tap the button below to activate the NFC scanner.'
+              : !isSecureOrigin
+              ? `Chrome blocked Web NFC because ${currentOrigin} is not yet added to Chrome's Trusted Origin flag.`
               : 'Web NFC requires Chrome with NFC enabled. You can still test below using manual UID input.'}
           </p>
           {lastScannedRawUid && (
@@ -476,6 +511,45 @@ export function MobileScannerPage() {
             </p>
           )}
         </div>
+
+        {!webNfcSupported && !isSecureOrigin && (
+          <div className="w-full max-w-md rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-left space-y-2.5">
+            <p className="text-[11px] font-mono uppercase tracking-widest text-amber-300">
+              Enable NFC for {currentOrigin}
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => copyTextSafe(currentOrigin, 'origin')}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-white/10 bg-black/40 hover:bg-white/10 text-xs font-mono text-white transition-colors cursor-pointer"
+              >
+                <span className="truncate">1. Copy IP: {currentOrigin}</span>
+                {copiedField === 'origin' ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5 text-white/50 shrink-0" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  copyTextSafe('chrome://flags/#unsafely-treat-insecure-origin-as-secure', 'flag')
+                }
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-white/10 bg-black/40 hover:bg-white/10 text-xs font-mono text-white transition-colors cursor-pointer"
+              >
+                <span className="truncate">2. Copy Flag Link (Paste in Chrome)</span>
+                {copiedField === 'flag' ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5 text-white/50 shrink-0" />
+                )}
+              </button>
+            </div>
+            <p className="text-[11px] text-white/50 leading-relaxed">
+              Paste the Flag Link in Chrome’s address bar, paste <span className="font-mono text-white/80">{currentOrigin}</span> inside the box, set to <span className="text-white/80">Enabled</span>, then tap <span className="text-white/80">Relaunch</span>.
+            </p>
+          </div>
+        )}
 
         {webNfcSupported && (
           <div className="w-full max-w-xs pt-1">
@@ -660,11 +734,7 @@ export function MobileScannerPage() {
                   </p>
                 </div>
                 <span className="text-[10px] font-mono text-white/40 shrink-0">
-                  {new Date(item.tapped_at).toLocaleTimeString('en-PH', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  })}
+                  {formatPhTime(item.tapped_at, true)}
                 </span>
               </div>
             ))}
