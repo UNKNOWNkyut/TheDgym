@@ -1,14 +1,18 @@
+import json
+import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
-import joblib
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
-import pandas as pd
-from xgboost import XGBClassifier
 from sklearn.preprocessing import StandardScaler
+from xgboost import XGBClassifier
+from xgboost.core import XGBoostError
+
+logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "ml"
-MODEL_PATH = MODEL_DIR / "churn_model.pkl"
-SCALER_PATH = MODEL_DIR / "scaler.pkl"
+MODEL_PATH = MODEL_DIR / "churn_model.json"
+SCALER_PATH = MODEL_DIR / "scaler.json"
 
 FEATURE_NAMES = [
     "visit_frequency_weekly",
@@ -21,8 +25,55 @@ FEATURE_NAMES = [
     "recent_activity_score",
 ]
 
-_cached_model = None
-_cached_scaler = None
+_cached_model: Optional[XGBClassifier] = None
+_cached_scaler: Optional[StandardScaler] = None
+
+
+def _save_scaler_json(scaler: StandardScaler, path: Path) -> None:
+    payload = {
+        "feature_names": FEATURE_NAMES,
+        "mean": [float(v) for v in np.asarray(scaler.mean_, dtype=np.float64)],
+        "scale": [float(v) for v in np.asarray(scaler.scale_, dtype=np.float64)],
+        "var": [float(v) for v in np.asarray(scaler.var_, dtype=np.float64)],
+        "n_samples_seen": int(np.asarray(scaler.n_samples_seen_).item()),
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _load_scaler_json(path: Path) -> StandardScaler:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("feature_names") != FEATURE_NAMES:
+        raise ValueError("Invalid scaler.json feature_names schema")
+
+    n_cols = len(FEATURE_NAMES)
+    mean_arr = np.asarray(payload["mean"], dtype=np.float64)
+    scale_arr = np.asarray(payload["scale"], dtype=np.float64)
+    var_arr = np.asarray(payload["var"], dtype=np.float64)
+    if (
+        mean_arr.shape != (n_cols,)
+        or scale_arr.shape != (n_cols,)
+        or var_arr.shape != (n_cols,)
+        or not (np.all(np.isfinite(mean_arr)) and np.all(np.isfinite(scale_arr)) and np.all(np.isfinite(var_arr)))
+        or not np.all(scale_arr > 0.0)
+        or not np.all(var_arr >= 0.0)
+    ):
+        raise ValueError("Invalid scaler.json numeric arrays")
+
+    scaler = StandardScaler()
+    scaler.mean_ = mean_arr
+    scaler.scale_ = scale_arr
+    scaler.var_ = var_arr
+    scaler.n_features_in_ = n_cols
+    scaler.n_samples_seen_ = int(payload.get("n_samples_seen", 0))
+    return scaler
+
+
+def _load_model_json(path: Path) -> XGBClassifier:
+    model = XGBClassifier()
+    model.load_model(str(path))
+    if int(getattr(model, "n_features_in_", len(FEATURE_NAMES))) != len(FEATURE_NAMES):
+        raise ValueError("Invalid churn_model.json feature count")
+    return model
 
 
 def get_model_and_scaler() -> Tuple[XGBClassifier, StandardScaler]:
@@ -30,9 +81,15 @@ def get_model_and_scaler() -> Tuple[XGBClassifier, StandardScaler]:
     if _cached_model is None or _cached_scaler is None:
         if not MODEL_PATH.exists() or not SCALER_PATH.exists():
             # If not yet trained, train baseline model
-            train_baseline_model()
-        _cached_model = joblib.load(MODEL_PATH)
-        _cached_scaler = joblib.load(SCALER_PATH)
+            train_baseline_model(save=True)
+        else:
+            try:
+                _cached_model = _load_model_json(MODEL_PATH)
+                _cached_scaler = _load_scaler_json(SCALER_PATH)
+            except (OSError, ValueError, KeyError, TypeError, XGBoostError) as exc:
+                logger.warning("Corrupt or incompatible churn ML JSON artifacts (%s); retraining baseline.", exc)
+                train_baseline_model(save=True)
+    assert _cached_model is not None and _cached_scaler is not None
     return _cached_model, _cached_scaler
 
 
@@ -70,22 +127,21 @@ def train_baseline_model(save: bool = True) -> Dict[str, float]:
     labels_churn = np.ones(n_churn, dtype=int)
 
     # Combine datasets
-    data = {
-        "visit_frequency_weekly": np.concatenate([retained_freq, churn_freq]),
-        "days_since_last_checkin": np.concatenate([retained_recency, churn_recency]),
-        "total_visits_30d": np.concatenate([retained_visits_30d, churn_visits_30d]),
-        "total_class_bookings": np.concatenate([retained_classes, churn_classes]),
-        "total_pt_sessions": np.concatenate([retained_pt, churn_pt]),
-        "membership_tenure_days": np.concatenate([retained_tenure, churn_tenure]),
-        "total_revenue_lifetime": np.concatenate([retained_rev, churn_rev]),
-        "recent_activity_score": np.concatenate([retained_momentum, churn_momentum]),
-    }
-    df = pd.DataFrame(data)
+    X = np.column_stack([
+        np.concatenate([retained_freq, churn_freq]),
+        np.concatenate([retained_recency, churn_recency]),
+        np.concatenate([retained_visits_30d, churn_visits_30d]),
+        np.concatenate([retained_classes, churn_classes]),
+        np.concatenate([retained_pt, churn_pt]),
+        np.concatenate([retained_tenure, churn_tenure]),
+        np.concatenate([retained_rev, churn_rev]),
+        np.concatenate([retained_momentum, churn_momentum]),
+    ]).astype(np.float64)
     y = np.concatenate([labels_retained, labels_churn])
 
     # Standardize features
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(df[FEATURE_NAMES])
+    X_scaled = scaler.fit_transform(X)
 
     # Train XGBoost
     model = XGBClassifier(
@@ -103,8 +159,8 @@ def train_baseline_model(save: bool = True) -> Dict[str, float]:
     accuracy = float(np.mean(model.predict(X_scaled) == y))
 
     if save:
-        joblib.dump(model, MODEL_PATH)
-        joblib.dump(scaler, SCALER_PATH)
+        model.save_model(str(MODEL_PATH))
+        _save_scaler_json(scaler, SCALER_PATH)
         global _cached_model, _cached_scaler
         _cached_model = model
         _cached_scaler = scaler
@@ -116,20 +172,8 @@ def train_baseline_model(save: bool = True) -> Dict[str, float]:
     }
 
 
-def predict_churn(features: Dict[str, float]) -> Dict:
-    """
-    Inference helper for a single member's feature vector.
-    Calculates probability, assigns Risk Tier, and extracts top 3 contributing factors.
-    """
-    model, scaler = get_model_and_scaler()
-
-    # Create DataFrame with exact column names
-    vector = pd.DataFrame([[float(features.get(col, 0.0)) for col in FEATURE_NAMES]], columns=FEATURE_NAMES)
-    scaled_vector = scaler.transform(vector)
-
-    # Predict probability of churn (class 1)
-    prob = float(model.predict_proba(scaled_vector)[0][1])
-    prob = max(0.01, min(0.99, prob))
+def _build_prediction_result(features: Dict[str, float], raw_prob: float) -> Dict:
+    prob = max(0.01, min(0.99, float(raw_prob)))
 
     # Risk Tier Segmentation (per docs/ARCHITECTURE.md)
     if prob > 0.70:
@@ -189,3 +233,27 @@ def predict_churn(features: Dict[str, float]) -> Dict:
         "top_risk_factors": top_3_factors,
         "model_version": "xgboost_v1.0",
     }
+
+
+def predict_churn_batch(features_list: List[Dict[str, float]]) -> List[Dict]:
+    """Vectorized batch inference for multiple member feature dictionaries."""
+    if not features_list:
+        return []
+    model, scaler = get_model_and_scaler()
+    # Build feature matrix in exact FEATURE_NAMES order
+    matrix = np.array(
+        [[float(features.get(col, 0.0)) for col in FEATURE_NAMES] for features in features_list],
+        dtype=np.float64,
+    )
+    scaled_matrix = scaler.transform(matrix)
+    # Predict probability of churn (class 1)
+    probs = model.predict_proba(scaled_matrix)[:, 1]
+    return [_build_prediction_result(features, float(prob)) for features, prob in zip(features_list, probs)]
+
+
+def predict_churn(features: Dict[str, float]) -> Dict:
+    """
+    Inference helper for a single member's feature vector.
+    Calculates probability, assigns Risk Tier, and extracts top 3 contributing factors.
+    """
+    return predict_churn_batch([features])[0]
