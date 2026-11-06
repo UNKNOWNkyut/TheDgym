@@ -1,20 +1,183 @@
+import asyncio
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Sequence
 
-from sqlalchemy import select, func, delete
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.member import Member, MemberStatus, Gender
-from app.models.visit import Visit, VisitType
+from app.models.class_session import ClassEnrollment
+from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
 from app.models.membership_plan import MembershipPlan
-from app.models.class_session import ClassSession, ClassEnrollment
-from app.models.pt_session import PTSession
-from app.models.processed_customer import ProcessedCustomer
 from app.models.prediction import Prediction
+from app.models.processed_customer import ProcessedCustomer
+from app.models.pt_session import PTSession
 from app.models.raw_transaction import RawTransaction
-from app.services.churn_ml import predict_churn, train_baseline_model
+from app.models.visit import Visit, VisitType
+from app.services.churn_ml import predict_churn_batch, train_baseline_model
+
+
+def _as_utc(dt: datetime | str) -> datetime:
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+async def _compute_features_for_members(
+    session: AsyncSession,
+    member_ids: Optional[Sequence[int]] = None,
+) -> Dict[int, Dict[str, float]]:
+    now = datetime.now(timezone.utc)
+
+    # 1. Member profile & tenure
+    stmt_members = select(Member.id, Member.joined_at)
+    if member_ids is not None:
+        if not member_ids:
+            return {}
+        stmt_members = stmt_members.where(Member.id.in_(member_ids))
+
+    member_rows = (await session.execute(stmt_members)).all()
+    if not member_rows:
+        return {}
+    target_ids = [row[0] for row in member_rows]
+
+    def _scope(stmt, col):
+        return stmt.where(col.in_(target_ids)) if member_ids is not None else stmt
+
+    # 2. Visits aggregation
+    # Visits in last 30 days & 14 days
+    d30, d14, d28 = now - timedelta(days=30), now - timedelta(days=14), now - timedelta(days=28)
+    stmt_visits = _scope(
+        select(
+            Visit.member_id,
+            func.max(Visit.checked_in_at),
+            func.coalesce(func.sum(case((Visit.checked_in_at >= d30, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((Visit.checked_in_at >= d14, 1), else_=0)), 0),
+            func.coalesce(func.sum(case(((Visit.checked_in_at < d14) & (Visit.checked_in_at >= d28), 1), else_=0)), 0),
+        ).group_by(Visit.member_id),
+        Visit.member_id,
+    )
+    visit_map = {row[0]: row[1:] for row in (await session.execute(stmt_visits)).all()}
+
+    # 3. Class enrollments count
+    stmt_classes = _scope(
+        select(ClassEnrollment.member_id, func.count(ClassEnrollment.id)).group_by(ClassEnrollment.member_id),
+        ClassEnrollment.member_id,
+    )
+    class_map = dict((await session.execute(stmt_classes)).all())
+
+    # 4. PT sessions count
+    stmt_pt = _scope(
+        select(PTSession.member_id, func.count(PTSession.id)).group_by(PTSession.member_id),
+        PTSession.member_id,
+    )
+    pt_map = dict((await session.execute(stmt_pt)).all())
+
+    # 5. Total revenue lifetime
+    stmt_rev = _scope(
+        select(MemberMembership.member_id, func.coalesce(func.sum(MemberMembership.paid_amount), 0)).group_by(
+            MemberMembership.member_id
+        ),
+        MemberMembership.member_id,
+    )
+    rev_map = dict((await session.execute(stmt_rev)).all())
+
+    results: Dict[int, Dict[str, float]] = {}
+    for mid, joined_at in member_rows:
+        # Handle joined_at offset-naive vs aware
+        tenure_days = max(1, (now - _as_utc(joined_at)).days)
+        if mid in visit_map:
+            last_visit_raw, visits_last_30d, visits_last_14d, visits_prev_14d = visit_map[mid]
+            days_since_last_checkin = max(0, (now - _as_utc(last_visit_raw)).days)
+        else:
+            days_since_last_checkin = min(tenure_days, 60)
+            visits_last_30d = visits_last_14d = visits_prev_14d = 0
+
+        visit_frequency_weekly = round((visits_last_30d / 30.0) * 7.0, 2)
+
+        # Recent activity momentum: ratio of recent 14d vs prior 14d
+        if visits_prev_14d > 0:
+            recent_activity_score = min(1.0, round(visits_last_14d / visits_prev_14d, 2))
+        elif visits_last_14d > 0:
+            recent_activity_score = 0.85
+        else:
+            recent_activity_score = 0.05
+
+        results[mid] = {
+            "visit_frequency_weekly": float(visit_frequency_weekly),
+            "days_since_last_checkin": int(days_since_last_checkin),
+            "total_visits_30d": int(visits_last_30d),
+            "total_class_bookings": int(class_map.get(mid, 0)),
+            "total_pt_sessions": int(pt_map.get(mid, 0)),
+            "membership_tenure_days": int(tenure_days),
+            "total_revenue_lifetime": float(rev_map.get(mid, 0.0) or 0.0),
+            "recent_activity_score": float(recent_activity_score),
+        }
+
+    return results
+
+
+async def _refresh_predictions(
+    session: AsyncSession,
+    member_ids: Optional[Sequence[int]] = None,
+) -> Dict[int, Prediction]:
+    features_by_member = await _compute_features_for_members(session, member_ids)
+    if not features_by_member:
+        return {}
+
+    ordered_ids = list(features_by_member.keys())
+    ordered_features = [features_by_member[mid] for mid in ordered_ids]
+
+    # Run XGBoost inference
+    pred_results = await asyncio.to_thread(predict_churn_batch, ordered_features)
+
+    stmt_proc = select(ProcessedCustomer)
+    stmt_pred = select(Prediction)
+    if member_ids is not None:
+        stmt_proc = stmt_proc.where(ProcessedCustomer.customer_id.in_(ordered_ids))
+        stmt_pred = stmt_pred.where(Prediction.customer_id.in_(ordered_ids))
+
+    existing_proc = {row.customer_id: row for row in (await session.execute(stmt_proc)).scalars().all()}
+    existing_preds = {row.customer_id: row for row in (await session.execute(stmt_pred)).scalars().all()}
+
+    now = datetime.now(timezone.utc)
+    updated_preds: Dict[int, Prediction] = {}
+    for mid, features, pred_result in zip(ordered_ids, ordered_features, pred_results):
+        # Upsert into processed_customers
+        proc_cust = existing_proc.get(mid)
+        if not proc_cust:
+            proc_cust = ProcessedCustomer(customer_id=mid)
+            session.add(proc_cust)
+
+        proc_cust.visit_frequency_weekly = features["visit_frequency_weekly"]
+        proc_cust.days_since_last_checkin = features["days_since_last_checkin"]
+        proc_cust.total_visits_30d = features["total_visits_30d"]
+        proc_cust.total_class_bookings = features["total_class_bookings"]
+        proc_cust.total_pt_sessions = features["total_pt_sessions"]
+        proc_cust.membership_tenure_days = features["membership_tenure_days"]
+        proc_cust.total_revenue_lifetime = features["total_revenue_lifetime"]
+        proc_cust.recent_activity_score = features["recent_activity_score"]
+        proc_cust.feature_calculated_at = now
+
+        # Upsert into predictions
+        pred_obj = existing_preds.get(mid)
+        if not pred_obj:
+            pred_obj = Prediction(customer_id=mid)
+            session.add(pred_obj)
+
+        factors = pred_result["top_risk_factors"]
+        pred_obj.churn_probability = pred_result["churn_probability"]
+        pred_obj.risk_tier = pred_result["risk_tier"]
+        pred_obj.top_risk_factor_1 = factors[0] if len(factors) > 0 else None
+        pred_obj.top_risk_factor_2 = factors[1] if len(factors) > 1 else None
+        pred_obj.top_risk_factor_3 = factors[2] if len(factors) > 2 else None
+        pred_obj.model_version = pred_result["model_version"]
+        pred_obj.predicted_at = now
+        updated_preds[mid] = pred_obj
+
+    await session.commit()
+    return updated_preds
 
 
 async def compute_member_features(session: AsyncSession, member_id: int) -> Dict[str, float]:
@@ -22,88 +185,8 @@ async def compute_member_features(session: AsyncSession, member_id: int) -> Dict
     Computes real-time behavioral features for a specific member by aggregating
     their visits, subscriptions, and class attendance.
     """
-    now = datetime.now(timezone.utc)
-
-    # 1. Member profile & tenure
-    stmt_member = select(Member).where(Member.id == member_id)
-    member = (await session.execute(stmt_member)).scalar_one_or_none()
-    if not member:
-        return {}
-
-    # Handle joined_at offset-naive vs aware
-    joined = member.joined_at
-    if joined.tzinfo is None:
-        joined = joined.replace(tzinfo=timezone.utc)
-    tenure_days = max(1, (now - joined).days)
-
-    # 2. Visits aggregation
-    stmt_visits = select(Visit).where(Visit.member_id == member_id).order_by(Visit.checked_in_at.desc())
-    visits = (await session.execute(stmt_visits)).scalars().all()
-
-    total_visits = len(visits)
-    if visits:
-        last_visit_time = visits[0].checked_in_at
-        if last_visit_time.tzinfo is None:
-            last_visit_time = last_visit_time.replace(tzinfo=timezone.utc)
-        days_since_last_checkin = max(0, (now - last_visit_time).days)
-    else:
-        days_since_last_checkin = min(tenure_days, 60)
-
-    # Visits in last 30 days & 14 days
-    date_30d_ago = now - timedelta(days=30)
-    date_14d_ago = now - timedelta(days=14)
-    date_28d_ago = now - timedelta(days=28)
-
-    visits_last_30d = 0
-    visits_last_14d = 0
-    visits_prev_14d = 0
-
-    for v in visits:
-        v_time = v.checked_in_at
-        if v_time.tzinfo is None:
-            v_time = v_time.replace(tzinfo=timezone.utc)
-
-        if v_time >= date_30d_ago:
-            visits_last_30d += 1
-        if v_time >= date_14d_ago:
-            visits_last_14d += 1
-        elif v_time >= date_28d_ago:
-            visits_prev_14d += 1
-
-    visit_frequency_weekly = round((visits_last_30d / 30.0) * 7.0, 2)
-
-    # Recent activity momentum: ratio of recent 14d vs prior 14d
-    if visits_prev_14d > 0:
-        recent_activity_score = min(1.0, round(visits_last_14d / visits_prev_14d, 2))
-    elif visits_last_14d > 0:
-        recent_activity_score = 0.85
-    else:
-        recent_activity_score = 0.05
-
-    # 3. Class enrollments count
-    stmt_classes = select(func.count(ClassEnrollment.id)).where(ClassEnrollment.member_id == member_id)
-    total_class_bookings = (await session.execute(stmt_classes)).scalar() or 0
-
-    # 4. PT sessions count
-    stmt_pt = select(func.count(PTSession.id)).where(PTSession.member_id == member_id)
-    total_pt_sessions = (await session.execute(stmt_pt)).scalar() or 0
-
-    # 5. Total revenue lifetime
-    stmt_rev = select(func.coalesce(func.sum(MemberMembership.paid_amount), 0)).where(
-        MemberMembership.member_id == member_id
-    )
-    total_revenue_lifetime = float((await session.execute(stmt_rev)).scalar() or 0.0)
-
-    return {
-        "visit_frequency_weekly": float(visit_frequency_weekly),
-        "days_since_last_checkin": int(days_since_last_checkin),
-        "total_visits_30d": int(visits_last_30d),
-        "total_class_bookings": int(total_class_bookings),
-        "total_pt_sessions": int(total_pt_sessions),
-        "membership_tenure_days": int(tenure_days),
-        "total_revenue_lifetime": float(total_revenue_lifetime),
-        "recent_activity_score": float(recent_activity_score),
-    }
+    features_by_member = await _compute_features_for_members(session, [member_id])
+    return features_by_member.get(member_id, {})
 
 
 async def refresh_member_churn_prediction(session: AsyncSession, member_id: int) -> Optional[Prediction]:
@@ -111,51 +194,10 @@ async def refresh_member_churn_prediction(session: AsyncSession, member_id: int)
     Computes features, updates processed_customers, runs XGBoost model,
     and upserts prediction record for a member.
     """
-    features = await compute_member_features(session, member_id)
-    if not features:
-        return None
-
-    # Upsert into processed_customers
-    stmt_feat = select(ProcessedCustomer).where(ProcessedCustomer.customer_id == member_id)
-    proc_cust = (await session.execute(stmt_feat)).scalar_one_or_none()
-
-    now = datetime.now(timezone.utc)
-    if not proc_cust:
-        proc_cust = ProcessedCustomer(customer_id=member_id)
-        session.add(proc_cust)
-
-    proc_cust.visit_frequency_weekly = features["visit_frequency_weekly"]
-    proc_cust.days_since_last_checkin = features["days_since_last_checkin"]
-    proc_cust.total_visits_30d = features["total_visits_30d"]
-    proc_cust.total_class_bookings = features["total_class_bookings"]
-    proc_cust.total_pt_sessions = features["total_pt_sessions"]
-    proc_cust.membership_tenure_days = features["membership_tenure_days"]
-    proc_cust.total_revenue_lifetime = features["total_revenue_lifetime"]
-    proc_cust.recent_activity_score = features["recent_activity_score"]
-    proc_cust.feature_calculated_at = now
-
-    # Run XGBoost inference
-    pred_result = predict_churn(features)
-
-    # Upsert into predictions
-    stmt_pred = select(Prediction).where(Prediction.customer_id == member_id)
-    pred_obj = (await session.execute(stmt_pred)).scalar_one_or_none()
-
-    if not pred_obj:
-        pred_obj = Prediction(customer_id=member_id)
-        session.add(pred_obj)
-
-    pred_obj.churn_probability = pred_result["churn_probability"]
-    pred_obj.risk_tier = pred_result["risk_tier"]
-    factors = pred_result["top_risk_factors"]
-    pred_obj.top_risk_factor_1 = factors[0] if len(factors) > 0 else None
-    pred_obj.top_risk_factor_2 = factors[1] if len(factors) > 1 else None
-    pred_obj.top_risk_factor_3 = factors[2] if len(factors) > 2 else None
-    pred_obj.model_version = pred_result["model_version"]
-    pred_obj.predicted_at = now
-
-    await session.commit()
-    await session.refresh(pred_obj)
+    preds = await _refresh_predictions(session, [member_id])
+    pred_obj = preds.get(member_id)
+    if pred_obj is not None:
+        await session.refresh(pred_obj)
     return pred_obj
 
 
@@ -163,13 +205,7 @@ async def refresh_all_predictions(session: AsyncSession) -> int:
     """
     Refreshes churn predictions for all existing gym members.
     """
-    stmt = select(Member.id)
-    member_ids = (await session.execute(stmt)).scalars().all()
-    count = 0
-    for mid in member_ids:
-        await refresh_member_churn_prediction(session, mid)
-        count += 1
-    return count
+    return len(await _refresh_predictions(session))
 
 
 async def seed_simulated_gym_analytics(session: AsyncSession):
@@ -184,7 +220,7 @@ async def seed_simulated_gym_analytics(session: AsyncSession):
         return  # Already populated
 
     # Ensure baseline XGBoost model is trained
-    train_baseline_model(save=True)
+    await asyncio.to_thread(train_baseline_model, True)
 
     # List of realistic member profiles representing different churn personas
     sample_members_data = [
@@ -216,11 +252,14 @@ async def seed_simulated_gym_analytics(session: AsyncSession):
     monthly_plan = (await session.execute(stmt_plan)).scalar_one_or_none()
     plan_id = monthly_plan.id if monthly_plan else 2
 
+    # Check if member exists by code
+    sample_codes = [item["code"] for item in sample_members_data]
+    existing_codes = set(
+        (await session.execute(select(Member.member_code).where(Member.member_code.in_(sample_codes)))).scalars().all()
+    )
+
     for item in sample_members_data:
-        # Check if member exists by code
-        stmt_m = select(Member).where(Member.member_code == item["code"])
-        m_obj = (await session.execute(stmt_m)).scalar_one_or_none()
-        if not m_obj:
+        if item["code"] not in existing_codes:
             joined_date = now - timedelta(days=item["tenure"])
             m_obj = Member(
                 member_code=item["code"],
