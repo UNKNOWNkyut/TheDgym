@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import {
   Calendar,
@@ -38,8 +38,9 @@ interface ChecklistItem {
   done: boolean;
 }
 
+type MemberPortalProps = Pick<ReturnType<typeof useAuth>, 'user' | 'logout'>;
+
 export function DashboardPage() {
-  void React;
   const { user, logout } = useAuth();
 
   // If Admin is logged in, redirect to Management Hub
@@ -59,6 +60,11 @@ export function DashboardPage() {
       </>
     );
   }
+
+  return <MemberPortalDashboard user={user} logout={logout} />;
+}
+
+function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
 
   // Derive viewMode directly from user's active membership status
   const viewMode: 'ACTIVE' | 'INACTIVE' = user?.has_active_membership ? 'ACTIVE' : 'INACTIVE';
