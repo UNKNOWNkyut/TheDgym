@@ -22,6 +22,8 @@ def extract_token_from_request(
         auth_header = request.headers["authorization"]
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get("access_token")
     return token
 
 

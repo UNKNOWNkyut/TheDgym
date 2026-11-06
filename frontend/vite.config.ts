@@ -39,7 +39,7 @@ function getPythonConfig(rootDir: string): { exe: string; args: string[]; cwd: s
     if (fs.existsSync(candidate)) {
       return {
         exe: candidate,
-        args: ['-m', 'uvicorn', 'app.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
+        args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000', '--reload'],
         cwd: backendDir,
       }
     }
@@ -47,7 +47,7 @@ function getPythonConfig(rootDir: string): { exe: string; args: string[]; cwd: s
 
   return {
     exe: isWin ? 'python' : 'python3',
-    args: ['-m', 'uvicorn', 'app.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
+    args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000', '--reload'],
     cwd: backendDir,
   }
 }
@@ -106,8 +106,9 @@ function dgymBackendAutoStartPlugin(): Plugin {
           process.exit()
         })
         server.httpServer?.on('close', cleanup)
-      } catch (err: any) {
-        console.error('\x1b[31m[DGym Backend]\x1b[0m Could not auto-start backend:', err.message)
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('\x1b[31m[DGym Backend]\x1b[0m Could not auto-start backend:', msg)
       }
     },
   }
@@ -133,6 +134,7 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
+        xfwd: true,
       },
     },
   },
