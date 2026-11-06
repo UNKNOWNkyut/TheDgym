@@ -1,6 +1,8 @@
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 from uuid import uuid4
+
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -14,8 +16,11 @@ ph = PasswordHasher()
 _DUMMY_ARGON2_HASH = ph.hash("dgym-constant-time-dummy-password-guard")
 
 # Server-side token revocation store (Check 25: Session invalidation on logout / password change)
-_REVOKED_JTIS: Set[str] = set()
-_USER_MIN_IAT: Dict[str, float] = {}
+# shortcut: in-memory revocation resets on process restart, move to shared DB/Redis if running >1 worker
+_MAX_REVOKED_JTIS = 10_000
+_MAX_USER_REVOCATIONS = 10_000
+_REVOKED_JTIS: OrderedDict[str, float] = OrderedDict()
+_USER_MIN_IAT: OrderedDict[str, float] = OrderedDict()
 
 
 def hash_password(password: str) -> str:
@@ -45,28 +50,28 @@ def create_access_token(
     """Create a signed JWT access token with jti, iss, aud, iat, and exp (Check 25 & 26)."""
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
-    if expires_delta:
-        expire = now + expires_delta
-    else:
-        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = now + (
+        expires_delta
+        if expires_delta is not None
+        else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
 
     to_encode.update(
         {
             "jti": uuid4().hex,
             "iss": settings.JWT_ISSUER,
             "aud": settings.JWT_AUDIENCE,
-            "iat": now,
-            "exp": expire,
+            "iat": now.timestamp(),
+            "exp": expire.timestamp(),
         }
     )
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
-    return encoded_jwt
 
 
 def revoke_token(token: Optional[str]) -> None:
-    """Revoke a specific JWT token on logout (Check 25)."""
+    """Revoke a specific JWT token on logout (Check 25 & ANTIGRAV-09 FIFO eviction)."""
     if not token:
         return
     try:
@@ -74,53 +79,63 @@ def revoke_token(token: Optional[str]) -> None:
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
-            options={"verify_aud": False, "verify_iss": False},
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
         )
         jti = payload.get("jti")
-        if jti:
-            if len(_REVOKED_JTIS) > 10000:
-                _REVOKED_JTIS.clear()
-            _REVOKED_JTIS.add(str(jti))
+        if not jti:
+            return
+
+        jti_str = str(jti)
+        now_ts = datetime.now(timezone.utc).timestamp()
+        exp_ts = float(payload.get("exp", now_ts))
+
+        _REVOKED_JTIS.pop(jti_str, None)
+        _REVOKED_JTIS[jti_str] = exp_ts
+
+        # Prune naturally expired entries from the front first, then FIFO-evict oldest if over cap
+        while _REVOKED_JTIS:
+            oldest_jti, oldest_exp = next(iter(_REVOKED_JTIS.items()))
+            if oldest_exp <= now_ts or len(_REVOKED_JTIS) > _MAX_REVOKED_JTIS:
+                _REVOKED_JTIS.pop(oldest_jti, None)
+            else:
+                break
     except jwt.PyJWTError:
         pass
 
 
 def revoke_user_sessions(user_id: int) -> None:
     """Invalidate all tokens issued for user_id prior to right now (Check 25)."""
-    _USER_MIN_IAT[str(user_id)] = datetime.now(timezone.utc).timestamp()
+    sub = str(user_id)
+    _USER_MIN_IAT.pop(sub, None)
+    _USER_MIN_IAT[sub] = datetime.now(timezone.utc).timestamp()
+    while len(_USER_MIN_IAT) > _MAX_USER_REVOCATIONS:
+        _USER_MIN_IAT.popitem(last=False)
 
 
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
-    """Decode and validate a JWT access token including revocation and claims (Check 25 & 26)."""
+    """Decode and validate a JWT access token including revocation and claims (Check 25, 26 & ANTIGRAV-09)."""
     try:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
-            options={"require": ["exp", "sub"], "verify_aud": False, "verify_iss": False},
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+            options={"require": ["exp", "iat", "sub", "jti", "iss", "aud"]},
         )
 
-        # Verify issuer and audience if present on token
-        tok_iss = payload.get("iss")
-        if tok_iss and tok_iss != settings.JWT_ISSUER:
-            return None
-
-        tok_aud = payload.get("aud")
-        if tok_aud and tok_aud != settings.JWT_AUDIENCE:
-            return None
-
         # Check JTI revocation list (Check 25)
-        jti = payload.get("jti")
-        if jti and str(jti) in _REVOKED_JTIS:
+        jti = str(payload.get("jti", "")).strip()
+        if not jti or jti in _REVOKED_JTIS:
             return None
 
         # Check user-wide session invalidation timestamp
         sub = str(payload.get("sub", ""))
         iat = payload.get("iat")
-        if sub in _USER_MIN_IAT and iat is not None:
-            if float(iat) < _USER_MIN_IAT[sub] - 1.0:
-                return None
+        if sub in _USER_MIN_IAT and float(iat) < _USER_MIN_IAT[sub]:
+            return None
 
         return payload
-    except jwt.PyJWTError:
+    except (jwt.PyJWTError, TypeError, ValueError):
         return None
