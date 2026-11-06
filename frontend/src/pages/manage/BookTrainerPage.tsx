@@ -50,14 +50,25 @@ const STATUS_BADGES: Record<string, { label: string; style: string }> = {
 
 export function BookTrainerPage() {
   const { user } = useAuth()
-  const [trainers, setTrainers] = useState<TrainerProfile[]>([])
 
   if (user && user.role === 'member' && !user.has_active_membership) {
     return <Navigate to="/dashboard" replace />
   }
+
+  return <BookTrainerContent />
+}
+
+function BookTrainerContent() {
+  const [trainers, setTrainers] = useState<TrainerProfile[]>([])
   const [myBookings, setMyBookings] = useState<PTSession[]>([])
   const [selectedTrainer, setSelectedTrainer] = useState<number | null>(null)
-  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [minDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    // Default date to tomorrow
+    const tmrw = new Date()
+    tmrw.setDate(tmrw.getDate() + 1)
+    return tmrw.toISOString().split('T')[0]
+  })
   const [selectedSlot, setSelectedSlot] = useState<string>(TIME_SLOTS[0])
   const [duration, setDuration] = useState<number>(60)
   const [notes, setNotes] = useState<string>('')
@@ -69,31 +80,27 @@ export function BookTrainerPage() {
 
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const [trainersData, bookingsData] = await Promise.all([
-        api.getAvailableTrainers(),
-        api.getMyBookings(),
-      ])
-      setTrainers(trainersData)
-      setMyBookings(bookingsData)
-      if (trainersData.length > 0 && !selectedTrainer) {
-        setSelectedTrainer(trainersData[0].id)
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load booking details.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchData()
-    // Default date to tomorrow
-    const tmrw = new Date()
-    tmrw.setDate(tmrw.getDate() + 1)
-    setSelectedDate(tmrw.toISOString().split('T')[0])
+    let active = true
+    Promise.all([api.getAvailableTrainers(), api.getMyBookings()])
+      .then(([trainersData, bookingsData]) => {
+        if (!active) return
+        setTrainers(trainersData)
+        setMyBookings(bookingsData)
+        if (trainersData.length > 0) {
+          setSelectedTrainer((prev) => prev ?? trainersData[0].id)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!active) return
+        setError(err instanceof Error ? err.message : 'Failed to load booking details.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   useGSAP(() => {
@@ -304,7 +311,7 @@ export function BookTrainerPage() {
                 <input
                   type="date"
                   required
-                  min={new Date().toISOString().split('T')[0]}
+                  min={minDate}
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-red/50 transition-colors"

@@ -1,17 +1,7 @@
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from 'react'
-
+import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { api } from '@/services/api'
-
-import type {
-  Expense,
-  ExpenseCategory,
-} from '@/types/auth'
-
+import type { Expense, ExpenseCategory } from '@/types/auth'
 
 interface AddExpenseModalProps {
   open: boolean
@@ -21,178 +11,83 @@ interface AddExpenseModalProps {
   onSaved: () => void
 }
 
-
 function getTodayInputValue() {
   const now = new Date()
-
   const year = now.getFullYear()
-
-  const month = String(
-    now.getMonth() + 1,
-  ).padStart(2, '0')
-
-  const day = String(
-    now.getDate(),
-  ).padStart(2, '0')
-
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
+export function AddExpenseModal(props: AddExpenseModalProps) {
+  if (!props.open) return null
+  const formKey = props.expense
+    ? `edit-${props.expense.id}`
+    : `new-${props.categories[0]?.id ?? 'none'}`
+  return <AddExpenseForm key={formKey} {...props} />
+}
 
-export function AddExpenseModal({
-  open,
-  categories,
-  expense,
-  onClose,
-  onSaved,
-}: AddExpenseModalProps) {
-  const [categoryId, setCategoryId] = useState('')
-  const [amount, setAmount] = useState('')
-  const [expenseDate, setExpenseDate] = useState(
-    getTodayInputValue(),
+function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseModalProps) {
+  const [categoryId, setCategoryId] = useState(() =>
+    expense ? String(expense.category_id) : categories.length > 0 ? String(categories[0].id) : '',
   )
-  const [description, setDescription] = useState('')
-  const [receiptPath, setReceiptPath] = useState('')
-
+  const [amount, setAmount] = useState(() => (expense ? String(expense.amount) : ''))
+  const [expenseDate, setExpenseDate] = useState(() =>
+    expense ? expense.expense_date : getTodayInputValue(),
+  )
+  const [description, setDescription] = useState(() => (expense ? expense.description : ''))
+  const [receiptPath, setReceiptPath] = useState(() => expense?.receipt_path ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    if (expense) {
-      setCategoryId(
-        String(expense.category_id),
-      )
-
-      setAmount(
-        String(expense.amount),
-      )
-
-      setExpenseDate(
-        expense.expense_date,
-      )
-
-      setDescription(
-        expense.description,
-      )
-
-      setReceiptPath(
-        expense.receipt_path ?? '',
-      )
-    } else {
-      setCategoryId(
-        categories.length > 0
-          ? String(categories[0].id)
-          : '',
-      )
-
-      setAmount('')
-      setExpenseDate(
-        getTodayInputValue(),
-      )
-      setDescription('')
-      setReceiptPath('')
-    }
-
-    setError('')
-  }, [
-    open,
-    expense,
-    categories,
-  ])
-
-
-  if (!open) {
-    return null
-  }
-
-
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-
     setError('')
 
-    const parsedCategory = Number(
-      categoryId,
-    )
-
-    const parsedAmount = Number(
-      amount,
-    )
+    const parsedCategory = Number(categoryId)
+    const parsedAmount = Number(amount)
 
     if (!parsedCategory) {
-      setError(
-        'Please select an expense category.',
-      )
+      setError('Please select an expense category.')
       return
     }
-
-    if (
-      !parsedAmount ||
-      parsedAmount <= 0
-    ) {
-      setError(
-        'Please enter a valid amount.',
-      )
+    if (!parsedAmount || parsedAmount <= 0) {
+      setError('Please enter a valid amount.')
       return
     }
-
     if (!expenseDate) {
-      setError(
-        'Please select the expense date.',
-      )
+      setError('Please select the expense date.')
       return
     }
-
     if (!description.trim()) {
-      setError(
-        'Please enter an expense description.',
-      )
+      setError('Please enter an expense description.')
       return
     }
 
     setSaving(true)
-
     try {
       const data = {
         category_id: parsedCategory,
         amount: parsedAmount,
         expense_date: expenseDate,
         description: description.trim(),
-        receipt_path:
-          receiptPath.trim() || undefined,
+        receipt_path: receiptPath.trim() || undefined,
       }
 
       if (expense) {
-        await api.updateExpense(
-          expense.id,
-          data,
-        )
+        await api.updateExpense(expense.id, data)
       } else {
-        await api.createExpense(
-          data,
-        )
+        await api.createExpense(data)
       }
 
       onSaved()
       onClose()
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to save expense.',
-      )
+      setError(err instanceof Error ? err.message : 'Unable to save expense.')
     } finally {
       setSaving(false)
     }
   }
-
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -209,11 +104,8 @@ export function AddExpenseModal({
             <p className="text-[10px] uppercase tracking-[0.22em] text-red font-semibold">
               Finance
             </p>
-
             <h2 className="font-display text-2xl font-black uppercase text-white">
-              {expense
-                ? 'Edit Expense'
-                : 'Add Expense'}
+              {expense ? 'Edit Expense' : 'Add Expense'}
             </h2>
           </div>
 
@@ -226,10 +118,7 @@ export function AddExpenseModal({
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-5 p-6"
-        >
+        <form onSubmit={handleSubmit} className="space-y-5 p-6">
           {error && (
             <div className="rounded-lg border border-red/30 bg-red/10 px-4 py-3 text-sm text-red">
               {error}
@@ -243,33 +132,19 @@ export function AddExpenseModal({
           )}
 
           <div className="space-y-1.5">
-            <label
-              htmlFor="expense-category"
-              className="text-sm font-medium text-white/70"
-            >
+            <label htmlFor="expense-category" className="text-sm font-medium text-white/70">
               Category
             </label>
-
             <select
               id="expense-category"
               value={categoryId}
-              onChange={(event) =>
-                setCategoryId(
-                  event.target.value,
-                )
-              }
+              onChange={(event) => setCategoryId(event.target.value)}
               className="w-full rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
               required
             >
-              <option value="">
-                Select category
-              </option>
-
+              <option value="">Select category</option>
               {categories.map((category) => (
-                <option
-                  key={category.id}
-                  value={category.id}
-                >
+                <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
@@ -278,29 +153,20 @@ export function AddExpenseModal({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label
-                htmlFor="expense-amount"
-                className="text-sm font-medium text-white/70"
-              >
+              <label htmlFor="expense-amount" className="text-sm font-medium text-white/70">
                 Amount
               </label>
-
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-white/35">
                   ₱
                 </span>
-
                 <input
                   id="expense-amount"
                   type="number"
                   min="0.01"
                   step="0.01"
                   value={amount}
-                  onChange={(event) =>
-                    setAmount(
-                      event.target.value,
-                    )
-                  }
+                  onChange={(event) => setAmount(event.target.value)}
                   placeholder="0.00"
                   className="w-full rounded-lg border border-white/10 bg-surface-2 py-3 pl-9 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/30"
                   required
@@ -309,22 +175,14 @@ export function AddExpenseModal({
             </div>
 
             <div className="space-y-1.5">
-              <label
-                htmlFor="expense-date"
-                className="text-sm font-medium text-white/70"
-              >
+              <label htmlFor="expense-date" className="text-sm font-medium text-white/70">
                 Expense Date
               </label>
-
               <input
                 id="expense-date"
                 type="date"
                 value={expenseDate}
-                onChange={(event) =>
-                  setExpenseDate(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => setExpenseDate(event.target.value)}
                 className="w-full rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
                 required
               />
@@ -332,22 +190,14 @@ export function AddExpenseModal({
           </div>
 
           <div className="space-y-1.5">
-            <label
-              htmlFor="expense-description"
-              className="text-sm font-medium text-white/70"
-            >
+            <label htmlFor="expense-description" className="text-sm font-medium text-white/70">
               Description
             </label>
-
             <textarea
               id="expense-description"
               rows={4}
               value={description}
-              onChange={(event) =>
-                setDescription(
-                  event.target.value,
-                )
-              }
+              onChange={(event) => setDescription(event.target.value)}
               placeholder="Example: October electricity bill"
               className="w-full resize-none rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/30"
               required
@@ -355,51 +205,26 @@ export function AddExpenseModal({
           </div>
 
           <div className="space-y-1.5">
-            <label
-              htmlFor="receipt-reference"
-              className="text-sm font-medium text-white/70"
-            >
+            <label htmlFor="receipt-reference" className="text-sm font-medium text-white/70">
               Receipt / Reference
             </label>
-
             <input
               id="receipt-reference"
               type="text"
               value={receiptPath}
-              onChange={(event) =>
-                setReceiptPath(
-                  event.target.value,
-                )
-              }
+              onChange={(event) => setReceiptPath(event.target.value)}
               placeholder="Optional receipt number or reference"
               className="w-full rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/30"
             />
-
-            <p className="text-xs text-white/30">
-              Actual file upload can be added later.
-            </p>
+            <p className="text-xs text-white/30">Actual file upload can be added later.</p>
           </div>
 
           <div className="flex flex-col-reverse gap-3 border-t border-white/8 pt-5 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onClose}
-              disabled={saving}
-            >
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-
-            <Button
-              type="submit"
-              loading={saving}
-              disabled={
-                categories.length === 0
-              }
-            >
-              {expense
-                ? 'Save Changes'
-                : 'Add Expense'}
+            <Button type="submit" loading={saving} disabled={categories.length === 0}>
+              {expense ? 'Save Changes' : 'Add Expense'}
             </Button>
           </div>
         </form>
