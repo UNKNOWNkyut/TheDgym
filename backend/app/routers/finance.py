@@ -16,14 +16,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-    status,
-)
-from sqlalchemy import and_, func, or_, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import Integer, and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -45,188 +39,105 @@ from app.schemas.finance import (
     MonthlyFinancePoint,
 )
 
+router = APIRouter(prefix="/api/finance", tags=["Finance"])
 
-router = APIRouter(
-    prefix="/api/finance",
-    tags=["Finance"],
-)
+CURRENT_YEAR = 2026
+CURRENT_MONTH = 10  # October is mid-month / incomplete
+ANNUAL_MONTH_NAMES = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
 
 
 # =========================================================
 # HELPER FUNCTIONS
 # =========================================================
 
-def _expense_to_response(
-    expense: Expense,
-) -> ExpenseResponse:
-
+def _expense_to_response(expense: Expense) -> ExpenseResponse:
     return ExpenseResponse(
         id=expense.id,
         category_id=expense.category_id,
-        category_name=(
-            expense.category.name
-            if expense.category
-            else "Unknown"
-        ),
+        category_name=expense.category.name if expense.category else "Unknown",
         amount=expense.amount,
         expense_date=expense.expense_date,
         description=expense.description,
         receipt_path=expense.receipt_path,
         recorded_by_user_id=expense.recorded_by_user_id,
-        recorded_by_name=(
-            expense.recorded_by.full_name
-            if expense.recorded_by
-            else None
-        ),
+        recorded_by_name=expense.recorded_by.full_name if expense.recorded_by else None,
         is_archived=expense.is_archived,
         created_at=expense.created_at,
         updated_at=expense.updated_at,
     )
 
 
-def _period_bounds(
-    year: int,
-    month: Optional[int],
-):
-    """
-    Creates the starting and ending dates
-    used by finance filters.
-    """
-
+def _period_bounds(year: int, month: Optional[int]):
+    """Creates the starting and ending dates used by finance filters."""
     if month is not None:
-
-        start_date = date(
-            year,
-            month,
-            1,
+        start_date = date(year, month, 1)
+        end_date = date(year, month, monthrange(year, month)[1])
+        start_dt = datetime(year, month, 1, tzinfo=timezone.utc)
+        end_dt = (
+            datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+            if month == 12
+            else datetime(year, month + 1, 1, tzinfo=timezone.utc)
         )
-
-        last_day = monthrange(
-            year,
-            month,
-        )[1]
-
-        end_date = date(
-            year,
-            month,
-            last_day,
-        )
-
-        start_dt = datetime(
-            year,
-            month,
-            1,
-            tzinfo=timezone.utc,
-        )
-
-        if month == 12:
-
-            end_dt = datetime(
-                year + 1,
-                1,
-                1,
-                tzinfo=timezone.utc,
-            )
-
-        else:
-
-            end_dt = datetime(
-                year,
-                month + 1,
-                1,
-                tzinfo=timezone.utc,
-            )
-
     else:
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
 
-        start_date = date(
-            year,
-            1,
-            1,
-        )
+    return start_date, end_date, start_dt, end_dt
 
-        end_date = date(
-            year,
-            12,
-            31,
-        )
 
-        start_dt = datetime(
-            year,
-            1,
-            1,
-            tzinfo=timezone.utc,
-        )
-
-        end_dt = datetime(
-            year + 1,
-            1,
-            1,
-            tzinfo=timezone.utc,
-        )
-
-    return (
-        start_date,
-        end_date,
-        start_dt,
-        end_dt,
+def _revenue_period_clause(start_date: date, end_date: date, start_dt: datetime, end_dt: datetime):
+    return or_(
+        and_(MemberMembership.created_at >= start_dt, MemberMembership.created_at < end_dt),
+        and_(MemberMembership.start_date >= start_date, MemberMembership.start_date <= end_date),
     )
 
 
-async def _get_category_or_404(
-    db: AsyncSession,
-    category_id: int,
-) -> ExpenseCategory:
-
-    result = await db.execute(
-        select(ExpenseCategory).where(
-            ExpenseCategory.id == category_id
-        )
-    )
-
-    category = result.scalar_one_or_none()
-
+async def _get_category_or_404(db: AsyncSession, category_id: int) -> ExpenseCategory:
+    stmt = select(ExpenseCategory).where(ExpenseCategory.id == category_id)
+    category = (await db.execute(stmt)).scalar_one_or_none()
     if not category:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Expense category not found.",
         )
-
     return category
+
+
+async def _load_expense_or_404(db: AsyncSession, expense_id: int) -> Expense:
+    stmt = (
+        select(Expense)
+        .where(Expense.id == expense_id)
+        .options(selectinload(Expense.category), selectinload(Expense.recorded_by))
+    )
+    expense = (await db.execute(stmt)).scalar_one_or_none()
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense not found.",
+        )
+    return expense
 
 
 # =========================================================
 # EXPENSE CATEGORIES
 # =========================================================
 
-@router.get(
-    "/categories",
-    response_model=List[ExpenseCategoryResponse],
-)
+@router.get("/categories", response_model=List[ExpenseCategoryResponse])
 async def list_expense_categories(
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
     stmt = select(ExpenseCategory)
-
     if not include_inactive:
-
-        stmt = stmt.where(
-            ExpenseCategory.is_active.is_(True)
-        )
-
-    stmt = stmt.order_by(
-        ExpenseCategory.name.asc()
-    )
-
-    result = await db.execute(stmt)
-
-    return result.scalars().all()
+        stmt = stmt.where(ExpenseCategory.is_active.is_(True))
+    stmt = stmt.order_by(ExpenseCategory.name.asc())
+    return (await db.execute(stmt)).scalars().all()
 
 
 @router.post(
@@ -237,146 +148,74 @@ async def list_expense_categories(
 async def create_expense_category(
     data: ExpenseCategoryCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
     clean_name = data.name.strip()
-
     existing = await db.execute(
-        select(ExpenseCategory).where(
-            func.lower(
-                ExpenseCategory.name
-            ) == clean_name.lower()
-        )
+        select(ExpenseCategory).where(func.lower(ExpenseCategory.name) == clean_name.lower())
     )
-
     if existing.scalar_one_or_none():
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "An expense category with "
-                "this name already exists."
-            ),
+            detail="An expense category with this name already exists.",
         )
 
     category = ExpenseCategory(
         name=clean_name,
-        description=(
-            data.description.strip()
-            if data.description
-            else None
-        ),
+        description=data.description.strip() if data.description else None,
         created_by_user_id=current_user.id,
         is_active=True,
     )
-
     db.add(category)
-
     await db.commit()
-
     await db.refresh(category)
-
     return category
 
 
-@router.patch(
-    "/categories/{category_id}",
-    response_model=ExpenseCategoryResponse,
-)
+@router.patch("/categories/{category_id}", response_model=ExpenseCategoryResponse)
 async def update_expense_category(
     category_id: int,
     data: ExpenseCategoryUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
+    category = await _get_category_or_404(db, category_id)
+    update_data = data.model_dump(exclude_unset=True)
 
-    category = await _get_category_or_404(
-        db,
-        category_id,
-    )
-
-    update_data = data.model_dump(
-        exclude_unset=True
-    )
-
-    if (
-        "name" in update_data
-        and update_data["name"] is not None
-    ):
-
-        clean_name = update_data[
-            "name"
-        ].strip()
-
+    if "name" in update_data and update_data["name"] is not None:
+        clean_name = update_data["name"].strip()
         duplicate = await db.execute(
             select(ExpenseCategory).where(
-                func.lower(
-                    ExpenseCategory.name
-                ) == clean_name.lower(),
+                func.lower(ExpenseCategory.name) == clean_name.lower(),
                 ExpenseCategory.id != category_id,
             )
         )
-
         if duplicate.scalar_one_or_none():
-
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "An expense category with "
-                    "this name already exists."
-                ),
+                detail="An expense category with this name already exists.",
             )
-
         update_data["name"] = clean_name
 
-    if (
-        "description" in update_data
-        and update_data["description"] is not None
-    ):
-
-        update_data["description"] = (
-            update_data["description"].strip()
-        )
+    if "description" in update_data and update_data["description"] is not None:
+        update_data["description"] = update_data["description"].strip()
 
     for field, value in update_data.items():
-
-        setattr(
-            category,
-            field,
-            value,
-        )
+        setattr(category, field, value)
 
     await db.commit()
-
     await db.refresh(category)
-
     return category
 
 
-@router.delete(
-    "/categories/{category_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deactivate_expense_category(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    category = await _get_category_or_404(
-        db,
-        category_id,
-    )
-
+    category = await _get_category_or_404(db, category_id)
     category.is_active = False
-
     await db.commit()
 
 
@@ -384,180 +223,59 @@ async def deactivate_expense_category(
 # EXPENSES
 # =========================================================
 
-@router.get(
-    "/expenses",
-    response_model=List[ExpenseResponse],
-)
+@router.get("/expenses", response_model=List[ExpenseResponse])
 async def list_expenses(
     search: Optional[str] = Query(None),
-    category_id: Optional[int] = Query(
-        None,
-        ge=1,
-    ),
-    year: Optional[int] = Query(
-        None,
-        ge=2000,
-        le=2100,
-    ),
-    month: Optional[int] = Query(
-        None,
-        ge=1,
-        le=12,
-    ),
+    category_id: Optional[int] = Query(None, ge=1),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    month: Optional[int] = Query(None, ge=1, le=12),
     include_archived: bool = Query(False),
-    skip: int = Query(
-        0,
-        ge=0,
-    ),
-    limit: int = Query(
-        100,
-        ge=1,
-        le=500,
-    ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    if (
-        month is not None
-        and year is None
-    ):
-
+    if month is not None and year is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "A year is required when "
-                "filtering by month."
-            ),
+            detail="A year is required when filtering by month.",
         )
 
     stmt = (
         select(Expense)
-        .join(
-            ExpenseCategory,
-            Expense.category_id
-            == ExpenseCategory.id,
-        )
-        .options(
-            selectinload(
-                Expense.category
-            ),
-            selectinload(
-                Expense.recorded_by
-            ),
-        )
+        .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
+        .options(selectinload(Expense.category), selectinload(Expense.recorded_by))
     )
 
     if not include_archived:
-
-        stmt = stmt.where(
-            Expense.is_archived.is_(False)
-        )
-
+        stmt = stmt.where(Expense.is_archived.is_(False))
     if category_id is not None:
-
-        stmt = stmt.where(
-            Expense.category_id
-            == category_id
-        )
-
+        stmt = stmt.where(Expense.category_id == category_id)
     if year is not None:
-
-        (
-            start_date,
-            end_date,
-            _,
-            _,
-        ) = _period_bounds(
-            year,
-            month,
-        )
-
-        stmt = stmt.where(
-            Expense.expense_date
-            >= start_date,
-            Expense.expense_date
-            <= end_date,
-        )
-
+        start_date, end_date, _, _ = _period_bounds(year, month)
+        stmt = stmt.where(Expense.expense_date >= start_date, Expense.expense_date <= end_date)
     if search:
-
-        search_term = (
-            f"%{search.strip()}%"
-        )
-
+        search_term = f"%{search.strip()}%"
         stmt = stmt.where(
             or_(
-                Expense.description.ilike(
-                    search_term
-                ),
-                ExpenseCategory.name.ilike(
-                    search_term
-                ),
+                Expense.description.ilike(search_term),
+                ExpenseCategory.name.ilike(search_term),
             )
         )
 
-    stmt = (
-        stmt
-        .order_by(
-            Expense.expense_date.desc(),
-            Expense.id.desc(),
-        )
-        .offset(skip)
-        .limit(limit)
-    )
-
-    result = await db.execute(stmt)
-
-    expenses = result.scalars().all()
-
-    return [
-        _expense_to_response(expense)
-        for expense in expenses
-    ]
+    stmt = stmt.order_by(Expense.expense_date.desc(), Expense.id.desc()).offset(skip).limit(limit)
+    expenses = (await db.execute(stmt)).scalars().all()
+    return [_expense_to_response(expense) for expense in expenses]
 
 
-@router.get(
-    "/expenses/{expense_id}",
-    response_model=ExpenseResponse,
-)
+@router.get("/expenses/{expense_id}", response_model=ExpenseResponse)
 async def get_expense(
     expense_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    result = await db.execute(
-        select(Expense)
-        .where(
-            Expense.id == expense_id
-        )
-        .options(
-            selectinload(
-                Expense.category
-            ),
-            selectinload(
-                Expense.recorded_by
-            ),
-        )
-    )
-
-    expense = result.scalar_one_or_none()
-
-    if not expense:
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found.",
-        )
-
-    return _expense_to_response(
-        expense
-    )
+    expense = await _load_expense_or_404(db, expense_id)
+    return _expense_to_response(expense)
 
 
 @router.post(
@@ -568,24 +286,13 @@ async def get_expense(
 async def create_expense(
     data: ExpenseCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    category = await _get_category_or_404(
-        db,
-        data.category_id,
-    )
-
+    category = await _get_category_or_404(db, data.category_id)
     if not category.is_active:
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "This expense category "
-                "is inactive."
-            ),
+            detail="This expense category is inactive.",
         )
 
     expense = Expense(
@@ -593,199 +300,58 @@ async def create_expense(
         amount=data.amount,
         expense_date=data.expense_date,
         description=data.description.strip(),
-        receipt_path=(
-            data.receipt_path.strip()
-            if data.receipt_path
-            else None
-        ),
-        recorded_by_user_id=(
-            current_user.id
-        ),
+        receipt_path=data.receipt_path.strip() if data.receipt_path else None,
+        recorded_by_user_id=current_user.id,
         is_archived=False,
     )
-
     db.add(expense)
-
     await db.commit()
-
-    result = await db.execute(
-        select(Expense)
-        .where(
-            Expense.id == expense.id
-        )
-        .options(
-            selectinload(
-                Expense.category
-            ),
-            selectinload(
-                Expense.recorded_by
-            ),
-        )
-    )
-
-    loaded_expense = (
-        result.scalar_one()
-    )
-
-    return _expense_to_response(
-        loaded_expense
-    )
+    return _expense_to_response(await _load_expense_or_404(db, expense.id))
 
 
-@router.patch(
-    "/expenses/{expense_id}",
-    response_model=ExpenseResponse,
-)
+@router.patch("/expenses/{expense_id}", response_model=ExpenseResponse)
 async def update_expense(
     expense_id: int,
     data: ExpenseUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    result = await db.execute(
-        select(Expense).where(
-            Expense.id == expense_id
-        )
-    )
-
-    expense = (
-        result.scalar_one_or_none()
-    )
-
-    if not expense:
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found.",
-        )
-
+    expense = await _load_expense_or_404(db, expense_id)
     if expense.is_archived:
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Archived expenses "
-                "cannot be edited."
-            ),
+            detail="Archived expenses cannot be edited.",
         )
 
-    update_data = data.model_dump(
-        exclude_unset=True
-    )
-
+    update_data = data.model_dump(exclude_unset=True)
     if "category_id" in update_data:
-
-        category = (
-            await _get_category_or_404(
-                db,
-                update_data["category_id"],
-            )
-        )
-
+        category = await _get_category_or_404(db, update_data["category_id"])
         if not category.is_active:
-
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "This expense category "
-                    "is inactive."
-                ),
+                detail="This expense category is inactive.",
             )
 
-    if (
-        "description" in update_data
-        and update_data["description"]
-        is not None
-    ):
+    if "description" in update_data and update_data["description"] is not None:
+        update_data["description"] = update_data["description"].strip()
+    if "receipt_path" in update_data and update_data["receipt_path"] is not None:
+        update_data["receipt_path"] = update_data["receipt_path"].strip()
 
-        update_data["description"] = (
-            update_data[
-                "description"
-            ].strip()
-        )
-
-    if (
-        "receipt_path" in update_data
-        and update_data["receipt_path"]
-        is not None
-    ):
-
-        update_data["receipt_path"] = (
-            update_data[
-                "receipt_path"
-            ].strip()
-        )
-
-    for field, value in (
-        update_data.items()
-    ):
-
-        setattr(
-            expense,
-            field,
-            value,
-        )
+    for field, value in update_data.items():
+        setattr(expense, field, value)
 
     await db.commit()
-
-    result = await db.execute(
-        select(Expense)
-        .where(
-            Expense.id == expense_id
-        )
-        .options(
-            selectinload(
-                Expense.category
-            ),
-            selectinload(
-                Expense.recorded_by
-            ),
-        )
-    )
-
-    loaded_expense = (
-        result.scalar_one()
-    )
-
-    return _expense_to_response(
-        loaded_expense
-    )
+    return _expense_to_response(await _load_expense_or_404(db, expense_id))
 
 
-@router.delete(
-    "/expenses/{expense_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def archive_expense(
     expense_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    result = await db.execute(
-        select(Expense).where(
-            Expense.id == expense_id
-        )
-    )
-
-    expense = (
-        result.scalar_one_or_none()
-    )
-
-    if not expense:
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found.",
-        )
-
+    expense = await _load_expense_or_404(db, expense_id)
     expense.is_archived = True
-
     await db.commit()
 
 
@@ -793,217 +359,87 @@ async def archive_expense(
 # FINANCIAL SUMMARY
 # =========================================================
 
-@router.get(
-    "/summary",
-    response_model=FinanceSummaryResponse,
-)
+@router.get("/summary", response_model=FinanceSummaryResponse)
 async def get_finance_summary(
-    year: int = Query(
-        ...,
-        ge=2000,
-        le=2100,
-    ),
-    month: Optional[int] = Query(
-        None,
-        ge=1,
-        le=12,
-    ),
+    year: int = Query(..., ge=2000, le=2100),
+    month: Optional[int] = Query(None, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_roles([UserRole.ADMIN])
-    ),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-
-    current_year = 2026
-    current_month = 10  # October is mid-month / incomplete
-
     # Incomplete / future months return 0.00
-    if month is not None:
-        if (year == current_year and month >= current_month) or year > current_year:
-            return FinanceSummaryResponse(
-                year=year,
-                month=month,
-                membership_revenue=Decimal("0.00"),
-                total_expenses=Decimal("0.00"),
-                profit=Decimal("0.00"),
-                expense_count=0,
-                expenses_by_category=[],
-            )
+    if month is not None and ((year == CURRENT_YEAR and month >= CURRENT_MONTH) or year > CURRENT_YEAR):
+        return FinanceSummaryResponse(
+            year=year,
+            month=month,
+            membership_revenue=Decimal("0.00"),
+            total_expenses=Decimal("0.00"),
+            profit=Decimal("0.00"),
+            expenses_by_category=[],
+        )
 
-    (
-        start_date,
-        end_date,
-        start_dt,
-        end_dt,
-    ) = _period_bounds(
-        year,
-        month,
-    )
+    start_date, end_date, start_dt, end_dt = _period_bounds(year, month)
 
     # For full-year view of current year, only sum completed months (Jan - Sep)
-    if month is None and year == current_year:
+    if month is None and year == CURRENT_YEAR:
+        last_completed = CURRENT_MONTH - 1
         start_date = date(year, 1, 1)
-        end_date = date(year, current_month - 1, 30)
+        end_date = date(year, last_completed, monthrange(year, last_completed)[1])
         start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
-        end_dt = datetime(year, current_month, 1, tzinfo=timezone.utc)
+        end_dt = datetime(year, CURRENT_MONTH, 1, tzinfo=timezone.utc)
 
-    # -----------------------------------------------------
     # MEMBERSHIP REVENUE
-    # -----------------------------------------------------
-
     revenue_result = await db.execute(
-        select(
-            func.coalesce(
-                func.sum(
-                    MemberMembership.paid_amount
-                ),
-                0,
-            )
-        ).where(
-            MemberMembership.paid_amount.is_not(
-                None
-            ),
-            or_(
-                and_(
-                    MemberMembership.created_at >= start_dt,
-                    MemberMembership.created_at < end_dt,
-                ),
-                and_(
-                    MemberMembership.start_date >= start_date,
-                    MemberMembership.start_date <= end_date,
-                ),
-            ),
+        select(func.coalesce(func.sum(MemberMembership.paid_amount), 0)).where(
+            MemberMembership.paid_amount.is_not(None),
+            _revenue_period_clause(start_date, end_date, start_dt, end_dt),
         )
     )
+    membership_revenue = Decimal(revenue_result.scalar_one() or 0)
 
-    membership_revenue = Decimal(
-        revenue_result.scalar_one()
-        or 0
-    )
-
-    # -----------------------------------------------------
     # TOTAL EXPENSES
-    # -----------------------------------------------------
-
     expenses_result = await db.execute(
-        select(
-            func.coalesce(
-                func.sum(
-                    Expense.amount
-                ),
-                0,
-            ),
-            func.count(
-                Expense.id
-            ),
-        ).where(
-            Expense.is_archived.is_(
-                False
-            ),
-            Expense.expense_date
-            >= start_date,
-            Expense.expense_date
-            <= end_date,
+        select(func.coalesce(func.sum(Expense.amount), 0)).where(
+            Expense.is_archived.is_(False),
+            Expense.expense_date >= start_date,
+            Expense.expense_date <= end_date,
         )
     )
+    total_expenses = Decimal(expenses_result.scalar_one() or 0)
 
-    (
-        total_expenses_raw,
-        expense_count,
-    ) = expenses_result.one()
-
-    total_expenses = Decimal(
-        total_expenses_raw
-        or 0
-    )
-
-    # -----------------------------------------------------
     # EXPENSE BREAKDOWN BY CATEGORY
-    # -----------------------------------------------------
-
     breakdown_result = await db.execute(
         select(
             ExpenseCategory.id,
             ExpenseCategory.name,
-            func.coalesce(
-                func.sum(
-                    Expense.amount
-                ),
-                0,
-            ),
+            func.coalesce(func.sum(Expense.amount), 0),
         )
-        .join(
-            Expense,
-            Expense.category_id
-            == ExpenseCategory.id,
-        )
+        .join(Expense, Expense.category_id == ExpenseCategory.id)
         .where(
-            Expense.is_archived.is_(
-                False
-            ),
-            Expense.expense_date
-            >= start_date,
-            Expense.expense_date
-            <= end_date,
+            Expense.is_archived.is_(False),
+            Expense.expense_date >= start_date,
+            Expense.expense_date <= end_date,
         )
-        .group_by(
-            ExpenseCategory.id,
-            ExpenseCategory.name,
-        )
-        .order_by(
-            func.sum(
-                Expense.amount
-            ).desc()
-        )
+        .group_by(ExpenseCategory.id, ExpenseCategory.name)
+        .order_by(func.sum(Expense.amount).desc())
     )
-
     breakdown = [
         ExpenseCategoryTotal(
             category_id=category_id,
             category_name=category_name,
-            total=Decimal(
-                total or 0
-            ),
+            total=Decimal(total or 0),
         )
-        for (
-            category_id,
-            category_name,
-            total,
-        ) in breakdown_result.all()
+        for category_id, category_name, total in breakdown_result.all()
     ]
 
-    # -----------------------------------------------------
     # PROFIT / LOSS
-    # -----------------------------------------------------
-
-    profit = (
-        membership_revenue
-        - total_expenses
-    )
-
     return FinanceSummaryResponse(
         year=year,
         month=month,
-        membership_revenue=(
-            membership_revenue
-        ),
-        total_expenses=(
-            total_expenses
-        ),
-        profit=profit,
-        expense_count=int(
-            expense_count or 0
-        ),
-        expenses_by_category=(
-            breakdown
-        ),
+        membership_revenue=membership_revenue,
+        total_expenses=total_expenses,
+        profit=membership_revenue - total_expenses,
+        expenses_by_category=breakdown,
     )
-
-
-ANNUAL_MONTH_NAMES = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-]
 
 
 @router.get(
@@ -1016,13 +452,71 @@ async def get_annual_finance_breakdown(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-    current_year = 2026
-    current_month = 10  # October is incomplete
+    # Incomplete / future months return 0.00
+    if year > CURRENT_YEAR:
+        return [
+            MonthlyFinancePoint(
+                month=m,
+                month_name=ANNUAL_MONTH_NAMES[m - 1],
+                revenue=Decimal("0.00"),
+                expenses=Decimal("0.00"),
+                net_income=Decimal("0.00"),
+            )
+            for m in range(1, 13)
+        ]
 
-    points = []
+    # October is incomplete
+    max_month = CURRENT_MONTH - 1 if year == CURRENT_YEAR else 12
+    range_start_date = date(year, 1, 1)
+    range_end_date = date(year, max_month, monthrange(year, max_month)[1])
+    range_start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
+    range_end_dt = (
+        datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        if max_month == 12
+        else datetime(year, max_month + 1, 1, tzinfo=timezone.utc)
+    )
+
+    # Revenue (single pass across completed months instead of 12 sequential queries)
+    rev_cols = [
+        func.coalesce(
+            func.sum(
+                case(
+                    (_revenue_period_clause(*_period_bounds(year, m)), MemberMembership.paid_amount),
+                    else_=0,
+                )
+            ),
+            0,
+        )
+        for m in range(1, max_month + 1)
+    ]
+    rev_row = (
+        await db.execute(
+            select(*rev_cols).where(
+                MemberMembership.paid_amount.is_not(None),
+                _revenue_period_clause(range_start_date, range_end_date, range_start_dt, range_end_dt),
+            )
+        )
+    ).one()
+    rev_by_month = {m: Decimal(rev_row[m - 1] or 0) for m in range(1, max_month + 1)}
+
+    # Expenses (single GROUP BY month query instead of 12 sequential queries)
+    month_expr = func.cast(func.strftime("%m", Expense.expense_date), Integer)
+    exp_rows = (
+        await db.execute(
+            select(month_expr, func.coalesce(func.sum(Expense.amount), 0))
+            .where(
+                Expense.is_archived.is_(False),
+                Expense.expense_date >= range_start_date,
+                Expense.expense_date <= range_end_date,
+            )
+            .group_by(month_expr)
+        )
+    ).all()
+    exp_by_month = {int(m): Decimal(total or 0) for m, total in exp_rows}
+
+    points: List[MonthlyFinancePoint] = []
     for m in range(1, 13):
-        # Incomplete / future months return 0.00
-        if (year == current_year and m >= current_month) or year > current_year:
+        if m > max_month:
             points.append(
                 MonthlyFinancePoint(
                     month=m,
@@ -1034,44 +528,15 @@ async def get_annual_finance_breakdown(
             )
             continue
 
-        start_date, end_date, start_dt, end_dt = _period_bounds(year, m)
-
-        # Revenue
-        rev_res = await db.execute(
-            select(func.coalesce(func.sum(MemberMembership.paid_amount), 0)).where(
-                MemberMembership.paid_amount.is_not(None),
-                or_(
-                    and_(
-                        MemberMembership.created_at >= start_dt,
-                        MemberMembership.created_at < end_dt,
-                    ),
-                    and_(
-                        MemberMembership.start_date >= start_date,
-                        MemberMembership.start_date <= end_date,
-                    ),
-                ),
-            )
-        )
-        rev = Decimal(rev_res.scalar() or 0)
-
-        # Expenses
-        exp_res = await db.execute(
-            select(func.coalesce(func.sum(Expense.amount), 0)).where(
-                Expense.is_archived.is_(False),
-                Expense.expense_date >= start_date,
-                Expense.expense_date <= end_date,
-            )
-        )
-        exp = Decimal(exp_res.scalar() or 0)
-
-        net = rev - exp
+        rev = rev_by_month.get(m, Decimal(0))
+        exp = exp_by_month.get(m, Decimal(0))
         points.append(
             MonthlyFinancePoint(
                 month=m,
                 month_name=ANNUAL_MONTH_NAMES[m - 1],
                 revenue=rev,
                 expenses=exp,
-                net_income=net,
+                net_income=rev - exp,
             )
         )
     return points
