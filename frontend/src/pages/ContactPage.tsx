@@ -4,10 +4,11 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 /*
  * CONTACT INFO NOTE:
- * Phone, email, and full address are [PLACEHOLDER] — not verified from client.
+ * Verified address, phone, email, and operating hours ingested from TDGGYM-QUESTIONNAIRES-1.
  * The contact form is UI-only in Phase 2 — no backend submission yet (Phase 3).
  */
 
@@ -97,37 +98,47 @@ export function ContactPage() {
                 <div>
                   <p className="text-sm font-semibold text-white mb-0.5">Location</p>
                   <p className="text-sm text-white/70">
-                    Rosario, Batangas, Philippines
+                    {GYM_INFO.streetAddress}
                     <br />
-                    <span className="text-white/40 text-xs">High End Premium Weightlifting & Powerlifting Gym</span>
+                    <span className="text-white/40 text-xs">{GYM_INFO.landmark}</span>
                   </p>
                 </div>
               </div>
 
-              {/* Phone placeholder */}
+              {/* Phone */}
               <div className="flex gap-4">
-                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center text-white/30 shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red shrink-0">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.17 11.63 19.79 19.79 0 0 1 1.08 3C1.08 1.95 1.95 1.08 3 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6.07 6.07l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white/40 mb-0.5">Phone</p>
-                  <p className="text-sm text-white/30">[Contact via Facebook for direct inquiries]</p>
+                  <p className="text-sm font-semibold text-white mb-0.5">Phone</p>
+                  <a
+                    href={GYM_INFO.phoneHref}
+                    className="text-sm text-white/70 hover:text-white transition-colors underline underline-offset-2"
+                  >
+                    {GYM_INFO.phoneDisplay} ({GYM_INFO.phoneInternational})
+                  </a>
                 </div>
               </div>
 
-              {/* Email placeholder */}
+              {/* Email */}
               <div className="flex gap-4">
-                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center text-white/30 shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red shrink-0">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                     <polyline points="22,6 12,13 2,6" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white/40 mb-0.5">Email</p>
-                  <p className="text-sm text-white/30">[Send message via form or Facebook]</p>
+                  <p className="text-sm font-semibold text-white mb-0.5">Email</p>
+                  <a
+                    href={GYM_INFO.emailHref}
+                    className="text-sm text-white/70 hover:text-white transition-colors underline underline-offset-2 break-all"
+                  >
+                    {GYM_INFO.email}
+                  </a>
                 </div>
               </div>
 
@@ -141,24 +152,32 @@ export function ContactPage() {
                 <div>
                   <p className="text-sm font-semibold text-white mb-0.5">Official Facebook</p>
                   <a
-                    href="https://www.facebook.com/profile.php?id=61577169056417"
+                    href={GYM_INFO.facebookUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-white/70 hover:text-white transition-colors underline underline-offset-2"
                   >
-                    The DGym Rosario Batangas (2,400+ followers)
+                    {GYM_INFO.facebookLabel} (2,400+ followers)
                   </a>
                 </div>
               </div>
 
-              {/* Hours placeholder */}
-              <div className="mt-4 p-5 rounded-xl border border-white/8 bg-surface">
-                <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">
+              {/* Operating Hours */}
+              <div className="mt-4 p-5 rounded-xl border border-white/10 bg-surface">
+                <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-3">
                   Operating Hours
                 </p>
-                <p className="text-sm text-white/30">
-                  [Hours not yet confirmed — check our Facebook page for current hours]
-                </p>
+                <div className="space-y-2">
+                  {GYM_INFO.operatingHours.map((entry) => (
+                    <div
+                      key={entry.days}
+                      className="flex items-center justify-between gap-4 text-sm"
+                    >
+                      <span className="text-white/60">{entry.days}</span>
+                      <span className="text-white font-medium text-right">{entry.hours}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

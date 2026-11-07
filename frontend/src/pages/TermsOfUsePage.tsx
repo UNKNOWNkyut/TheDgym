@@ -6,6 +6,7 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -475,17 +476,29 @@ export function TermsOfUsePage() {
                     The DGym Member Services
                   </p>
                   <p className="text-white/70">
-                    <strong className="text-white">Facility:</strong> Rosario, Batangas, Philippines
+                    <strong className="text-white">Facility:</strong> {GYM_INFO.fullAddress}
+                  </p>
+                  <p className="text-white/70">
+                    <strong className="text-white">Phone:</strong>{' '}
+                    <a href={GYM_INFO.phoneHref} className="text-red hover:underline">
+                      {GYM_INFO.phoneDisplay} ({GYM_INFO.phoneInternational})
+                    </a>
+                  </p>
+                  <p className="text-white/70">
+                    <strong className="text-white">Customer Service Email:</strong>{' '}
+                    <a href={GYM_INFO.emailHref} className="text-red hover:underline break-all">
+                      {GYM_INFO.email}
+                    </a>
                   </p>
                   <p className="text-white/70">
                     <strong className="text-white">Facebook Community:</strong>{' '}
                     <a
-                      href="https://www.facebook.com/profile.php?id=61577169056417"
+                      href={GYM_INFO.facebookUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-red hover:underline"
                     >
-                      The DGym Rosario Batangas
+                      {GYM_INFO.facebookLabel}
                     </a>
                   </p>
                   <p className="text-white/70">

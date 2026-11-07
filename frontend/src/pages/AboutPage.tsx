@@ -5,6 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -124,18 +125,21 @@ export function AboutPage() {
 
         {/* Location note */}
         <div className="reveal p-8 rounded-2xl border border-white/8 bg-surface flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-2">Location</p>
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-2">Location & Hours</p>
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-1">
-              Rosario, Batangas
+              {GYM_INFO.streetAddress}
             </h2>
-            <p className="text-sm text-white/50">
-              Visit our official Facebook page for announcements, operating hours, and location directions.
+            <p className="text-sm text-white/60 mb-2">
+              {GYM_INFO.landmark}
+            </p>
+            <p className="text-xs text-white/40">
+              {GYM_INFO.operatingHoursSummary}
             </p>
           </div>
           <div className="flex gap-3 shrink-0">
             <a
-              href="https://www.facebook.com/profile.php?id=61577169056417"
+              href={GYM_INFO.facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block"

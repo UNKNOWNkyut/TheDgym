@@ -6,6 +6,7 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -459,17 +460,29 @@ export function PrivacyPolicyPage() {
                     The DGym Data Protection Office
                   </p>
                   <p className="text-white/70">
-                    <strong className="text-white">Facility Address:</strong> Rosario, Batangas, Philippines
+                    <strong className="text-white">Facility Address:</strong> {GYM_INFO.fullAddress}
+                  </p>
+                  <p className="text-white/70">
+                    <strong className="text-white">Phone:</strong>{' '}
+                    <a href={GYM_INFO.phoneHref} className="text-red hover:underline">
+                      {GYM_INFO.phoneDisplay} ({GYM_INFO.phoneInternational})
+                    </a>
+                  </p>
+                  <p className="text-white/70">
+                    <strong className="text-white">Email:</strong>{' '}
+                    <a href={GYM_INFO.emailHref} className="text-red hover:underline break-all">
+                      {GYM_INFO.email}
+                    </a>
                   </p>
                   <p className="text-white/70">
                     <strong className="text-white">Official Facebook Channel:</strong>{' '}
                     <a
-                      href="https://www.facebook.com/profile.php?id=61577169056417"
+                      href={GYM_INFO.facebookUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-red hover:underline"
                     >
-                      The DGym Rosario Batangas
+                      {GYM_INFO.facebookLabel}
                     </a>
                   </p>
                   <p className="text-white/70">

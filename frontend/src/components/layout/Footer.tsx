@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 const FOOTER_LINKS = {
   Gym: [
@@ -15,9 +16,9 @@ const FOOTER_LINKS = {
   ],
 }
 
-export function Footer() {
-  const currentYear = new Date().getFullYear()
+const CURRENT_YEAR = new Date().getFullYear()
 
+export function Footer() {
   return (
     <footer
       className="bg-surface border-t border-white/8 mt-auto"
@@ -41,12 +42,26 @@ export function Footer() {
               />
             </Link>
             <p className="text-sm text-white/50 leading-relaxed max-w-xs">
-              High End Premium Weightlifting, Powerlifting, and Fitness Gym in Rosario, Batangas.
+              {GYM_INFO.tagline}
             </p>
+            <div className="mt-4 space-y-1.5 text-xs text-white/50 max-w-xs">
+              <p className="text-white/70">{GYM_INFO.streetAddress}</p>
+              <p className="text-white/40">{GYM_INFO.landmark}</p>
+              <p>
+                <a href={GYM_INFO.phoneHref} className="hover:text-white transition-colors">
+                  {GYM_INFO.phoneDisplay}
+                </a>
+                {' • '}
+                <a href={GYM_INFO.emailHref} className="hover:text-white transition-colors break-all">
+                  {GYM_INFO.email}
+                </a>
+              </p>
+              <p className="text-white/40 pt-1">{GYM_INFO.operatingHoursSummary}</p>
+            </div>
 
             {/* Facebook link */}
             <a
-              href="https://www.facebook.com/profile.php?id=61577169056417"
+              href={GYM_INFO.facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Follow The DGym Rosario Batangas on Facebook"
@@ -61,7 +76,7 @@ export function Footer() {
               >
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
               </svg>
-              Facebook: The DGym Rosario Batangas
+              Facebook: {GYM_INFO.facebookLabel}
             </a>
           </div>
 
@@ -90,7 +105,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="pt-6 border-t border-white/8 flex flex-col md:flex-row items-center justify-between gap-3">
           <p className="text-xs text-white/30">
-            &copy; {currentYear} The DGym Rosario Batangas. All rights reserved.
+            &copy; {CURRENT_YEAR} {GYM_INFO.facebookLabel}. All rights reserved.
           </p>
           <p className="text-xs text-white/20">
             High End Premium Weightlifting & Powerlifting Gym.

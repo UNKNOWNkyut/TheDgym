@@ -1,43 +1,45 @@
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 gsap.registerPlugin(ScrollTrigger)
 
 const FAQS = [
   {
     q: 'Do I need a membership to use the gym?',
-    a: 'We offer day passes if you want to try the gym before committing. Reach out to us or check our Facebook page for current day pass rates.',
+    a: 'Walk-ins are welcome with a ₱400 Day Pass for full one-day equipment and locker access—no sign-up required.',
   },
   {
     q: 'Are group classes included with membership?',
-    a: 'Group classes are included with monthly and quarterly memberships. Day passes cover equipment access only.',
+    a: 'Yes. Active members enjoy unlimited free (₱0) access to our 6:00 PM TABATA and HIIT group classes. Day passes cover equipment and locker access only.',
   },
   {
     q: 'How do I book a personal training session?',
-    a: 'Contact us through the contact form or message us on Facebook. A trainer will get back to you to discuss availability, goals, and pricing.',
+    a: `Registered members can book directly from their portal, or contact us at ${GYM_INFO.phoneDisplay} / ${GYM_INFO.email} to arrange a 12-session coaching package.`,
   },
   {
     q: 'What equipment is available?',
-    a: 'We have a full free weights area, barbells, resistance machines, and cardio equipment. The floor is maintained and updated regularly.',
+    a: 'We feature top-tier strength and cardio equipment, free weights, barbells, resistance machines, lounge and workspace access, and free facility-wide Wi-Fi.',
   },
   {
     q: 'Where is The DGym located?',
-    a: 'We are located in Rosario, Batangas. Follow our official Facebook page for directions and announcements, or use the contact form to ask.',
+    a: `We are located at ${GYM_INFO.fullAddress}.`,
   },
   {
     q: 'What are your operating hours?',
-    a: 'Our hours are not yet listed online. Check our Facebook page for the most current schedule, or send us a message.',
+    a: 'We are open Monday to Saturday from 6:00 AM to 11:00 PM, and Sunday from 2:00 PM to 10:00 PM. Holiday hours depend on the specific holiday.',
   },
   {
-    q: 'Can I cancel my membership?',
-    a: 'Monthly memberships are flexible. Reach out to us directly for the terms of cancellation.',
+    q: 'Can I cancel or refund my membership?',
+    a: `All memberships, personal training packages, and day passes are strictly non-refundable once availed. Reach out to ${GYM_INFO.email} if you have questions before subscribing.`,
   },
   {
     q: 'Is personal training suitable for beginners?',
-    a: 'Yes. Our trainers work with all levels. If you are just starting out, one-on-one coaching is one of the most effective ways to build a safe foundation.',
+    a: 'Yes. Our certified coaches work with all fitness levels—from beginners building safe form to experienced lifters and boxers.',
   },
 ]
 
@@ -154,19 +156,23 @@ export function FAQPage() {
 
         <div className="mt-14 p-6 rounded-xl border border-white/8 bg-surface max-w-3xl">
           <p className="text-sm text-white/50">
-            Don't see your question here?{' '}
+            Don't see your question here? Call{' '}
+            <a href={GYM_INFO.phoneHref} className="text-white/80 hover:text-white underline underline-offset-2 transition-colors">
+              {GYM_INFO.phoneDisplay}
+            </a>
+            ,{' '}
             <a
-              href="https://www.facebook.com/profile.php?id=61577169056417"
+              href={GYM_INFO.facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-white/80 hover:text-white underline underline-offset-2 transition-colors"
             >
-              Message us on Facebook
-            </a>{' '}
-            or use our{' '}
-            <a href="/contact" className="text-white/80 hover:text-white underline underline-offset-2 transition-colors">
+              message us on Facebook
+            </a>
+            , or use our{' '}
+            <Link to="/contact" className="text-white/80 hover:text-white underline underline-offset-2 transition-colors">
               contact form
-            </a>.
+            </Link>.
           </p>
         </div>
       </div>

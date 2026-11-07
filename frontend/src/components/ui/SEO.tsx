@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 interface SEOProps {
   title?: string
@@ -7,8 +8,8 @@ interface SEOProps {
   ogImage?: string
 }
 
-const SITE_NAME = 'The DGym Rosario Batangas'
-const DEFAULT_DESCRIPTION = 'High End Premium Weightlifting, Powerlifting, and Fitness Gym in Rosario, Batangas.'
+const SITE_NAME = GYM_INFO.name
+const DEFAULT_DESCRIPTION = GYM_INFO.seoDescription
 const DEFAULT_OG_IMAGE = '/assets/images/dgym_bg.jpg'
 
 /**
