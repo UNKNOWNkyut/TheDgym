@@ -1,6 +1,6 @@
 # PROJECT_PLAN.md — THE DGYM
 
-> Version: 0.1.0 | Status: Phase 0 Complete | Last Updated: 2026-10-02
+> Version: 0.9.0 | Status: Phase 9 Complete | Last Updated: 2026-11-07
 
 ---
 
@@ -17,24 +17,23 @@ It consists of:
 
 ---
 
-## Verified Business Information (from Facebook)
+## Verified Business Information (Facebook & TDGGYM-QUESTIONNAIRES-1)
 
 | Field | Value | Source |
 |-------|-------|--------|
-| Business Name | The DGym Rosario Batangas | Facebook OG metadata & User directive |
-| Location | Rosario, Batangas | Facebook OG metadata & User directive |
+| Business Name | The DGym Rosario Batangas | Facebook OG metadata & Client Questionnaire |
+| Street Address | 2nd Floor, Carandang St., Brgy. Namuco, Rosario, Batangas (Along the Highway, in front of Shell Gasoline Station) | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Contact Phone | `0969 483 9896` | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Customer Service Email | `tdgymcustomerservice.825@gmail.com` | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Operating Hours | Mon–Sat: `6:00 AM – 11:00 PM` • Sun: `2:00 PM – 10:00 PM` • Holidays: Depends on Holiday | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Membership Rates | Day Pass `₱400` • Monthly `₱1,999` • Student `₱1,500` • Senior/PWD `₱1,500` • Quarterly `₱5,400` • 6-Month `₱8,000` • Annual `₱13,000` (`₱1,000` renewal fee) | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Payment Methods | Cash, GCash, Bank Transfer, QR Payment, Credit Card, Debit Card | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Official Coaches | Coach Ivan (Muscle Gain), Coach Marta (Muscle Gain & TABATA), Coach Kresler (Boxing & HIIT) | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Personal Training | 12 Sessions Muscle Gain (`₱8,000`), 12 Sessions Boxing 1.5 HR (`₱8,000`), 12 Sessions Cardio Boxing (`₱4,000`) | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
+| Group Classes | TABATA (Coach Marta) & HIIT (Coach Kresler) — Every `6:00 PM`, `₱0` (Free w/ Active Membership) | Client Questionnaire (`TDGGYM-QUESTIONNAIRES-1`) |
 | Business Description | High End Premium Weightlifting, Powerlifting, Fitness Gym | Facebook OG metadata |
 | Followers | 2,425+ | Facebook OG metadata |
 | Facebook URL | https://www.facebook.com/profile.php?id=61577169056417 | Client-verified Facebook URL |
-
-**NOT VERIFIED (placeholders required):**
-- Full street address
-- Phone number
-- Email address
-- Operating hours
-- Membership pricing
-- Services list (beyond what logo implies)
-- Staff names
 
 ---
 
@@ -67,8 +66,8 @@ It consists of:
 | **6** | Analytics + Churn Prediction | ✅ COMPLETE |
 | **7** | AI Retention Strategies | ✅ COMPLETE |
 | **8** | Security + Performance Hardening | ✅ COMPLETE |
-| **9** | Full QA + Integration Testing | ⏳ Next Phase |
-| **10** | Deployment + Documentation | ⏳ Pending |
+| **9** | Full QA + Integration Testing | ✅ COMPLETE |
+| **10** | Deployment + Documentation | ⏳ Next Phase |
 
 ---
 
@@ -148,16 +147,15 @@ It consists of:
 
 ---
 
-## Unresolved Items (Requires Client Input)
+## Client Input & Infrastructure Checklist
 
-- [ ] Full street address of The DGym (Lobo)
-- [ ] Phone number
-- [ ] Email address
-- [ ] Operating hours (weekday/weekend)
-- [ ] Membership tiers and pricing
-- [ ] Class schedule and types offered
-- [ ] Personal trainer names and credentials
-- [ ] Any ongoing promotions or special offers
-- [ ] PostgreSQL connection details / hosting plan
-- [ ] OpenAI API key (to be provided as env variable)
+- [x] Full street address of The DGym (`2nd Floor, Carandang St., Brgy. Namuco, Rosario, Batangas`)
+- [x] Phone number (`0969 483 9896`)
+- [x] Email address (`tdgymcustomerservice.825@gmail.com`)
+- [x] Operating hours (`Mon–Sat 6:00 AM – 11:00 PM`, `Sun 2:00 PM – 10:00 PM`, `Holidays: Depends on Holiday`)
+- [x] Membership tiers and pricing (7 verified tiers + non-refundable & `₱1,000` annual renewal rules)
+- [x] Class schedule and types offered (`6:00 PM` TABATA & HIIT — `₱0` free w/ membership)
+- [x] Personal trainer names and packages (`Coach Ivan`, `Coach Marta`, `Coach Kresler` + 3 12-session PT packages)
+- [ ] PostgreSQL production connection details / hosting plan
+- [ ] OpenAI API key (to be provided as env variable in production)
 - [ ] Deployment target (VPS, cloud provider, etc.)

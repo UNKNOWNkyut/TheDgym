@@ -442,16 +442,47 @@ Build: clean, 6 lazy page chunks.
 
 ## PHASE 8 — Security + Performance Hardening
 
-**Status:** ⏳ Next Phase
+**Status:** ✅ COMPLETE  
+**Date:** 2026-11-06  
+**Engineer:** Antigravity AI
+
+### Summary of Completed Deliverables:
+1. **Authentication, Session & CSRF Hardening (`ANTIGRAV-01` – `ANTIGRAV-10`):**
+   - Production startup guard rejecting default `SECRET_KEY` values when `APP_ENV=production`.
+   - Online self-service `/api/auth/avail-plan` creates `PENDING` (`₱0.00`) subscriptions requiring staff/front-desk payment verification before check-in activation.
+   - Sliding-window rate limiting (`app/core/rate_limit.py`) with trusted-proxy `X-Forwarded-For` validation across auth, sensitive admin actions, AI generation, and RFID/NFC tap endpoints.
+   - Cookie-session CSRF header enforcement (`X-Requested-With: XMLHttpRequest`), HTTP security headers (`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Cross-Origin-Opener-Policy`, auth `Cache-Control: no-store`), `POST`-only webhook enforcement (`405` on `GET`), and JWT `jti` + `tokens_revoked_after` session revocation.
+2. **Database Concurrency, ML Artifact Safety & Query Scale:**
+   - Atomic conditional `INSERT ... SELECT` capacity & duplicate guard on `POST /api/classes/{id}/enroll` preventing concurrent race conditions.
+   - Single-pass SQL aggregation on `/api/finance/annual` (cutting 24 sequential queries down to 2).
+   - Replaced unsafe `pickle` (`.pkl`) model serialization with JSON-only XGBoost (`churn_model.json`) + scaler (`scaler.json`) artifacts and batch SQL feature extraction in `churn_pipeline.py`.
+3. **Verification:**
+   - Automated regression suite `backend/test_security_and_scale_regressions.py`: **6/6 end-to-end security & scale suites passed**.
 
 ---
 
 ## PHASE 9 — Full QA + Integration Testing
 
-**Status:** ⏳ NOT STARTED
+**Status:** ✅ COMPLETE — READY FOR PHASE 10  
+**Date:** 2026-11-07  
+**Engineer:** Antigravity AI
+
+### Summary of Completed Deliverables:
+1. **Client Questionnaire Ingestion (`TDGGYM-QUESTIONNAIRES-1`):**
+   - Centralized verified Rosario, Batangas facility data in `frontend/src/constants/gymInfo.ts` (`2nd Floor, Carandang St., Brgy. Namuco, Rosario, Batangas`, `0969 483 9896`, `tdgymcustomerservice.825@gmail.com`, Mon–Sat `6:00 AM – 11:00 PM`, Sun `2:00 PM – 10:00 PM`) and eliminated `[PLACEHOLDER]` copy across public & legal pages.
+   - Updated idempotent seeders (`seed_plans.py`, `seed.py`, `seed_phase5.py`) and frontend constants (`plans.ts`, `coaches.ts`) with all **7 official membership rates** (`₱400` Day Pass, `₱1,999` Monthly, `₱1,500` Student, `₱1,500` Senior/PWD, `₱5,400` Quarterly, `₱8,000` 6-Month, `₱13,000` Annual), **6 payment methods** (`cash`, `gcash`, `bank_transfer`, `qr_payment`, `credit_card`, `debit_card`), **3 official coaches** (`Coach Ivan`, `Coach Marta`, `Coach Kresler`), **3 12-session PT packages** (`₱8,000` Muscle Gain, `₱8,000` Boxing 1.5 HR, `₱4,000` Cardio Boxing), and **free (`₱0`) 6:00 PM TABATA & HIIT group classes**.
+2. **The 9 Core Business KPIs (`overview_kpis.py` + `OverviewKpiGrid.tsx`):**
+   - Implemented single-pass/window SQL KPI service anchored to `Asia/Manila` (`UTC+8`) boundaries for Active Members, Expired Memberships, New Members, Membership Renewals (this month & all-time), Upcoming Expirations (7d), Payments, Monthly Income, Monthly Expenses, and Profit/Loss.
+   - Shared period & revenue predicates with `/api/finance/summary` for exact centavo-for-centavo parity and enforced strict RBAC redaction of financial KPIs for non-admin roles.
+3. **NFC Smart Keycard Tap Flow QA & Hardening:**
+   - Verified all 6 NFC tap paths (Smart Pairing + auto-revocation + `409` conflict guard, check-in + 10-min cooldown, check-out + 5-min guard, unpaid/expired/suspended/unregistered denials, lost/revoked card denials + security audit trail, and `X-Scanner-API-Key` hardware webhook auth + WebSocket live-feed broadcasts).
+   - Fixed Android scanner screen WakeLock visibility re-acquisition in `MobileScannerPage.tsx`, React Compiler ref syncs in `MobileScannerPage.tsx` & `LiveKeycardMonitor.tsx`, and DI override support in `websocket_access_live_feed`.
+4. **Master Regression Verification:**
+   - `backend/test_phase9_qa_integration.py` (**6/6 suites passed**) + `backend/test_security_and_scale_regressions.py` (**6/6 suites passed**).
+   - Frontend `oxlint`, `tsc -b`, and `npm run build` passed with **0 errors**.
 
 ---
 
 ## PHASE 10 — Deployment + Documentation
 
-**Status:** ⏳ NOT STARTED
+**Status:** ⏳ Next Phase
