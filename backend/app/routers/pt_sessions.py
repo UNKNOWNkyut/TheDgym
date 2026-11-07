@@ -117,22 +117,34 @@ async def list_available_trainers(
     """
     stmt = (
         select(User)
-        .where(User.role.in_([UserRole.TRAINER, UserRole.ADMIN]))
+        .where(User.role == UserRole.TRAINER)
         .where(User.is_active == True)
         .order_by(User.full_name)
     )
     result = await db.execute(stmt)
     trainers = result.scalars().all()
 
-    # Pre-defined profiles for Rosario Batangas coaches
+    if not trainers:
+        fallback_stmt = (
+            select(User)
+            .where(User.role == UserRole.ADMIN, User.is_active == True)
+            .order_by(User.full_name)
+        )
+        trainers = (await db.execute(fallback_stmt)).scalars().all()
+
+    # Verified profiles for official The DGym Rosario, Batangas coaches (TDGGYM-QUESTIONNAIRES-1)
     trainer_profiles = {
-        "Head Coach Mark": {
-            "specialties": ["Powerlifting", "Barbell Mechanics", "Meet Preparation", "Strength Coaching"],
-            "bio": "Competitive powerlifter and head coach at The DGym Rosario. Specializes in squat/bench/deadlift form optimization and peaking programs.",
+        "Coach Ivan": {
+            "specialties": ["Muscle Gain", "Hypertrophy Programming", "Strength Progression"],
+            "bio": "Certified Personal Trainer at The DGym Rosario, Batangas specializing in structured muscle gain, progressive overload, and strength mechanics.",
         },
-        "DGym Admin": {
-            "specialties": ["Functional Fitness", "Athletic Conditioning", "Nutrition Guidance"],
-            "bio": "Founding director & senior fitness instructor. Focused on lifestyle transformation and long-term athletic durability.",
+        "Coach Marta": {
+            "specialties": ["Muscle Gain", "TABATA (6:00 PM)", "Body Recomposition"],
+            "bio": "Certified Personal Trainer for 1-on-1 muscle gain programs and lead instructor for the free 6:00 PM TABATA group sessions.",
+        },
+        "Coach Kresler": {
+            "specialties": ["Boxing (1.5 HR)", "Cardio Boxing", "HIIT (6:00 PM)"],
+            "bio": "Certified Boxing & Conditioning Coach leading 1.5-hour Boxing and Cardio Boxing PT packages plus the free 6:00 PM HIIT group classes.",
         },
     }
 

@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useAuth } from '@/context/AuthContext'
+import { OFFICIAL_PT_PACKAGES } from '@/constants/coaches'
 import { api } from '@/services/api'
 import type { TrainerProfile, PTSession } from '@/types/auth'
 
@@ -70,7 +71,8 @@ function BookTrainerContent() {
     return tmrw.toISOString().split('T')[0]
   })
   const [selectedSlot, setSelectedSlot] = useState<string>(TIME_SLOTS[0])
-  const [duration, setDuration] = useState<number>(60)
+  const [selectedPackageId, setSelectedPackageId] = useState<string>(OFFICIAL_PT_PACKAGES[0].id)
+  const [duration, setDuration] = useState<number>(OFFICIAL_PT_PACKAGES[0].durationMinutes)
   const [notes, setNotes] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -140,11 +142,17 @@ function BookTrainerContent() {
     setSuccessMsg(null)
 
     try {
+      const selectedPkg = OFFICIAL_PT_PACKAGES.find((p) => p.id === selectedPackageId)
+      const packagePrefix = selectedPkg
+        ? `[${selectedPkg.name} (${selectedPkg.priceFormatted})]`
+        : ''
+      const combinedNotes = [packagePrefix, notes.trim()].filter(Boolean).join(' ').trim()
+
       await api.bookPTSession({
         trainer_id: selectedTrainer,
         scheduled_at: bookingDate.toISOString(),
         duration_minutes: duration,
-        notes: notes || undefined,
+        notes: combinedNotes || undefined,
       })
       setSuccessMsg('Your booking request has been submitted! Waiting for instructor approval.')
       setNotes('')
@@ -294,13 +302,45 @@ function BookTrainerContent() {
             </div>
           </div>
 
-          {/* STEP 2: Select Date & Time */}
+          {/* STEP 2: Select PT Package & Schedule */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-red/20 text-red font-mono text-xs font-bold flex items-center justify-center border border-red/30">
                 2
               </span>
-              <h2 className="text-base font-semibold text-white">Select Date & Time Slot</h2>
+              <h2 className="text-base font-semibold text-white">Select PT Package, Date & Time Slot</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {OFFICIAL_PT_PACKAGES.map((pkg) => {
+                const isPkgSelected = selectedPackageId === pkg.id
+                return (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPackageId(pkg.id)
+                      setDuration(pkg.durationMinutes)
+                    }}
+                    className={`rounded-2xl p-4 border text-left transition-all ${
+                      isPkgSelected
+                        ? 'bg-red/10 border-red/40 ring-1 ring-red/40'
+                        : 'bg-surface border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-xs font-mono text-red font-semibold">
+                        {pkg.priceFormatted}
+                      </span>
+                      <span className="text-[11px] text-white/40 font-mono">
+                        {pkg.durationMinutes} mins
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold text-white">{pkg.name}</p>
+                    <p className="text-xs text-white/40 mt-1">{pkg.coachesLabel}</p>
+                  </button>
+                )
+              })}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-surface p-6 rounded-2xl border border-white/10">

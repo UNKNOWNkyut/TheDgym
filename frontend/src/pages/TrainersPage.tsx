@@ -3,17 +3,26 @@ import { Link } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
+import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/context/AuthContext'
+import { OFFICIAL_COACHES, OFFICIAL_PT_PACKAGES } from '@/constants/coaches'
+import { GYM_INFO } from '@/constants/gymInfo'
 
 /*
  * TRAINERS NOTE:
- * Trainer names and individual credentials are [PLACEHOLDER].
- * Not verified from client or public source.
- * Cards use placeholder structure — client must supply trainer profiles.
+ * Official coaches and 12-session PT packages verified from TDGGYM-QUESTIONNAIRES-1.
  */
 
 export function TrainersPage() {
   const heroRef = useRef<HTMLDivElement>(null)
+  const { isAuthenticated, user } = useAuth()
+  const bookingHref =
+    isAuthenticated && user?.has_active_membership ? '/manage/book-pt' : '/contact'
+  const bookingLabel =
+    isAuthenticated && user?.has_active_membership
+      ? 'Book a PT Session'
+      : 'Inquire for PT Sessions'
 
   useGSAP(() => {
     if (!heroRef.current) return
@@ -28,7 +37,7 @@ export function TrainersPage() {
     <>
       <SEO
         title="Personal Trainers & Coaches"
-        description="Personal training and dedicated coaching at The DGym Rosario Batangas. One-on-one progressive programming."
+        description="Train with Coach Ivan, Coach Marta, and Coach Kresler at The DGym Rosario Batangas. Official 12-session Muscle Gain and Boxing packages."
         canonical="https://thedgym.com/trainers"
         ogImage="/assets/images/img4.jpg"
       />
@@ -72,8 +81,8 @@ export function TrainersPage() {
               ))}
             </div>
             <div>
-              <Link to="/contact">
-                <Button size="lg">Inquire for PT Sessions</Button>
+              <Link to={bookingHref}>
+                <Button size="lg">{bookingLabel}</Button>
               </Link>
             </div>
           </div>
@@ -94,15 +103,47 @@ export function TrainersPage() {
           </div>
         </div>
 
-        {/* The Coaching Team Section with real photos */}
+        {/* Official Certified Coaches Roster */}
         <div className="mb-20">
           <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-2">
-              The DGym Staff
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+              Official Roster
             </p>
             <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">
-              Our Coaching Team
+              Meet Your Certified Coaches
             </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {OFFICIAL_COACHES.map((coach) => (
+              <div
+                key={coach.name}
+                className="flex flex-col justify-between rounded-2xl border border-white/10 bg-surface p-6 hover:border-white/20 transition-colors"
+              >
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-red font-semibold mb-1">
+                    {coach.role}
+                  </p>
+                  <h3 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-1">
+                    {coach.name}
+                  </h3>
+                  <p className="text-xs text-white/40 font-mono mb-4">
+                    Focus: {coach.primaryFocus}
+                  </p>
+                  <p className="text-sm text-white/60 leading-relaxed mb-5">
+                    {coach.bio}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-4 border-t border-white/8">
+                  {coach.specialties.map((spec) => (
+                    <Badge key={spec} variant="default" size="sm">
+                      {spec}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
@@ -139,17 +180,71 @@ export function TrainersPage() {
           </div>
         </div>
 
+        {/* Official Personal Training Packages */}
+        <div className="mb-20">
+          <div className="mb-8">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+              1-on-1 Coaching Rates
+            </p>
+            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">
+              Personal Training Packages
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {OFFICIAL_PT_PACKAGES.map((pkg) => (
+              <div
+                key={pkg.id}
+                className="flex flex-col justify-between rounded-2xl border border-white/10 bg-surface p-7 hover:border-white/20 transition-colors"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <Badge variant="red" size="sm">
+                      {pkg.sessionsCount} Sessions
+                    </Badge>
+                    <span className="text-xs text-white/40 font-mono">
+                      {pkg.durationLabel}
+                    </span>
+                  </div>
+
+                  <h3 className="font-display text-xl font-bold uppercase tracking-wide text-white mb-2">
+                    {pkg.name}
+                  </h3>
+
+                  <p className="text-3xl font-bold font-mono text-white mb-3">
+                    {pkg.priceFormatted}
+                  </p>
+
+                  <p className="text-xs uppercase tracking-widest text-white/40 mb-3">
+                    Assigned: <span className="text-white/80">{pkg.coachesLabel}</span>
+                  </p>
+
+                  <p className="text-sm text-white/60 leading-relaxed mb-6">
+                    {pkg.description}
+                  </p>
+                </div>
+
+                <Link to={bookingHref}>
+                  <Button fullWidth variant="secondary">
+                    {bookingLabel}
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* CTA */}
         <div className="p-8 md:p-12 rounded-2xl border border-red/20 bg-red/5 text-center">
           <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-wide text-white mb-3">
             Ready to train with a DGym Coach?
           </h2>
           <p className="text-sm text-white/60 mb-8 max-w-md mx-auto leading-relaxed">
-            Message us on Facebook or submit an inquiry to discuss coach availability, program goals, and personal training packages in Rosario, Batangas.
+            Call {GYM_INFO.phoneDisplay}, message us on Facebook, or submit an inquiry to start your 12-session Muscle Gain or Boxing package in Rosario, Batangas.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link to="/contact"><Button size="lg">Contact Us</Button></Link>
-            <a href="https://www.facebook.com/profile.php?id=61577169056417" target="_blank" rel="noopener noreferrer">
+            <Link to={bookingHref}><Button size="lg">{bookingLabel}</Button></Link>
+            <a href={GYM_INFO.facebookUrl} target="_blank" rel="noopener noreferrer">
               <Button variant="secondary" size="lg">Facebook Page</Button>
             </a>
           </div>

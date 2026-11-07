@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -6,59 +6,41 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { useAuth } from '@/context/AuthContext'
+import { api } from '@/services/api'
+import { CLASS_TYPE_LABELS, OFFICIAL_GROUP_CLASSES } from '@/constants/coaches'
+import type { ClassSession } from '@/types/auth'
 
 gsap.registerPlugin(ScrollTrigger)
 
 /*
  * CLASS CONTENT NOTE:
- * Specific class names, instructors, and schedule are [PLACEHOLDER].
- * General category types (Strength, Cardio, Group Training) are reasonable
- * for any gym context and do not constitute a fabricated business claim.
- * Actual schedule must be provided by client before Phase 2 is considered final.
+ * Official group classes (TABATA w/ Coach Marta & HIIT w/ Coach Kresler — Every 6:00 PM, ₱0 free w/ membership)
+ * verified from TDGGYM-QUESTIONNAIRES-1.
  */
-
-const CLASS_TYPES = [
-  {
-    category: 'Strength',
-    name: 'Barbell Club',
-    description: 'Structured progressive overload programming built around the big lifts.',
-    days: '[PLACEHOLDER]',
-    time: '[PLACEHOLDER]',
-    level: 'Intermediate',
-    levelVariant: 'warning' as const,
-  },
-  {
-    category: 'Conditioning',
-    name: 'Circuit Training',
-    description: 'High-intensity rounds combining resistance and cardio work for full-body conditioning.',
-    days: '[PLACEHOLDER]',
-    time: '[PLACEHOLDER]',
-    level: 'All Levels',
-    levelVariant: 'success' as const,
-  },
-  {
-    category: 'Strength',
-    name: 'Functional Fitness',
-    description: 'Movement patterns that carry over into everyday life and athletic performance.',
-    days: '[PLACEHOLDER]',
-    time: '[PLACEHOLDER]',
-    level: 'Beginner',
-    levelVariant: 'success' as const,
-  },
-  {
-    category: 'Cardio',
-    name: 'Endurance',
-    description: 'Sustained effort training for cardiovascular base building and stamina.',
-    days: '[PLACEHOLDER]',
-    time: '[PLACEHOLDER]',
-    level: 'All Levels',
-    levelVariant: 'success' as const,
-  },
-]
 
 export function ClassesPage() {
   const heroRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const { isAuthenticated } = useAuth()
+  const [liveSessions, setLiveSessions] = useState<ClassSession[]>([])
+  const visibleSessions = isAuthenticated ? liveSessions : []
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let active = true
+    api
+      .getClassSessions({ status: 'scheduled', limit: 6 })
+      .then((rows) => {
+        if (active) setLiveSessions(rows)
+      })
+      .catch(() => {
+        if (active) setLiveSessions([])
+      })
+    return () => {
+      active = false
+    }
+  }, [isAuthenticated])
 
   useGSAP(() => {
     if (!heroRef.current) return
@@ -83,7 +65,7 @@ export function ClassesPage() {
     <>
       <SEO
         title="Group Classes & Training"
-        description="Group fitness classes at The DGym in Rosario, Batangas. Strength, conditioning, functional fitness, and cardio."
+        description="Free 6:00 PM TABATA (Coach Marta) and HIIT (Coach Kresler) group fitness classes at The DGym in Rosario, Batangas."
         canonical="https://thedgym.com/classes"
         ogImage="/assets/images/img14.jpg"
       />
@@ -98,48 +80,113 @@ export function ClassesPage() {
             Classes Built<br />Around Results
           </h1>
           <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
-            Structured group training sessions led by DGym coaches. Train with purpose, surrounded by people who keep you going.
+            Unlimited free (₱0) access to our 6:00 PM TABATA and HIIT group sessions for all active members—led by Coach Marta and Coach Kresler.
           </p>
         </div>
       </div>
 
-      {/* Classes grid */}
+      {/* Official Group Classes grid */}
       <div ref={listRef} className="container-dgym section-padding">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-16">
-          {CLASS_TYPES.map((cls) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+          {OFFICIAL_GROUP_CLASSES.map((cls) => (
             <div
               key={cls.name}
-              className="class-card group p-6 rounded-xl border border-white/8 bg-surface hover:border-white/15 transition-all duration-200"
+              className="class-card group p-7 rounded-2xl border border-white/10 bg-surface hover:border-white/20 transition-all duration-200 flex flex-col justify-between"
             >
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-1">
-                    {cls.category}
-                  </p>
-                  <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white">
-                    {cls.name}
-                  </h2>
+              <div>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-1">
+                      {cls.category}
+                    </p>
+                    <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-white">
+                      {cls.name}
+                    </h2>
+                  </div>
+                  <Badge variant="success" dot>{cls.rateLabel}</Badge>
                 </div>
-                <Badge variant={cls.levelVariant} dot>{cls.level}</Badge>
+
+                <p className="text-sm text-white/60 leading-relaxed mb-6">
+                  {cls.description}
+                </p>
               </div>
 
-              <p className="text-sm text-white/55 leading-relaxed mb-5">
-                {cls.description}
-              </p>
-
-              <div className="flex flex-wrap gap-4 text-sm text-white/30 border-t border-white/8 pt-4">
-                <span>
-                  <span className="text-white/20 uppercase text-xs tracking-widest mr-1.5">Days</span>
-                  {cls.days}
-                </span>
-                <span>
-                  <span className="text-white/20 uppercase text-xs tracking-widest mr-1.5">Time</span>
-                  {cls.time}
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm border-t border-white/10 pt-4">
+                <div>
+                  <span className="block text-white/40 uppercase text-[11px] tracking-widest mb-0.5">
+                    Instructor
+                  </span>
+                  <span className="text-white font-medium">{cls.coachName}</span>
+                </div>
+                <div>
+                  <span className="block text-white/40 uppercase text-[11px] tracking-widest mb-0.5">
+                    Time
+                  </span>
+                  <span className="text-white font-medium">{cls.scheduleTime}</span>
+                </div>
+                <div>
+                  <span className="block text-white/40 uppercase text-[11px] tracking-widest mb-0.5">
+                    Level
+                  </span>
+                  <span className="text-white/80">{cls.level}</span>
+                </div>
               </div>
             </div>
           ))}
         </div>
+
+        {/* Live Scheduled Sessions from API (for signed-in members/staff) */}
+        {visibleSessions.length > 0 && (
+          <div className="mb-16">
+            <div className="mb-6">
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+                Live Portal Schedule
+              </p>
+              <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+                Upcoming Scheduled Sessions
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {visibleSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="p-5 rounded-xl border border-white/10 bg-surface flex items-center justify-between gap-4"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="default" size="sm">
+                        {CLASS_TYPE_LABELS[session.class_type] ?? session.class_type}
+                      </Badge>
+                      {session.coach_name && (
+                        <span className="text-xs text-white/50">{session.coach_name}</span>
+                      )}
+                    </div>
+                    <h3 className="text-base font-semibold text-white">{session.name}</h3>
+                    <p className="text-xs text-white/40 font-mono mt-0.5">
+                      {new Date(session.scheduled_at).toLocaleString('en-PH', {
+                        timeZone: 'Asia/Manila',
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      {' • '}
+                      {session.duration_minutes} mins
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-mono text-white/70">
+                      {session.enrolled_count}/{session.max_capacity} slots
+                    </p>
+                    <p className="text-[11px] text-green-400">Free w/ Plan</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Real community photos */}
         <div className="mb-16">
@@ -181,7 +228,7 @@ export function ClassesPage() {
         {/* CTA */}
         <div className="mt-8 text-center">
           <p className="text-sm text-white/40 mb-4">
-            All classes are included with monthly and quarterly memberships.
+            Unlimited free (₱0) access to all 6:00 PM group classes is included with every active membership.
           </p>
           <Link to="/membership">
             <Button size="lg">See Membership Plans</Button>

@@ -7,12 +7,13 @@ from app.database import Base
 
 
 class ClassType(str, enum.Enum):
+    TABATA = "tabata"
+    HIIT = "hiit"
     BARBELL_CLUB = "barbell_club"
     CONDITIONING = "conditioning"
     OPEN_GYM = "open_gym"
     POWERLIFTING = "powerlifting"
     STRENGTH = "strength"
-    HIIT = "hiit"
     OTHER = "other"
 
 

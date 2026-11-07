@@ -45,7 +45,7 @@ def generate_heuristic_strategy(
             "tactical_action_steps": [
                 f"Direct WhatsApp/SMS outreach from Front Desk acknowledging {first_name}'s lifting milestones.",
                 "Conduct a brief check-in to identify scheduling, fatigue, or recovery roadblocks.",
-                "Offer a complimentary 1-on-1 barbell technique and form review session with Head Coach Mark.",
+                "Offer a complimentary 1-on-1 technique and form review session with Coach Ivan, Coach Marta, or Coach Kresler.",
                 "Provide a low-barrier re-entry invitation with zero re-activation fees.",
             ],
             "offer_title": "🔥 Comeback Special: 20% OFF Next Renewal + Free 1-on-1 Form Check",
@@ -68,7 +68,7 @@ def generate_heuristic_strategy(
                 f"indicates weak community anchoring."
             ),
             "tactical_action_steps": [
-                f"Invite {first_name} to join the Tuesday/Thursday Conditioning Circuit or Saturday Deadlift Clinic.",
+                f"Invite {first_name} to join our free 6:00 PM TABATA (Coach Marta) or HIIT (Coach Kresler) group classes.",
                 "Coach check-in on the floor during next entry to evaluate current program split.",
                 "Suggest a paired training partner or introduce to regular morning/evening barbell lifters.",
             ],

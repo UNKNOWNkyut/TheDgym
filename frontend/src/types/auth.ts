@@ -198,7 +198,7 @@ export interface AssignMembershipCreate {
 // ─── Visits, Classes & PT Types (Phase 5) ────────────────────────────────────
 
 export type VisitType = 'walk_in' | 'class' | 'pt_session' | 'open_gym'
-export type ClassType = 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'hiit' | 'other'
+export type ClassType = 'tabata' | 'hiit' | 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'other'
 export type ClassStatus = 'scheduled' | 'ongoing' | 'completed' | 'cancelled'
 export type PTSessionStatus = 'pending' | 'confirmed' | 'scheduled' | 'rejected' | 'completed' | 'cancelled' | 'no_show'
 

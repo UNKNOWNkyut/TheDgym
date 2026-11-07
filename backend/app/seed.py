@@ -11,21 +11,35 @@ INITIAL_USERS = [
         "email": "admin@thedgym.com",
         "password": "admin12345",
         "full_name": "DGym Admin",
-        "phone": "+63 917 100 0001",
+        "phone": "+63 969 483 9896",
         "role": UserRole.ADMIN,
     },
     {
         "email": "staff@thedgym.com",
         "password": "staff12345",
         "full_name": "DGym Staff",
-        "phone": "+63 917 100 0002",
+        "phone": "+63 969 483 9896",
         "role": UserRole.STAFF,
     },
     {
         "email": "trainer@thedgym.com",
         "password": "trainer12345",
-        "full_name": "Head Coach Mark",
-        "phone": "+63 917 100 0003",
+        "full_name": "Coach Ivan",
+        "phone": "+63 969 483 9896",
+        "role": UserRole.TRAINER,
+    },
+    {
+        "email": "marta@thedgym.com",
+        "password": "trainer12345",
+        "full_name": "Coach Marta",
+        "phone": "+63 969 483 9896",
+        "role": UserRole.TRAINER,
+    },
+    {
+        "email": "kresler@thedgym.com",
+        "password": "trainer12345",
+        "full_name": "Coach Kresler",
+        "phone": "+63 969 483 9896",
         "role": UserRole.TRAINER,
     },
     {
@@ -39,7 +53,7 @@ INITIAL_USERS = [
 
 
 async def seed_users(session: AsyncSession):
-    """Seed initial accounts if not already present."""
+    """Seed initial accounts and upgrade legacy placeholder coach names idempotently."""
     for user_data in INITIAL_USERS:
         stmt = select(User).where(User.email == user_data["email"])
         result = await session.execute(stmt)
@@ -55,6 +69,9 @@ async def seed_users(session: AsyncSession):
             )
             session.add(new_user)
             print(f"Seeded user: {user_data['email']} ({user_data['role'].value})")
+        elif existing.full_name == "Head Coach Mark":
+            existing.full_name = user_data["full_name"]
+            existing.phone = user_data["phone"]
 
     await session.commit()
 

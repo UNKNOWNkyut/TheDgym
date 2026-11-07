@@ -2,20 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { api } from '@/services/api'
+import { CLASS_TYPE_LABELS } from '@/constants/coaches'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import type { ClassSession, Member, TrainerProfile } from '@/types/auth'
 
 // ─── Types & Helpers ──────────────────────────────────────────────────────────
-
-const CLASS_TYPE_LABELS: Record<string, string> = {
-  barbell_club: 'Barbell Club',
-  conditioning: 'Conditioning',
-  open_gym: 'Open Gym',
-  powerlifting: 'Powerlifting',
-  strength: 'Strength',
-  hiit: 'HIIT',
-  other: 'Other',
-}
 
 const CLASS_STATUS_COLORS: Record<string, string> = {
   scheduled: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
@@ -239,7 +230,7 @@ function CreateSessionModal({
     name: '',
     description: '',
     coach_id: '',
-    class_type: 'open_gym',
+    class_type: 'tabata',
     scheduled_at: '',
     duration_minutes: 60,
     max_capacity: 20,
@@ -291,7 +282,7 @@ function CreateSessionModal({
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-red/50 transition-colors"
-              placeholder="e.g. Barbell Club — Morning"
+              placeholder="e.g. TABATA — 6:00 PM Evening Session"
             />
           </div>
 
