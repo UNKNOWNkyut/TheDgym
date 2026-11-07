@@ -250,19 +250,34 @@ async def websocket_access_live_feed(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    async with AsyncSessionLocal() as db:
+    override_db = websocket.app.dependency_overrides.get(get_db)
+    if override_db is not None:
+        gen = override_db()
+        db = await anext(gen)
         try:
-            user = await db.get(User, int(payload["sub"]))
-        except (ValueError, TypeError):
-            user = None
+            try:
+                user = await db.get(User, int(payload["sub"]))
+            except (ValueError, TypeError):
+                user = None
+        finally:
+            try:
+                await gen.aclose()
+            except Exception:
+                pass
+    else:
+        async with AsyncSessionLocal() as db:
+            try:
+                user = await db.get(User, int(payload["sub"]))
+            except (ValueError, TypeError):
+                user = None
 
-        if not user or not user.is_active or user.role not in (
-            UserRole.ADMIN,
-            UserRole.STAFF,
-            UserRole.TRAINER,
-        ):
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+    if not user or not user.is_active or user.role not in (
+        UserRole.ADMIN,
+        UserRole.STAFF,
+        UserRole.TRAINER,
+    ):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
     await live_feed_manager.connect(websocket)
     try:

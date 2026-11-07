@@ -105,8 +105,6 @@ export function MemberKeycardsCard({
   // Smart Pairing Mode (Edge Case #4): Live WebSocket + Fallback Poll so PC Modal always auto-closes!
   useEffect(() => {
     if (!showPairModal || !canManageCards) {
-      setPhonePairingReady(false)
-      setDetectedPhoneUid(null)
       return
     }
 
@@ -197,6 +195,8 @@ export function MemberKeycardsCard({
       if (pollTimer) window.clearInterval(pollTimer)
       if (closeTimer) window.clearTimeout(closeTimer)
       ws?.close()
+      setPhonePairingReady(false)
+      setDetectedPhoneUid(null)
       if (!pairedByPhoneRef.current) {
         api.cancelPairingSession().catch(() => {})
       }

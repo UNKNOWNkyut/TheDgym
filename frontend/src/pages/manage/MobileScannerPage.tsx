@@ -101,7 +101,12 @@ export function MobileScannerPage() {
   const lastDebounceUidRef = useRef<string>('')
   const lastDebounceTsRef = useRef<number>(0)
   const mutedRef = useRef(soundMuted)
-  mutedRef.current = soundMuted
+  const isScanningRef = useRef(isScanning)
+
+  useEffect(() => {
+    mutedRef.current = soundMuted
+    isScanningRef.current = isScanning
+  }, [soundMuted, isScanning])
 
   // Entrance & radar pulse GSAP animations (transform + opacity only)
   useGSAP(
@@ -344,7 +349,7 @@ export function MobileScannerPage() {
     connectWs()
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && isScanning) {
+      if (document.visibilityState === 'visible' && isScanningRef.current) {
         acquireWakeLock()
       }
     }

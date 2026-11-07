@@ -62,7 +62,10 @@ export function LiveKeycardMonitor({ onTapProcessed }: LiveKeycardMonitorProps) 
   const alertCardRef = useRef<HTMLDivElement>(null)
   const lastProcessedStampRef = useRef<string>('')
   const onTapProcessedRef = useRef(onTapProcessed)
-  onTapProcessedRef.current = onTapProcessed
+
+  useEffect(() => {
+    onTapProcessedRef.current = onTapProcessed
+  }, [onTapProcessed])
 
   const applyTapResult = useCallback((result: TapVerificationResult) => {
     const signature = `${result.card_uid_masked}:${result.decision}:${result.tapped_at}`
