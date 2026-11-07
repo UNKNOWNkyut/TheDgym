@@ -27,6 +27,7 @@ from app.models.user import User, UserRole
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
 from app.seed_members import generate_member_code
 from app.services.audit import record_audit_log
+from app.services.overview_kpis import compute_overview_kpis
 
 router = APIRouter(prefix="/api/members", tags=["Members"])
 
@@ -125,20 +126,11 @@ async def get_member_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
-    """Return aggregate member statistics for the admin dashboard."""
-    total = await db.execute(select(func.count()).select_from(Member))
-    active = await db.execute(select(func.count()).select_from(Member).where(Member.status == MemberStatus.ACTIVE))
-    expired = await db.execute(select(func.count()).select_from(Member).where(Member.status == MemberStatus.EXPIRED))
-    inactive = await db.execute(select(func.count()).select_from(Member).where(Member.status == MemberStatus.INACTIVE))
-    suspended = await db.execute(select(func.count()).select_from(Member).where(Member.status == MemberStatus.SUSPENDED))
-
-    return {
-        "total": total.scalar(),
-        "active": active.scalar(),
-        "expired": expired.scalar(),
-        "inactive": inactive.scalar(),
-        "suspended": suspended.scalar(),
-    }
+    """Return aggregate member and business KPI statistics for the management dashboard."""
+    return await compute_overview_kpis(
+        db,
+        include_financials=(current_user.role == UserRole.ADMIN),
+    )
 
 
 @router.get("/{member_id}", response_model=MemberResponse)

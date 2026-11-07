@@ -66,8 +66,10 @@ export function ManageFinancePage() {
 
     return shortMonths.map((mName, i) => {
       const monthNum = i + 1
-      // Incomplete months rule: For 2026 Oct-Dec and future years, return 0
-      if ((targetYear === 2026 && monthNum >= 10) || targetYear > 2026) {
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth() + 1
+      // Future months return 0
+      if (targetYear > currentYear || (targetYear === currentYear && monthNum > currentMonth)) {
         return {
           month: monthNum,
           month_name: mName,
@@ -152,29 +154,27 @@ export function ManageFinancePage() {
 
   // Synchronize top KPI cards with the selected month & year data
   const selectedMonthData = annualData.find((d) => d.month === month)
-  const isMonthIncomplete = (year === 2026 && month >= 10) || year > 2026
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const isFutureMonth = year > currentYear || (year === currentYear && month > currentMonth)
 
-  const revenue = isMonthIncomplete
-    ? 0
-    : (summary && Number(summary.membership_revenue) > 0
-        ? Number(summary.membership_revenue)
-        : (selectedMonthData?.revenue ?? 0))
+  let revenue = 0
+  let expenses = 0
+  if (!isFutureMonth) {
+    revenue = summary ? Number(summary.membership_revenue) : (selectedMonthData?.revenue ?? 0)
+    expenses = summary ? Number(summary.total_expenses) : (selectedMonthData?.expenses ?? 0)
+  }
 
-  const expenses = isMonthIncomplete
-    ? 0
-    : (summary && Number(summary.total_expenses) > 0
-        ? Number(summary.total_expenses)
-        : (selectedMonthData?.expenses ?? 0))
+  const profit = isFutureMonth ? 0 : revenue - expenses
 
-  const profit = isMonthIncomplete
-    ? 0
-    : (revenue - expenses)
-
-  const expenseRecords = isMonthIncomplete
-    ? 0
-    : (summary?.expense_count && summary.expense_count > 0
-        ? summary.expense_count
-        : (expenses > 0 ? Math.max(3, Math.round(expenses / 5000)) : 0))
+  let expenseRecords = 0
+  if (!isFutureMonth) {
+    if (summary?.expense_count != null) {
+      expenseRecords = summary.expense_count
+    } else if (expenses > 0) {
+      expenseRecords = Math.max(3, Math.round(expenses / 5000))
+    }
+  }
 
   return (
     <>

@@ -25,8 +25,9 @@ from app.core.deps import require_roles
 from app.database import get_db
 from app.models.expense import Expense
 from app.models.expense_category import ExpenseCategory
-from app.models.member_membership import MemberMembership
+from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.user import User, UserRole
+from app.services.overview_kpis import get_manila_now, period_bounds, revenue_period_clause
 from app.schemas.finance import (
     ExpenseCategoryCreate,
     ExpenseCategoryResponse,
@@ -41,8 +42,6 @@ from app.schemas.finance import (
 
 router = APIRouter(prefix="/api/finance", tags=["Finance"])
 
-CURRENT_YEAR = 2026
-CURRENT_MONTH = 10  # October is mid-month / incomplete
 ANNUAL_MONTH_NAMES = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -72,29 +71,11 @@ def _expense_to_response(expense: Expense) -> ExpenseResponse:
 
 def _period_bounds(year: int, month: Optional[int]):
     """Creates the starting and ending dates used by finance filters."""
-    if month is not None:
-        start_date = date(year, month, 1)
-        end_date = date(year, month, monthrange(year, month)[1])
-        start_dt = datetime(year, month, 1, tzinfo=timezone.utc)
-        end_dt = (
-            datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-            if month == 12
-            else datetime(year, month + 1, 1, tzinfo=timezone.utc)
-        )
-    else:
-        start_date = date(year, 1, 1)
-        end_date = date(year, 12, 31)
-        start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
-        end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-
-    return start_date, end_date, start_dt, end_dt
+    return period_bounds(year, month)
 
 
 def _revenue_period_clause(start_date: date, end_date: date, start_dt: datetime, end_dt: datetime):
-    return or_(
-        and_(MemberMembership.created_at >= start_dt, MemberMembership.created_at < end_dt),
-        and_(MemberMembership.start_date >= start_date, MemberMembership.start_date <= end_date),
-    )
+    return revenue_period_clause(start_dt, end_dt)
 
 
 async def _get_category_or_404(db: AsyncSession, category_id: int) -> ExpenseCategory:
@@ -366,8 +347,10 @@ async def get_finance_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-    # Incomplete / future months return 0.00
-    if month is not None and ((year == CURRENT_YEAR and month >= CURRENT_MONTH) or year > CURRENT_YEAR):
+    manila_now = get_manila_now()
+
+    # Future months return 0.00
+    if month is not None and (year > manila_now.year or (year == manila_now.year and month > manila_now.month)):
         return FinanceSummaryResponse(
             year=year,
             month=month,
@@ -379,17 +362,17 @@ async def get_finance_summary(
 
     start_date, end_date, start_dt, end_dt = _period_bounds(year, month)
 
-    # For full-year view of current year, only sum completed months (Jan - Sep)
-    if month is None and year == CURRENT_YEAR:
-        last_completed = CURRENT_MONTH - 1
+    # For full-year view of current year, sum up through the current Manila month
+    if month is None and year == manila_now.year:
         start_date = date(year, 1, 1)
-        end_date = date(year, last_completed, monthrange(year, last_completed)[1])
-        start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
-        end_dt = datetime(year, CURRENT_MONTH, 1, tzinfo=timezone.utc)
+        end_date = date(year, manila_now.month, monthrange(year, manila_now.month)[1])
+        _, _, start_dt, _ = _period_bounds(year, 1)
+        _, _, _, end_dt = _period_bounds(year, manila_now.month)
 
     # MEMBERSHIP REVENUE
     revenue_result = await db.execute(
         select(func.coalesce(func.sum(MemberMembership.paid_amount), 0)).where(
+            MemberMembership.status != MembershipStatus.CANCELLED,
             MemberMembership.paid_amount.is_not(None),
             _revenue_period_clause(start_date, end_date, start_dt, end_dt),
         )
@@ -452,8 +435,10 @@ async def get_annual_finance_breakdown(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-    # Incomplete / future months return 0.00
-    if year > CURRENT_YEAR:
+    manila_now = get_manila_now()
+
+    # Future years return 0.00
+    if year > manila_now.year:
         return [
             MonthlyFinancePoint(
                 month=m,
@@ -465,16 +450,11 @@ async def get_annual_finance_breakdown(
             for m in range(1, 13)
         ]
 
-    # October is incomplete
-    max_month = CURRENT_MONTH - 1 if year == CURRENT_YEAR else 12
+    max_month = manila_now.month if year == manila_now.year else 12
     range_start_date = date(year, 1, 1)
     range_end_date = date(year, max_month, monthrange(year, max_month)[1])
-    range_start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
-    range_end_dt = (
-        datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-        if max_month == 12
-        else datetime(year, max_month + 1, 1, tzinfo=timezone.utc)
-    )
+    _, _, range_start_dt, _ = _period_bounds(year, 1)
+    _, _, _, range_end_dt = _period_bounds(year, max_month)
 
     # Revenue (single pass across completed months instead of 12 sequential queries)
     rev_cols = [
@@ -492,6 +472,7 @@ async def get_annual_finance_breakdown(
     rev_row = (
         await db.execute(
             select(*rev_cols).where(
+                MemberMembership.status != MembershipStatus.CANCELLED,
                 MemberMembership.paid_amount.is_not(None),
                 _revenue_period_clause(range_start_date, range_end_date, range_start_dt, range_end_dt),
             )

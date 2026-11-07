@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
-import { Card } from '@/components/ui/Card'
+import { OverviewKpiGrid } from '@/components/manage/OverviewKpiGrid'
 import { api } from '@/services/api'
 import type { MemberStats, MembershipPlan } from '@/types/auth'
 
@@ -30,12 +30,7 @@ export function ManageOverviewPage() {
     load()
   }, [])
 
-  const statCards = [
-    { label: 'Total Members', value: stats?.total ?? '—', color: 'text-white' },
-    { label: 'Active', value: stats?.active ?? '—', color: 'text-green-400' },
-    { label: 'Expired', value: stats?.expired ?? '—', color: 'text-yellow-400' },
-    { label: 'Inactive / Suspended', value: ((stats?.inactive ?? 0) + (stats?.suspended ?? 0)) || '—', color: 'text-red' },
-  ]
+  const showFinancials = user?.role === 'admin'
 
   return (
     <>
@@ -48,22 +43,13 @@ export function ManageOverviewPage() {
           <h1 className="font-display text-3xl md:text-4xl font-black uppercase tracking-tight text-white">
             Overview
           </h1>
-          <p className="text-sm text-white/50 mt-1">
+          <p className="text-sm text-white/50 mt-1 max-w-2xl">
             Welcome back, <span className="text-white">{user?.full_name}</span>. Here's a snapshot of The DGym operations.
           </p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {statCards.map((card) => (
-            <Card key={card.label} className="p-5">
-              <p className="text-xs uppercase tracking-widest text-white/40 mb-2">{card.label}</p>
-              <p className={`font-display text-3xl font-black ${card.color}`}>
-                {loading ? '...' : card.value}
-              </p>
-            </Card>
-          ))}
-        </div>
+        {/* 9 Core Business KPIs */}
+        <OverviewKpiGrid stats={stats} loading={loading} showFinancials={showFinancials} />
 
         {/* Quick Links */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">

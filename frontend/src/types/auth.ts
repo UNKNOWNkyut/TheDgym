@@ -157,6 +157,17 @@ export interface MemberStats {
   expired: number
   inactive: number
   suspended: number
+  period_year?: number
+  period_month?: number
+  period_label?: string
+  new_members_this_month?: number
+  renewals_this_month?: number
+  renewals_all_time?: number
+  upcoming_expirations_7d?: number
+  payments_this_month?: number | null
+  monthly_income?: string | null
+  monthly_expenses?: string | null
+  profit_loss?: string | null
 }
 
 
