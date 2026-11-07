@@ -16,8 +16,11 @@ class MembershipStatus(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     CASH = "cash"
     GCASH = "gcash"
-    MAYA = "maya"
     BANK_TRANSFER = "bank_transfer"
+    QR_PAYMENT = "qr_payment"
+    CREDIT_CARD = "credit_card"
+    DEBIT_CARD = "debit_card"
+    MAYA = "maya"
     OTHER = "other"
 
 

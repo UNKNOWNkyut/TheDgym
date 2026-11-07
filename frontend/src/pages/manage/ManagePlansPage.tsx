@@ -34,7 +34,7 @@ export function ManagePlansPage() {
     slug: '',
     description: '',
     duration_days: 30,
-    price_php: 600,
+    price_php: 1999,
     sort_order: 1,
     is_active: true,
   })
@@ -75,7 +75,7 @@ export function ManagePlansPage() {
       slug: '',
       description: '',
       duration_days: 30,
-      price_php: 500,
+      price_php: 1999,
       sort_order: plans.length + 1,
       is_active: true,
     })

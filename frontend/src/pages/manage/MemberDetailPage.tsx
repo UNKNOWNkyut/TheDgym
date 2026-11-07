@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { api } from '@/services/api'
 import { useAuth } from '@/context/AuthContext'
 import { markMemberSeenLocally } from '@/utils/memberSeen'
+import { formatPaymentMethod } from '@/constants/plans'
 import type { Member, MemberStatus, MembershipPlan } from '@/types/auth'
 import { AssignMembershipModal } from '@/components/manage/AssignMembershipModal'
 import { MemberKeycardsCard } from '@/components/manage/MemberKeycardsCard'
@@ -364,8 +365,8 @@ export function MemberDetailPage() {
                         <td className="py-3 px-4 text-white">
                           {ms.paid_amount ? `₱${parseFloat(ms.paid_amount).toLocaleString()}` : '—'}
                         </td>
-                        <td className="py-3 px-4 text-white/50 capitalize">
-                          {ms.payment_method?.replace('_', ' ') || '—'}
+                        <td className="py-3 px-4 text-white/50">
+                          {formatPaymentMethod(ms.payment_method)}
                         </td>
                         <td className="py-3 px-4">
                           <Badge variant={getMembershipStatusVariant(ms.status)}>{ms.status}</Badge>

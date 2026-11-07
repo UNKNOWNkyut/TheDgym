@@ -84,8 +84,11 @@ export type MembershipStatus =
 export type PaymentMethod =
   | 'cash'
   | 'gcash'
-  | 'maya'
   | 'bank_transfer'
+  | 'qr_payment'
+  | 'credit_card'
+  | 'debit_card'
+  | 'maya'
   | 'other'
 
 

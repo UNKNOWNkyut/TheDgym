@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { Button } from '@/components/ui/Button'
+import { PAYMENT_METHOD_OPTIONS } from '@/constants/plans'
 import { api } from '@/services/api'
 import type { Member, MembershipPlan, PaymentMethod } from '@/types/auth'
 
@@ -13,14 +14,6 @@ interface AssignMembershipModalProps {
   onClose: () => void
   onSuccess: () => void
 }
-
-const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'gcash', label: 'GCash' },
-  { value: 'maya', label: 'Maya' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'other', label: 'Other' },
-]
 
 export function AssignMembershipModal({
   member,
@@ -176,7 +169,7 @@ export function AssignMembershipModal({
                 onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
                 className="w-full px-3 py-2.5 bg-surface-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors capitalize"
               >
-                {PAYMENT_METHODS.map((pm) => (
+                {PAYMENT_METHOD_OPTIONS.map((pm) => (
                   <option key={pm.value} value={pm.value} className="bg-surface-2">
                     {pm.label}
                   </option>

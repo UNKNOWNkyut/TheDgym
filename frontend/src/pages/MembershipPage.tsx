@@ -7,7 +7,12 @@ import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { PUBLIC_PLANS } from '@/constants/plans'
+import {
+  EXTENDED_PLANS,
+  MEMBERSHIP_INCLUSIONS,
+  PAYMENT_METHOD_OPTIONS,
+  PUBLIC_PLANS,
+} from '@/constants/plans'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -136,11 +141,115 @@ export function MembershipPage() {
           })}
         </div>
 
-        {/* All plans note */}
-        <p className="text-center text-sm text-white/30 mt-10">
-          All memberships include full equipment access during operating hours.
-          Personal training is available as an add-on.
-        </p>
+        {/* Extended Packages & ID-Verified Discounts */}
+        <div className="max-w-5xl mx-auto mt-16">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+              Extended Packages & Official Discounts
+            </p>
+            <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+              Student, Senior / PWD & Long-Term Rates
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {EXTENDED_PLANS.map((plan) => {
+              const isUserCurrentPlan = Boolean(
+                user?.has_active_membership &&
+                  user.plan_name?.toLowerCase() === plan.name.toLowerCase(),
+              )
+              return (
+                <div
+                  key={plan.slug}
+                  className="plan-card flex flex-col justify-between rounded-2xl border border-white/10 bg-surface p-6 hover:border-white/20 transition-colors"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      {plan.badge && (
+                        <Badge variant="default" size="sm">
+                          {plan.badge}
+                        </Badge>
+                      )}
+                    </div>
+                    <h3 className="font-display text-lg font-bold uppercase tracking-wide text-white mb-1">
+                      {plan.name}
+                    </h3>
+                    <div className="flex items-baseline gap-1.5 mb-2">
+                      <span className="text-2xl font-bold font-mono text-white">
+                        {plan.priceFormatted}
+                      </span>
+                      <span className="text-xs text-white/40">{plan.period}</span>
+                    </div>
+                    {plan.requirement && (
+                      <p className="text-xs text-white/50 mb-4 leading-relaxed">
+                        {plan.requirement}
+                      </p>
+                    )}
+                  </div>
+
+                  {isUserCurrentPlan ? (
+                    <Button fullWidth size="sm" variant="secondary" disabled>
+                      Current Plan ✓
+                    </Button>
+                  ) : (
+                    <Button
+                      fullWidth
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleAvailPlan(plan.slug)}
+                    >
+                      Avail This Plan
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Official Inclusions, Payment Channels & Policy */}
+        <div className="max-w-5xl mx-auto mt-12 rounded-2xl border border-white/10 bg-surface p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-3">
+              Membership Inclusions
+            </p>
+            <ul className="space-y-2.5">
+              {MEMBERSHIP_INCLUSIONS.map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-white/60">
+                  <span className="text-red font-bold">•</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+                Accepted Payment Methods
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_METHOD_OPTIONS.slice(0, 6).map((pm) => (
+                  <span
+                    key={pm.value}
+                    className="px-3 py-1 rounded-lg border border-white/10 bg-white/[0.02] text-xs text-white/70"
+                  >
+                    {pm.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 space-y-1.5 text-xs text-white/40 leading-relaxed">
+              <p>
+                <strong className="text-white/70">Annual Membership Card:</strong> Valid for 12 months; annual renewal is ₱1,000 (requires at least a 3-month gym subscription).
+              </p>
+              <p>
+                <strong className="text-white/70">Cancellation Policy:</strong> All memberships, packages, and day passes are strictly non-refundable. Personal training is available as an add-on.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   )
