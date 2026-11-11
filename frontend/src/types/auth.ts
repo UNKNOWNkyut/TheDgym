@@ -569,3 +569,31 @@ export interface PairingSessionStatus {
   card_label: string | null
   expires_at: string | null
 }
+
+export interface CreateCheckoutPayload {
+  plan_id?: number
+  plan_slug?: string
+  success_url?: string
+  failure_url?: string
+}
+
+export interface CheckoutSessionResponse {
+  status: string
+  invoice_id: string
+  invoice_url: string
+  external_id: string
+  amount: number
+  plan_name: string
+  plan_price: number
+}
+
+export interface PaymentVerifyResponse {
+  status: string
+  invoice_id: string
+  invoice_status: string
+  is_paid: boolean
+  amount: number
+  payment_method?: string
+  membership_activated: boolean
+  membership_id?: number
+}

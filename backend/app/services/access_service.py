@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import HTTPException, Request, WebSocket, status
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -327,6 +328,10 @@ async def _finalize_tap(
     """Persist the tap log, commit, broadcast to live feeds, and build the API response."""
     keycard = ctx.keycard
     scanner = ctx.scanner
+    if keycard is not None:
+        keycard.last_tapped_at = ctx.now
+    if granted and member_obj is not None and member_obj.status == MemberStatus.EXPIRED:
+        member_obj.status = MemberStatus.ACTIVE
     latency_ms = max(1, int(round((time.perf_counter() - ctx.started_at) * 1000)))
     ctx.db.add(
         KeycardTapLog(
@@ -655,6 +660,28 @@ def _summarize_active_plan(valid_active: List[MemberMembership], now: datetime) 
     )
 
 
+async def _finalize_already_checked_in(
+    ctx: _TapContext,
+    *,
+    member: Optional[Member],
+    visit: Optional[Visit],
+    checkin_time_str: str,
+    reason_message: str,
+    plan_fields: Dict[str, Any],
+) -> TapVerificationResponse:
+    """Shared response builder for non-duplicate already-checked-in tap outcomes."""
+    return await _finalize_tap(
+        ctx,
+        granted=True,
+        decision=TapDecision.ALREADY_CHECKED_IN,
+        reason_message=reason_message,
+        privacy_safe_message=f"Already Checked In ({checkin_time_str}) — Enjoy Your Workout!",
+        member_obj=member,
+        visit_obj=visit,
+        **plan_fields,
+    )
+
+
 async def _apply_cooldown_or_checkout(
     ctx: _TapContext,
     member: Member,
@@ -694,18 +721,16 @@ async def _apply_cooldown_or_checkout(
                 if remaining_cd >= 60
                 else f"{remaining_cd}s"
             )
-            return await _finalize_tap(
+            return await _finalize_already_checked_in(
                 ctx,
-                granted=True,
-                decision=TapDecision.ALREADY_CHECKED_IN,
+                member=member,
+                visit=last_visit,
+                checkin_time_str=checkin_time_str,
                 reason_message=(
                     f"Already checked in since {checkin_time_str} (no duplicate logged). "
                     f"Check-out tap unlocks in {rem_label}."
                 ),
-                privacy_safe_message=f"Already Checked In ({checkin_time_str}) — Enjoy Your Workout!",
-                member_obj=member,
-                visit_obj=last_visit,
-                **plan_fields,
+                plan_fields=plan_fields,
             )
 
         # Elapsed > Check-In Cooldown -> Log Check-Out!
@@ -725,7 +750,14 @@ async def _apply_cooldown_or_checkout(
                 visit_obj=last_visit,
                 **plan_fields,
             )
-        return None
+        return await _finalize_already_checked_in(
+            ctx,
+            member=member,
+            visit=last_visit,
+            checkin_time_str=checkin_time_str,
+            reason_message=f"Already checked in since {checkin_time_str} (check-in-only scanner; active visit remains open).",
+            plan_fields=plan_fields,
+        )
 
     # Case B: Member JUST CHECKED OUT (< Post-Checkout Cooldown) -> Prevent accidental re-entry!
     elapsed_out_secs = (now - last_out).total_seconds()
@@ -752,6 +784,10 @@ async def _create_check_in(
     """Step 6: Create Automatic Check-In Visit + Notify Admin."""
     db, now = ctx.db, ctx.now
     keycard = ctx.keycard
+    member_id = member.id
+    keycard_id = keycard.id if keycard else None
+    scanner_id = ctx.scanner.id if ctx.scanner else None
+    plan_fields = plan.response_fields()
 
     inferred_type = await _infer_visit_type_and_notify_trainer(db, member, now)
     new_visit = Visit(
@@ -765,7 +801,38 @@ async def _create_check_in(
         notes=f"Auto check-in via NFC Smart Keycard ({ctx.uid_masked})",
     )
     db.add(new_visit)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Another concurrent tap (or manual check-in) won uq_visits_member_active_open;
+        # undo speculative notifications/inserts cleanly and deduplicate against the open visit.
+        await db.rollback()
+        fresh_member = await db.get(Member, member_id)
+        if keycard_id is not None:
+            ctx.keycard = await db.get(MemberKeycard, keycard_id)
+        if scanner_id is not None:
+            ctx.scanner = await db.get(AccessScanner, scanner_id)
+        open_visit = (
+            await db.execute(
+                select(Visit)
+                .where(Visit.member_id == member_id, Visit.checked_out_at.is_(None))
+                .order_by(desc(Visit.checked_in_at))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        checkin_time_str = (
+            _fmt_ph_clock(_ensure_utc(open_visit.checked_in_at))
+            if open_visit
+            else _fmt_ph_clock(now)
+        )
+        return await _finalize_already_checked_in(
+            ctx,
+            member=fresh_member,
+            visit=open_visit,
+            checkin_time_str=checkin_time_str,
+            reason_message=f"Already checked in since {checkin_time_str} (concurrent tap deduplicated).",
+            plan_fields=plan_fields,
+        )
 
     await notify_admins_on_checkin(
         db,
@@ -788,7 +855,7 @@ async def _create_check_in(
         member_obj=member,
         visit_obj=new_visit,
         admin_notified=True,
-        **plan.response_fields(),
+        **plan_fields,
     )
 
 
@@ -852,7 +919,6 @@ async def process_card_tap(
         )
 
     member = keycard.member
-    keycard.last_tapped_at = now
 
     # ── Steps 2–3: Keycard & Member Profile Status ───────────────────────────
     denied = await _check_card_and_member_status(ctx, keycard, member)
@@ -865,8 +931,6 @@ async def process_card_tap(
         return await _deny_without_active_membership(ctx, member, pending, expired)
 
     plan = _summarize_active_plan(valid_active, now)
-    if member.status == MemberStatus.EXPIRED:
-        member.status = MemberStatus.ACTIVE
 
     # ── Step 5: 10-Min Check-In Cooldown & 5-Min Post-Checkout Cooldown ──────
     early_response = await _apply_cooldown_or_checkout(ctx, member, plan)

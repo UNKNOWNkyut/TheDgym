@@ -43,15 +43,15 @@ export function TrainersPage() {
       />
 
       {/* Hero */}
-      <div ref={heroRef} className="border-b border-white/8 section-padding">
+      <div ref={heroRef} className="border-b border-zinc-200 dark:border-white/8 section-padding">
         <div className="container-dgym">
-          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
+          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-4">
             Coaching • Rosario, Batangas
           </p>
-          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-white mb-4 max-w-2xl">
+          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-zinc-950 dark:text-white mb-4 max-w-2xl">
             Train With<br />Our Coaches
           </h1>
-          <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
+          <p className="hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-lg leading-relaxed">
             One-on-one coaching and progressive overload programming built around your goals. Not a cookie-cutter routine — your plan.
           </p>
         </div>
@@ -61,10 +61,10 @@ export function TrainersPage() {
       <div className="container-dgym py-16 md:py-20">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-20">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">
               Why personal training
             </p>
-            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white mb-6">
+            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white mb-6">
               Faster Progress.<br />Fewer Wasted Sessions.
             </h2>
             <div className="space-y-4 mb-8">
@@ -76,7 +76,7 @@ export function TrainersPage() {
               ].map((point) => (
                 <div key={point} className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-red mt-2 shrink-0" aria-hidden="true" />
-                  <p className="text-base text-white/70">{point}</p>
+                  <p className="text-base text-zinc-600 dark:text-zinc-400">{point}</p>
                 </div>
               ))}
             </div>
@@ -106,10 +106,10 @@ export function TrainersPage() {
         {/* Official Certified Coaches Roster */}
         <div className="mb-20">
           <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2">
               Official Roster
             </p>
-            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">
+            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white">
               Meet Your Certified Coaches
             </h2>
           </div>
@@ -183,10 +183,10 @@ export function TrainersPage() {
         {/* Official Personal Training Packages */}
         <div className="mb-20">
           <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2">
               1-on-1 Coaching Rates
             </p>
-            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white">
+            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white">
               Personal Training Packages
             </h2>
           </div>
@@ -236,10 +236,10 @@ export function TrainersPage() {
 
         {/* CTA */}
         <div className="p-8 md:p-12 rounded-2xl border border-red/20 bg-red/5 text-center">
-          <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-wide text-white mb-3">
+          <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-3">
             Ready to train with a DGym Coach?
           </h2>
-          <p className="text-sm text-white/60 mb-8 max-w-md mx-auto leading-relaxed">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-8 max-w-md mx-auto leading-relaxed">
             Call {GYM_INFO.phoneDisplay}, message us on Facebook, or submit an inquiry to start your 12-session Muscle Gain or Boxing package in Rosario, Batangas.
           </p>
           <div className="flex flex-wrap justify-center gap-3">

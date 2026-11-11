@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   User,
@@ -12,10 +12,8 @@ import {
   Check,
   X,
   ShieldAlert,
-  Flame,
   Dumbbell,
   CreditCard,
-  Sparkles,
 } from 'lucide-react';
 
 interface AgendaSession {
@@ -54,7 +52,17 @@ interface Milestone {
   timeAgo: string;
 }
 
+const NEUTRAL_PILL =
+  'px-2 py-0.5 rounded-md text-[10px] font-mono uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700';
+
+const NEUTRAL_ACTION_BTN =
+  'px-2.5 py-1.5 rounded-lg text-xs font-mono border bg-zinc-900 border-zinc-800 text-zinc-300 transition-colors cursor-pointer';
+
 export function TrainerDashboard() {
+  // Tab Switcher States
+  const [scheduleTab, setScheduleTab] = useState<'agenda' | 'requests'>('agenda');
+  const [insightsTab, setInsightsTab] = useState<'flags' | 'milestones'>('flags');
+
   // 1. Agenda State
   const [sessions, setSessions] = useState<AgendaSession[]>([
     {
@@ -175,9 +183,15 @@ export function TrainerDashboard() {
   );
 
   // Up-next client (first upcoming scheduled session)
-  const upNextSession = useMemo(() => {
-    return sessions.find((s) => s.status === 'SCHEDULED' && s.type !== 'group');
-  }, [sessions]);
+  const upNextSession = useMemo(
+    () => sessions.find((s) => s.status === 'SCHEDULED' && s.type !== 'group'),
+    [sessions],
+  );
+
+  const pendingCount = useMemo(
+    () => bookingRequests.filter((r) => r.status === 'PENDING').length,
+    [bookingRequests],
+  );
 
   // Actions for sessions
   const updateSessionStatus = (
@@ -208,7 +222,7 @@ export function TrainerDashboard() {
     setClientAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const handleSaveLog = (e: React.FormEvent) => {
+  const handleSaveLog = (e: FormEvent) => {
     e.preventDefault();
     setLogSuccessToast(true);
     setTimeout(() => {
@@ -217,17 +231,45 @@ export function TrainerDashboard() {
     }, 1200);
   };
 
+  const attendedCount = sessions.filter((s) => s.status === 'ATTENDED').length;
+  const scheduledCount = sessions.filter((s) => s.status === 'SCHEDULED').length;
+
+  const kpiCards = [
+    {
+      label: "Today's Sessions",
+      value: `${sessions.length} Appointments`,
+      sub: `${attendedCount} Attended • ${scheduledCount} Scheduled`,
+      icon: Calendar,
+    },
+    {
+      label: 'Active Client Roster',
+      value: '8 Athletes',
+      sub: '100% Retained this cycle',
+      icon: User,
+    },
+    {
+      label: 'At-Risk Clients',
+      value: `${clientAlerts.length} Flagged`,
+      sub: 'Action required for retention',
+      icon: ShieldAlert,
+    },
+    {
+      label: 'Monthly PT Volume',
+      value: '₱18,500.00',
+      sub: '37 Completed PT Hours',
+      icon: CreditCard,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-[#070709] text-white p-4 sm:p-6 lg:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Top Header Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800/80">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                TRAINER COMMAND CENTER
-              </span>
-              <span className="text-xs text-white/40 font-mono">
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <span className={NEUTRAL_PILL}>TRAINER COMMAND CENTER</span>
+              <span className="text-xs text-zinc-400 font-mono">
                 Coach Mark • Rosario Facility
               </span>
             </div>
@@ -236,33 +278,33 @@ export function TrainerDashboard() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setIsLoggerOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-semibold uppercase tracking-wider font-mono transition-all shadow-[0_0_15px_rgba(229,32,26,0.3)] cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-semibold uppercase tracking-wider font-mono transition-all shadow-[0_0_15px_rgba(229,32,26,0.28)] cursor-pointer"
             >
               <Dumbbell className="w-4 h-4" />
               <span>Quick Workout Logger</span>
             </button>
             <Link
               to="/manage/pt-sessions"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-mono transition-all"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-mono transition-colors"
             >
-              <Calendar className="w-4 h-4 text-white/40" />
+              <Calendar className="w-4 h-4 text-zinc-400" />
               <span>Full Schedule</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
             <Link
               to="/manage/pt-sessions"
-              className="p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+              className="p-2 rounded-xl border border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
             </Link>
             <Link
               to="/manage/members"
-              className="p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+              className="p-2 rounded-xl border border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
               title="Settings"
             >
               <Settings className="w-4 h-4" />
@@ -270,226 +312,232 @@ export function TrainerDashboard() {
           </div>
         </div>
 
-        {/* 4 Top KPI Cards */}
+        {/* 1. COMPACT KPI STRIP (TOP ROW) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase font-mono tracking-widest text-white/40">
-                Today's Sessions
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                <Calendar className="w-4 h-4" />
+          {kpiCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.label}
+                className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 px-4 py-3.5"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] uppercase font-mono tracking-widest text-zinc-400">
+                    {card.label}
+                  </span>
+                  <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400">
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <p className="text-xl sm:text-2xl font-black font-mono text-white leading-tight">
+                  {card.value}
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">{card.sub}</p>
               </div>
-            </div>
-            <p className="text-2xl sm:text-3xl font-black font-mono text-white">
-              4 Appointments
-            </p>
-            <p className="text-xs text-emerald-400 mt-1 font-mono">
-              1 Attended • 3 Scheduled
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase font-mono tracking-widest text-white/40">
-                Active Client Roster
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                <User className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl sm:text-3xl font-black font-mono text-white">
-              8 Athletes
-            </p>
-            <p className="text-xs text-white/40 mt-1 font-mono">
-              100% Retained this cycle
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase font-mono tracking-widest text-white/40">
-                At-Risk Clients
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <ShieldAlert className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl sm:text-3xl font-black font-mono text-amber-400">
-              2 Flagged
-            </p>
-            <p className="text-xs text-amber-400/70 mt-1 font-mono">
-              Action required for retention
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase font-mono tracking-widest text-white/40">
-                Monthly PT Volume
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red">
-                <CreditCard className="w-4 h-4" />
-              </div>
-            </div>
-            <p className="text-2xl sm:text-3xl font-black font-mono text-white">
-              ₱18,500.00
-            </p>
-            <p className="text-xs text-white/40 mt-1 font-mono">
-              37 Completed PT Hours
-            </p>
-          </div>
+            );
+          })}
         </div>
 
-        {/* Section 1: Daily Operations & Schedule */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Agenda Timeline (2 cols) */}
-          <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-5">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div>
-                <h2 className="text-lg font-bold uppercase tracking-tight text-white flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-red" />
-                  Today's Agenda &amp; Floor Schedule
-                </h2>
-                <p className="text-xs text-white/40 mt-0.5">
-                  Instant check-in and attendance confirmation for floor sessions
-                </p>
+        {/* 2. 2-COLUMN BENTO GRID RESTRUCTURE (MAIN CONTENT) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* LEFT COLUMN (7 cols) — UNIFIED SCHEDULE HUB */}
+          <div className="lg:col-span-7 rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-5 space-y-4">
+            {/* Hub Header & Tab Switcher */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800/80">
+              <div className="inline-flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-fit">
+                <button
+                  type="button"
+                  onClick={() => setScheduleTab('agenda')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-2 ${
+                    scheduleTab === 'agenda'
+                      ? 'bg-zinc-800 text-white font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Today&apos;s Agenda ({sessions.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleTab('requests')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-2 ${
+                    scheduleTab === 'requests'
+                      ? 'bg-zinc-800 text-white font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <span>Pending Requests ({pendingCount})</span>
+                  {pendingCount > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-red" aria-hidden="true" />
+                  )}
+                </button>
               </div>
 
-              {/* Personal Break Block Toggle */}
               <button
                 type="button"
                 onClick={() => setIsBreakBlocked((prev) => !prev)}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-mono transition-all cursor-pointer ${
+                className={`text-xs px-3 py-1.5 rounded-lg border font-mono transition-colors cursor-pointer w-fit ${
                   isBreakBlocked
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
                 }`}
               >
                 {isBreakBlocked ? '🔒 Break Blocked (12:00 PM)' : '🔓 Block Break Time'}
               </button>
             </div>
 
-            {/* Agenda List */}
-            <div className="space-y-3">
-              {sessions.map((sess) => (
-                <div
-                  key={sess.id}
-                  className={`p-4 rounded-xl border transition-all ${
-                    sess.status === 'ATTENDED'
-                      ? 'border-emerald-500/20 bg-emerald-500/[0.03] opacity-75'
-                      : sess.status === 'NO_SHOW'
-                      ? 'border-red/20 bg-red/[0.03] opacity-75'
-                      : 'border-white/10 bg-white/[0.02] hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs font-mono font-bold text-white shrink-0 mt-0.5">
-                        {sess.time}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm text-white">
-                            {sess.clientName}
-                          </span>
-                          <span
-                            className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border ${
-                              sess.type === 'assessment'
-                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                : sess.type === 'group'
-                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                : 'bg-red/10 text-red border-red/20'
-                            }`}
-                          >
-                            {sess.type.toUpperCase()}
-                          </span>
-
-                          <span
-                            className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded font-bold ${
-                              sess.status === 'ATTENDED'
-                                ? 'bg-emerald-500/20 text-emerald-400'
-                                : sess.status === 'NO_SHOW'
-                                ? 'bg-red/20 text-red'
-                                : 'bg-white/10 text-white/60'
-                            }`}
-                          >
-                            {sess.status}
-                          </span>
+            {scheduleTab === 'agenda' ? (
+              <div className="space-y-3">
+                {sessions.map((sess) => (
+                  <div
+                    key={sess.id}
+                    className={`p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40 transition-colors hover:border-zinc-700 ${
+                      sess.status === 'ATTENDED' || sess.status === 'NO_SHOW' ? 'opacity-75' : ''
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-xs font-mono font-bold text-zinc-200 shrink-0 mt-0.5">
+                          {sess.time}
                         </div>
 
-                        <p className="text-xs text-white/60 mt-1 leading-relaxed">
-                          {sess.focus}
-                        </p>
-
-                        {sess.injuryNote && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-400/90 font-mono">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{sess.injuryNote}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm text-white">
+                              {sess.clientName}
+                            </span>
+                            <span className={NEUTRAL_PILL}>{sess.type.toUpperCase()}</span>
+                            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-800">
+                              {sess.status}
+                            </span>
                           </div>
-                        )}
 
-                        {sess.headcount && (
-                          <div className="mt-1 text-[11px] text-purple-400 font-mono">
-                            👥 {sess.headcount}
-                          </div>
-                        )}
+                          <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                            {sess.focus}
+                          </p>
+
+                          {sess.injuryNote && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{sess.injuryNote}</span>
+                            </div>
+                          )}
+
+                          {sess.headcount && (
+                            <div className="mt-1.5 text-[11px] text-zinc-400 font-mono">
+                              👥 {sess.headcount}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Monochrome Outline Action Buttons (subtle semantic states on active/hover) */}
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => updateSessionStatus(sess.id, 'ATTENDED')}
+                          className={`${NEUTRAL_ACTION_BTN} flex items-center gap-1 ${
+                            sess.status === 'ATTENDED'
+                              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 font-semibold'
+                              : 'hover:border-emerald-500/40 hover:text-emerald-400 hover:bg-emerald-500/10'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Attended</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => updateSessionStatus(sess.id, 'NO_SHOW')}
+                          className={`${NEUTRAL_ACTION_BTN} flex items-center gap-1 ${
+                            sess.status === 'NO_SHOW'
+                              ? 'bg-red/15 border-red/40 text-red font-semibold'
+                              : 'hover:border-red/40 hover:text-red hover:bg-red/10'
+                          }`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>No-Show</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => updateSessionStatus(sess.id, 'RESCHEDULED')}
+                          className={`${NEUTRAL_ACTION_BTN} ${
+                            sess.status === 'RESCHEDULED'
+                              ? 'bg-zinc-800 border-zinc-600 text-white font-semibold'
+                              : 'hover:text-white hover:border-zinc-700'
+                          }`}
+                        >
+                          Reschedule
+                        </button>
                       </div>
                     </div>
-
-                    {/* Quick Action Buttons */}
-                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                      <button
-                        type="button"
-                        onClick={() => updateSessionStatus(sess.id, 'ATTENDED')}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors flex items-center gap-1 ${
-                          sess.status === 'ATTENDED'
-                            ? 'bg-emerald-500 text-black font-bold'
-                            : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'
-                        }`}
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Attended</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => updateSessionStatus(sess.id, 'NO_SHOW')}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors flex items-center gap-1 ${
-                          sess.status === 'NO_SHOW'
-                            ? 'bg-red text-white font-bold'
-                            : 'bg-red/10 text-red hover:bg-red/20 border border-red/30'
-                        }`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        <span>No-Show</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => updateSessionStatus(sess.id, 'RESCHEDULED')}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-mono bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10 transition-colors"
-                      >
-                        Reschedule
-                      </button>
-                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {bookingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-white">
+                          {req.clientName}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+                            req.status === 'APPROVED'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : req.status === 'REJECTED'
+                              ? 'bg-red/10 text-red border-red/20'
+                              : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </div>
+                      <p className="text-zinc-400 text-xs font-mono">
+                        {req.sessionType} • {req.requestedTime}
+                      </p>
+                    </div>
+
+                    {req.status === 'PENDING' && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRequestAction(req.id, 'APPROVED')}
+                          className={`${NEUTRAL_ACTION_BTN} hover:border-emerald-500/40 hover:text-emerald-400 hover:bg-emerald-500/10`}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestAction(req.id, 'REJECTED')}
+                          className={`${NEUTRAL_ACTION_BTN} hover:border-red/40 hover:text-red hover:bg-red/10`}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Up-Next Client & Booking Requests (1 col) */}
-          <div className="space-y-6">
-            {/* Up-Next Snapshot */}
-            <div className="rounded-2xl border border-red/30 bg-gradient-to-b from-red/10 to-transparent p-5 space-y-4">
+          {/* RIGHT COLUMN (5 cols) — LIVE SNAPSHOT & CLIENT INSIGHTS */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* Top Card: Up-Next Client Snapshot */}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-mono tracking-widest text-red font-bold flex items-center gap-1.5">
-                  <Flame className="w-4 h-4 text-red" />
+                <span className="text-[11px] uppercase font-mono tracking-widest text-zinc-300 font-semibold flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red animate-pulse" aria-hidden="true" />
                   UP-NEXT CLIENT SNAPSHOT
                 </span>
-                <span className="text-xs font-mono text-white/40">
+                <span className="text-xs font-mono text-zinc-400">
                   {upNextSession?.time ?? 'No immediate session'}
                 </span>
               </div>
@@ -497,28 +545,30 @@ export function TrainerDashboard() {
               {upNextSession ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-red/20 border border-red/40 flex items-center justify-center text-white font-bold font-mono text-base">
+                    <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white font-bold font-mono text-sm">
                       {upNextSession.clientAvatar}
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-white">
                         {upNextSession.clientName}
                       </h3>
-                      <p className="text-xs text-white/50 font-mono">
+                      <p className="text-xs text-zinc-400 font-mono">
                         Active Athlete • 4 Sessions Completed
                       </p>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-xs space-y-1.5">
-                    <p className="text-white/40 font-mono uppercase text-[10px]">
+                  <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-xs space-y-2">
+                    <p className="text-zinc-500 font-mono uppercase text-[10px]">
                       Session Focus:
                     </p>
-                    <p className="text-white font-medium">{upNextSession.focus}</p>
+                    <p className="text-zinc-200 font-medium">{upNextSession.focus}</p>
                     {upNextSession.injuryNote && (
-                      <p className="text-amber-400 font-mono text-[11px] pt-1 border-t border-white/5">
-                        ⚠️ Restriction: {upNextSession.injuryNote}
-                      </p>
+                      <div className="pt-2 border-t border-zinc-800/80">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          ⚠️ Restriction: {upNextSession.injuryNote}
+                        </span>
+                      </div>
                     )}
                   </div>
 
@@ -528,193 +578,139 @@ export function TrainerDashboard() {
                       setActiveLoggingClient(upNextSession.clientName);
                       setIsLoggerOpen(true);
                     }}
-                    className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-mono font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-white text-xs font-mono font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Dumbbell className="w-3.5 h-3.5 text-red" />
                     <span>Open Real-Time Logger</span>
                   </button>
                 </div>
               ) : (
-                <p className="text-xs text-white/40 py-4 text-center">
+                <p className="text-xs text-zinc-500 py-4 text-center font-mono">
                   All scheduled floor sessions for today are completed!
                 </p>
               )}
             </div>
 
-            {/* Pending Booking Requests */}
-            <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs uppercase font-mono tracking-widest text-white/50 font-bold">
-                  Pending Booking Requests
-                </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                  {bookingRequests.filter((r) => r.status === 'PENDING').length} New
-                </span>
+            {/* Bottom Card: Tabbed Insights Card (Action Flags & Milestones) */}
+            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                <div className="inline-flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setInsightsTab('flags')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
+                      insightsTab === 'flags'
+                        ? 'bg-zinc-800 text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Action Flags ({clientAlerts.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInsightsTab('milestones')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
+                      insightsTab === 'milestones'
+                        ? 'bg-zinc-800 text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Milestones &amp; PRs ({milestones.length})
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2.5">
-                {bookingRequests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="p-3 rounded-xl border border-white/5 bg-white/[0.02] text-xs space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-white">
-                        {req.clientName}
-                      </span>
-                      <span
-                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
-                          req.status === 'APPROVED'
-                            ? 'text-emerald-400 bg-emerald-500/10'
-                            : req.status === 'REJECTED'
-                            ? 'text-red bg-red/10'
-                            : 'text-amber-400 bg-amber-500/10'
-                        }`}
-                      >
-                        {req.status}
-                      </span>
-                    </div>
-
-                    <p className="text-white/60 text-[11px] font-mono">
-                      {req.sessionType} • {req.requestedTime}
+              {insightsTab === 'flags' ? (
+                <div className="space-y-2.5">
+                  {clientAlerts.length === 0 ? (
+                    <p className="text-xs text-zinc-500 py-6 text-center font-mono">
+                      No active retention flags right now.
                     </p>
+                  ) : (
+                    clientAlerts.map((alt) => (
+                      <div
+                        key={alt.id}
+                        className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-semibold text-sm text-white">
+                              {alt.clientName}
+                            </span>
+                            <span
+                              className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border font-semibold ${
+                                alt.tier === 'HIGH'
+                                  ? 'bg-red/10 text-red border-red/20'
+                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              }`}
+                            >
+                              {alt.tier} CHURN RISK
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">{alt.reason}</p>
+                          <p className="text-[11px] text-zinc-500 font-mono mt-1">
+                            Last Check-In: {alt.lastVisit} • Remaining:{' '}
+                            <span className="text-amber-400 font-semibold">
+                              {alt.sessionsLeft} left
+                            </span>
+                          </p>
+                        </div>
 
-                    {req.status === 'PENDING' && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleRequestAction(req.id, 'APPROVED')}
-                          className="flex-1 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[11px] font-mono transition-colors"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRequestAction(req.id, 'REJECTED')}
-                          className="flex-1 py-1 rounded bg-red/20 hover:bg-red/30 text-red border border-red/40 text-[11px] font-mono transition-colors"
-                        >
-                          Decline
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Link
+                            to="/manage/pt-sessions"
+                            className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-[11px] font-mono border border-zinc-800 transition-colors"
+                          >
+                            Action &rarr;
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDismissAlert(alt.id)}
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                            title="Dismiss Alert"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 2: Client Roster & Retention Alerts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Retention & Renewal Warnings */}
-          <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 font-mono">
-                <ShieldAlert className="w-4 h-4 text-amber-400" />
-                Retention &amp; Session Renewal Warnings
-              </h2>
-              <span className="text-xs text-white/40 font-mono">Action Flags</span>
-            </div>
-
-            <div className="space-y-3">
-              {clientAlerts.map((alt) => (
-                <div
-                  key={alt.id}
-                  className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between gap-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm text-white">
-                        {alt.clientName}
-                      </span>
-                      <span
-                        className={`text-[9px] uppercase font-mono px-1.5 py-0.2 rounded font-bold ${
-                          alt.tier === 'HIGH'
-                            ? 'bg-red/20 text-red border border-red/30'
-                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                        }`}
-                      >
-                        {alt.tier} CHURN RISK
-                      </span>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {milestones.map((ms) => (
+                    <div
+                      key={ms.id}
+                      className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 flex items-start gap-3"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 shrink-0">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-sm text-white">{ms.clientName}</p>
+                          <span className="text-[10px] text-zinc-500 font-mono shrink-0">
+                            {ms.timeAgo}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-300 mt-0.5">{ms.achievement}</p>
+                      </div>
                     </div>
-                    <p className="text-xs text-white/50">{alt.reason}</p>
-                    <p className="text-[11px] text-white/30 font-mono mt-1">
-                      Last Check-In: {alt.lastVisit} • Remaining Sessions:{' '}
-                      <span className="text-amber-400 font-bold">
-                        {alt.sessionsLeft} left
-                      </span>
-                    </p>
-                  </div>
+                  ))}
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-900/30 text-center space-y-1.5 mt-2">
+                    <p className="text-xs text-zinc-400">
+                      Ready to assign updated workout programs or review 1RM trends?
+                    </p>
                     <Link
-                      to="/manage/pt-sessions"
-                      className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-mono border border-white/10 transition-colors"
+                      to="/manage/members"
+                      className="inline-block text-xs text-red hover:underline font-mono"
                     >
-                      Action &rarr;
+                      View All Assigned Clients &rarr;
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDismissAlert(alt.id)}
-                      className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-colors"
-                      title="Dismiss Alert"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Milestones & PRs Highlights */}
-          <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 font-mono">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-                Recent Client Milestones &amp; PRs
-              </h2>
-              <span className="text-xs text-emerald-400 font-mono">Great Work!</span>
-            </div>
-
-            <div className="space-y-3">
-              {milestones.map((ms) => (
-                <div
-                  key={ms.id}
-                  className="p-3.5 rounded-xl border border-emerald-500/10 bg-emerald-500/[0.02] flex items-start gap-3"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-sm text-white">
-                        {ms.clientName}
-                      </p>
-                      <span className="text-[10px] text-white/30 font-mono">
-                        {ms.timeAgo}
-                      </span>
-                    </div>
-                    <p className="text-xs text-emerald-300 mt-0.5">
-                      {ms.achievement}
-                    </p>
-                  </div>
-                </div>
-              ))}
-
-              <div className="p-4 rounded-xl border border-white/5 bg-black/40 text-center space-y-2">
-                <p className="text-xs text-white/50">
-                  Ready to assign updated workout programs or review 1RM trends?
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                  <Link
-                    to="/manage/members"
-                    className="text-xs text-red hover:underline font-mono"
-                  >
-                    View All Assigned Clients &rarr;
-                  </Link>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -726,10 +722,10 @@ export function TrainerDashboard() {
             onClick={() => setIsLoggerOpen(false)}
           >
             <div
-              className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#111114] p-6 shadow-2xl space-y-5"
+              className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl space-y-5"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                 <div className="flex items-center gap-2">
                   <Dumbbell className="w-5 h-5 text-red" />
                   <h3 className="font-bold text-base uppercase text-white font-mono">
@@ -739,100 +735,98 @@ export function TrainerDashboard() {
                 <button
                   type="button"
                   onClick={() => setIsLoggerOpen(false)}
-                  className="text-white/40 hover:text-white transition-colors"
+                  className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {logSuccessToast ? (
-                <div className="p-6 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2">
+                <div className="p-6 rounded-xl bg-zinc-900 border border-zinc-800 text-center space-y-2">
                   <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                  <p className="text-emerald-300 font-bold text-sm">
-                    Set Logged Successfully!
-                  </p>
-                  <p className="text-xs text-white/40">
-                    Data recorded to client's athlete training ledger.
+                  <p className="text-white font-bold text-sm">Set Logged Successfully!</p>
+                  <p className="text-xs text-zinc-400">
+                    Data recorded to client&apos;s athlete training ledger.
                   </p>
                 </div>
               ) : (
                 <form onSubmit={handleSaveLog} className="space-y-4">
                   <div>
-                    <label className="block text-xs uppercase font-mono text-white/40 mb-1">
+                    <label className="block text-xs uppercase font-mono text-zinc-400 mb-1">
                       Athlete
                     </label>
                     <input
                       type="text"
                       value={activeLoggingClient}
                       onChange={(e) => setActiveLoggingClient(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-red"
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs uppercase font-mono text-white/40 mb-1">
+                    <label className="block text-xs uppercase font-mono text-zinc-400 mb-1">
                       Exercise
                     </label>
                     <input
                       type="text"
                       value={exerciseName}
                       onChange={(e) => setExerciseName(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-red"
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
                       required
                     />
                   </div>
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs uppercase font-mono text-white/40 mb-1">
+                      <label className="block text-xs uppercase font-mono text-zinc-400 mb-1">
                         Weight (kg)
                       </label>
                       <input
                         type="number"
                         value={exerciseWeight}
                         onChange={(e) => setExerciseWeight(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-red"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-xs uppercase font-mono text-white/40 mb-1">
+                      <label className="block text-xs uppercase font-mono text-zinc-400 mb-1">
                         Reps
                       </label>
                       <input
                         type="number"
                         value={exerciseReps}
                         onChange={(e) => setExerciseReps(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-red"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-xs uppercase font-mono text-white/40 mb-1">
+                      <label className="block text-xs uppercase font-mono text-zinc-400 mb-1">
                         RPE (1-10)
                       </label>
                       <input
                         type="text"
                         value={exerciseRpe}
                         onChange={(e) => setExerciseRpe(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-red"
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-white/10 flex justify-end gap-2">
+                  <div className="pt-3 border-t border-zinc-800 flex justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setIsLoggerOpen(false)}
-                      className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-mono transition-colors"
+                      className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-mono transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 rounded-lg bg-red hover:bg-red-hover text-white text-xs font-bold font-mono uppercase tracking-wider transition-colors shadow-md"
+                      className="px-4 py-2 rounded-lg bg-red hover:bg-red-hover text-white text-xs font-bold font-mono uppercase tracking-wider transition-colors shadow-md cursor-pointer"
                     >
                       Save Set Record
                     </button>

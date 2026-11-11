@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -27,6 +27,15 @@ class PaymentMethod(str, enum.Enum):
 class MemberMembership(Base):
     """Junction table: links a Member to a MembershipPlan for a specific period."""
     __tablename__ = "member_memberships"
+    __table_args__ = (
+        Index(
+            "uq_member_memberships_payment_reference_nonempty",
+            "payment_reference",
+            unique=True,
+            sqlite_where=text("payment_reference IS NOT NULL AND payment_reference != ''"),
+            postgresql_where=text("payment_reference IS NOT NULL AND payment_reference != ''"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 

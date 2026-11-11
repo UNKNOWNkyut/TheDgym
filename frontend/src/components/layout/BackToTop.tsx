@@ -35,7 +35,7 @@ export function BackToTop() {
       onClick={scrollToTop}
       aria-label="Back to top"
       className={[
-        'fixed bottom-6 right-6 z-50',
+        'fixed bottom-6 right-6 z-30',
         'w-11 h-11 rounded-full',
         'bg-surface border border-white/15',
         'flex items-center justify-center',

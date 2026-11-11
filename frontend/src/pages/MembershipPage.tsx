@@ -56,15 +56,15 @@ export function MembershipPage() {
       />
 
       {/* Hero */}
-      <div ref={heroRef} className="border-b border-white/8 section-padding">
+      <div ref={heroRef} className="border-b border-zinc-200 dark:border-white/8 section-padding">
         <div className="container-dgym">
-          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
+          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-4">
             Membership • Rosario, Batangas
           </p>
-          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-white mb-4 max-w-2xl">
+          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-zinc-950 dark:text-white mb-4 max-w-2xl">
             Plans That Fit<br />Your Training
           </h1>
-          <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
+          <p className="hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-lg leading-relaxed">
             Simple, transparent options for lifters and fitness enthusiasts in Rosario, Batangas.
           </p>
         </div>
@@ -144,10 +144,10 @@ export function MembershipPage() {
         {/* Extended Packages & ID-Verified Discounts */}
         <div className="max-w-5xl mx-auto mt-16">
           <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2">
               Extended Packages & Official Discounts
             </p>
-            <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+            <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white">
               Student, Senior / PWD & Long-Term Rates
             </h2>
           </div>

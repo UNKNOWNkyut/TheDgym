@@ -3,13 +3,14 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.rate_limit import rate_limit_sensitive
 from app.core.security import hash_password, revoke_user_sessions, verify_password
 from app.database import get_db
+from app.models.member import Member
 from app.models.user import User
 from app.models.user_profile import UserProfile
 from app.schemas.account import (
@@ -149,11 +150,16 @@ async def update_account_profile(
     current_user: User = Depends(get_current_user),
 ):
     update_data = data.model_dump(exclude_unset=True)
+    previous_email = current_user.email.lower().strip()
+
+    # Resolve linked Member profile before mutating email so lookups do not orphan it
+    stmt_mem = select(Member).where(func.lower(Member.email) == previous_email)
+    mem_obj = (await db.execute(stmt_mem)).scalar_one_or_none()
 
     # EMAIL
     if "email" in update_data and update_data["email"] is not None:
         new_email = str(update_data["email"]).lower().strip()
-        if new_email != current_user.email:
+        if new_email != previous_email:
             # Changing email is sensitive, so require the current password.
             if not data.current_password or not verify_password(
                 data.current_password, current_user.hashed_password
@@ -163,24 +169,45 @@ async def update_account_profile(
                     detail="Current password is required to change your email address.",
                 )
 
-            duplicate = await db.execute(
-                select(User).where(User.email == new_email, User.id != current_user.id)
+            duplicate_user = await db.execute(
+                select(User).where(func.lower(User.email) == new_email, User.id != current_user.id)
             )
-            if duplicate.scalar_one_or_none():
+            if duplicate_user.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="An account with this email address already exists.",
+                )
+
+            duplicate_member = await db.execute(
+                select(Member).where(func.lower(Member.email) == new_email)
+            )
+            existing_mem_with_email = duplicate_member.scalar_one_or_none()
+            if existing_mem_with_email and (not mem_obj or existing_mem_with_email.id != mem_obj.id):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="An account with this email address already exists.",
                 )
 
             current_user.email = new_email
+            if mem_obj:
+                mem_obj.email = new_email
 
     # FULL NAME
     if "full_name" in update_data and update_data["full_name"] is not None:
-        current_user.full_name = update_data["full_name"].strip()
+        cleaned_name = update_data["full_name"].strip()
+        current_user.full_name = cleaned_name
+        if mem_obj:
+            name_parts = cleaned_name.split(" ", 1)
+            mem_obj.first_name = name_parts[0]
+            if len(name_parts) > 1:
+                mem_obj.last_name = name_parts[1]
 
     # PHONE
     if "phone" in update_data:
         current_user.phone = update_data["phone"]
+        # Sync linked Member record so notifications reach the updated mobile number
+        if mem_obj:
+            mem_obj.phone = update_data["phone"]
 
     await record_audit_log(
         db,

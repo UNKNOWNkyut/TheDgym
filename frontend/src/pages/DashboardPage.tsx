@@ -71,59 +71,40 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
   // Modals & Popovers State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Mock Users paired with viewMode
-  const mockUsers = useMemo(
-    () => ({
-      ACTIVE: {
-        id: 1,
-        name: 'Alex Cruz',
-        email: 'alex.cruz@example.com',
-        phone: '+63 917 555 0192',
-        emergencyContact: 'Elena Cruz (+63 918 222 3344)',
-        roleBadge: 'ACTIVE MEMBER',
-        membershipPlan: user?.plan_name || 'Monthly Unlimited Barbell Access',
-        daysRemaining: 18,
-        totalPlanDays: 30,
-        attendanceStreak: '12 Visits • 3-Week Consistency Streak',
-        coachingCreditsRemaining: 4,
-        totalCoachingCredits: 10,
-        prs: [
-          { lift: 'Squat', weight: '140 kg', date: 'Oct 12' },
-          { lift: 'Bench Press', weight: '100 kg', date: 'Oct 04' },
-          { lift: 'Deadlift', weight: '180 kg', date: 'Sep 28' },
-        ],
-      },
-      INACTIVE: {
-        id: 2,
-        name: 'Jordan Ramos',
-        email: 'jordan.ramos@example.com',
-        phone: '+63 928 444 8819',
-        emergencyContact: 'Teresa Ramos (+63 920 111 9988)',
-        roleBadge: 'REGISTERED USER',
-        membershipPlan: 'No Active Membership Pass',
-        daysRemaining: 0,
-        totalPlanDays: 0,
-        attendanceStreak: '0 Visits • Account Created',
-        coachingCreditsRemaining: 0,
-        totalCoachingCredits: 0,
-        prs: [],
-      },
-    }),
-    [user?.plan_name],
-  );
+  // Derive active plan duration cleanly (YAGNI & Code-Simplifier)
+  const planDays = useMemo(() => {
+    if (viewMode !== 'ACTIVE') return { remaining: 0, total: 0 };
+    const planLower = (user?.plan_name || '').toLowerCase();
+    if (planLower.includes('day')) return { remaining: 1, total: 1 };
+    if (planLower.includes('quarter')) return { remaining: 90, total: 90 };
+    if (planLower.includes('annual') || planLower.includes('year')) return { remaining: 365, total: 365 };
+    if (planLower.includes('six') || planLower.includes('6')) return { remaining: 180, total: 180 };
+    return { remaining: 30, total: 30 }; // Default Monthly
+  }, [viewMode, user?.plan_name]);
 
   const currentUserData = useMemo(() => {
-    const base = mockUsers[viewMode];
+    const isActive = viewMode === 'ACTIVE';
     return {
-      ...base,
-      name: user?.full_name || base.name,
-      email: user?.email || base.email,
+      id: user?.id || 1,
+      name: user?.full_name || 'Athlete',
+      email: user?.email || '',
+      phone: user?.phone || 'Not provided',
+      emergencyContact: 'Not provided',
+      roleBadge: isActive ? 'ACTIVE MEMBER' : 'REGISTERED USER',
+      membershipPlan: user?.plan_name || (isActive ? 'Active Membership Pass' : 'No Active Membership Pass'),
+      daysRemaining: planDays.remaining,
+      totalPlanDays: planDays.total,
+      attendanceStreak: isActive ? '0 Visits • First Day at The DGym' : '0 Visits • Account Created',
+      visitCount: 0,
+      coachingCreditsRemaining: 0,
+      totalCoachingCredits: 0,
+      prs: [] as { lift: string; weight: string; date: string }[],
     };
-  }, [mockUsers, viewMode, user]);
+  }, [user, viewMode, planDays]);
 
   const userInitials = getInitials(currentUserData.name);
 
-  // Interactive Group Conditioning Classes (Active member feature)
+  // Interactive Group Conditioning Classes (Starts with zero phantom reservations)
   const [groupClasses, setGroupClasses] = useState<GroupClass[]>([
     {
       id: 'cls-1',
@@ -131,8 +112,8 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
       schedule: 'Tuesday & Thursday • 07:00 AM',
       instructor: 'Coach Mark',
       capacity: 12,
-      bookedCount: 10,
-      isReserved: true,
+      bookedCount: 9,
+      isReserved: false,
     },
     {
       id: 'cls-2',
@@ -292,14 +273,14 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                     Pass Validity
                   </span>
                   <span className="text-emerald-400 font-bold">
-                    {currentUserData.daysRemaining} Days Left
+                    {currentUserData.daysRemaining} {currentUserData.daysRemaining === 1 ? 'Day' : 'Days'} Left
                   </span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
                   <div
                     className="h-full bg-emerald-400 rounded-full transition-all"
                     style={{
-                      width: `${(currentUserData.daysRemaining / currentUserData.totalPlanDays) * 100}%`,
+                      width: `${currentUserData.totalPlanDays > 0 ? Math.min(100, Math.max(8, (currentUserData.daysRemaining / currentUserData.totalPlanDays) * 100)) : 0}%`,
                     }}
                   />
                 </div>
@@ -315,10 +296,10 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                   <Flame className="w-4 h-4 text-orange-400" />
                 </div>
                 <p className="text-xl sm:text-2xl font-black text-white font-mono">
-                  12 Visits
+                  {currentUserData.visitCount} Visits
                 </p>
                 <p className="text-xs text-orange-400 font-mono flex items-center gap-1">
-                  <span>🔥 3-Week Consistency Streak</span>
+                  <span>✨ First Day at The DGym • Check-in Ready</span>
                 </p>
               </div>
 
@@ -332,7 +313,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                   {currentUserData.coachingCreditsRemaining} / {currentUserData.totalCoachingCredits}
                 </p>
                 <p className="text-xs text-blue-400 font-mono">
-                  1-on-1 technique sessions remaining
+                  Book sessions via Book a Coach
                 </p>
               </div>
             </div>
@@ -351,7 +332,7 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                     </p>
                   </div>
                   <span className="text-xs font-mono text-emerald-400">
-                    {groupClasses.filter((c) => c.isReserved).length} Active Booking
+                    {groupClasses.filter((c) => c.isReserved).length} Active {groupClasses.filter((c) => c.isReserved).length === 1 ? 'Booking' : 'Bookings'}
                   </span>
                 </div>
 
@@ -407,18 +388,27 @@ function MemberPortalDashboard({ user, logout }: MemberPortalProps) {
                   <span className="text-xs font-mono text-white/40">Verified by Coach</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {currentUserData.prs.map((pr) => (
-                    <div
-                      key={pr.lift}
-                      className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center space-y-1"
-                    >
-                      <p className="text-xs uppercase font-mono text-white/40">{pr.lift}</p>
-                      <p className="text-xl font-mono font-black text-white">{pr.weight}</p>
-                      <p className="text-[10px] font-mono text-emerald-400">Logged {pr.date}</p>
-                    </div>
-                  ))}
-                </div>
+                {currentUserData.prs.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {currentUserData.prs.map((pr) => (
+                      <div
+                        key={pr.lift}
+                        className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center space-y-1"
+                      >
+                        <p className="text-xs uppercase font-mono text-white/40">{pr.lift}</p>
+                        <p className="text-xl font-mono font-black text-white">{pr.weight}</p>
+                        <p className="text-[10px] font-mono text-emerald-400">Logged {pr.date}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-xl border border-white/5 bg-white/[0.02] text-center space-y-1">
+                    <p className="text-xs font-mono text-white/60">No verified lifting PRs logged yet</p>
+                    <p className="text-[11px] text-white/30 font-mono">
+                      Perform your benchmark lifts with our certified coaches to record verified Big 3 PRs.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

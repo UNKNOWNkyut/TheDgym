@@ -1,17 +1,61 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update, delete, or_
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.member import Member
 from app.models.notification import Notification
 from app.schemas.retention import NotificationResponse
+from app.services.sms_service import get_sms_account_status, send_sms
 
 router = APIRouter(prefix="/api/notifications", tags=["In-App Notifications"])
+
+_STAFF_ROLES = (UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER)
+
+
+async def _get_linked_member_id(db: AsyncSession, current_user: User) -> Optional[int]:
+    """Resolve Member.id matching current_user.email case-insensitively."""
+    normalized_email = (current_user.email or "").lower().strip()
+    if not normalized_email:
+        return None
+    stmt_mem = select(Member.id).where(func.lower(Member.email) == normalized_email)
+    return (await db.execute(stmt_mem)).scalar_one_or_none()
+
+
+async def _notification_scope_for_user(db: AsyncSession, current_user: User):
+    """Build SQLAlchemy WHERE clause scoping notifications to current_user safely."""
+    if current_user.role in _STAFF_ROLES:
+        return and_(
+            Notification.user_id == current_user.id,
+            Notification.type.notin_(["retention", "offer"]),
+        )
+
+    mem_id = await _get_linked_member_id(db, current_user)
+    if mem_id is not None:
+        return or_(
+            Notification.user_id == current_user.id,
+            and_(Notification.member_id == mem_id, Notification.user_id.is_(None)),
+        )
+    return Notification.user_id == current_user.id
+
+
+async def _user_owns_notification(
+    db: AsyncSession,
+    notif: Notification,
+    current_user: User,
+) -> bool:
+    """Verify current_user owns an individual notification without leaking user-targeted staff alerts."""
+    if notif.user_id == current_user.id:
+        return True
+    if current_user.role in _STAFF_ROLES or notif.user_id is not None or notif.member_id is None:
+        return False
+    mem_id = await _get_linked_member_id(db, current_user)
+    return mem_id is not None and notif.member_id == mem_id
 
 
 @router.get(
@@ -23,31 +67,10 @@ async def get_my_notifications(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Admin & Trainer Role Notifications
-    if current_user.role in ("admin", "trainer"):
-        stmt = (
-            select(Notification)
-            .where(
-                Notification.user_id == current_user.id,
-                Notification.type.notin_(["retention", "offer"]),
-            )
-            .order_by(Notification.created_at.desc())
-            .limit(50)
-        )
-        rows = (await db.execute(stmt)).scalars().all()
-        return rows
-
-    # 2. Member / User Notifications (Account offers, personal retention, bookings)
-    stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
-    mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
-
-    conditions = [Notification.user_id == current_user.id]
-    if mem_id:
-        conditions.append(Notification.member_id == mem_id)
-
+    scope = await _notification_scope_for_user(db, current_user)
     stmt = (
         select(Notification)
-        .where(or_(*conditions))
+        .where(scope)
         .order_by(Notification.created_at.desc())
         .limit(50)
     )
@@ -63,19 +86,11 @@ async def clear_all_notifications(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role in ("admin", "trainer"):
-        stmt = delete(Notification).where(Notification.user_id == current_user.id)
-    else:
-        stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
-        mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
-        conditions = [Notification.user_id == current_user.id]
-        if mem_id:
-            conditions.append(Notification.member_id == mem_id)
-        stmt = delete(Notification).where(or_(*conditions))
-
+    scope = await _notification_scope_for_user(db, current_user)
+    stmt = delete(Notification).where(scope)
     result = await db.execute(stmt)
     await db.commit()
-    return {"status": "cleared", "deleted_count": result.rowcount}
+    return {"status": "cleared", "deleted_count": result.rowcount or 0}
 
 
 @router.delete(
@@ -92,13 +107,7 @@ async def delete_notification(
     if not notif:
         return {"status": "deleted", "id": notification_id}
 
-    stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
-    mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
-
-    owns_notification = (notif.user_id == current_user.id) or (
-        mem_id is not None and notif.member_id == mem_id
-    )
-    if not owns_notification:
+    if not await _user_owns_notification(db, notif, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this notification.",
@@ -123,14 +132,8 @@ async def mark_notification_read(
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
 
-    # Check 06 / Check 33: Verify notification belongs to current_user or their linked Member
-    stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
-    mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
-
-    owns_notification = (notif.user_id == current_user.id) or (
-        mem_id is not None and notif.member_id == mem_id
-    )
-    if not owns_notification:
+    # Check 06 / Check 33: Verify notification belongs to current_user or their unaddressed linked Member alert
+    if not await _user_owns_notification(db, notif, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to modify this notification.",
@@ -150,19 +153,45 @@ async def mark_all_notifications_read(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    stmt_mem = select(Member.id).where(Member.email == current_user.email.lower().strip())
-    mem_id = (await db.execute(stmt_mem)).scalar_one_or_none()
-
-    conditions = [Notification.user_id == current_user.id]
-    if mem_id:
-        conditions.append(Notification.member_id == mem_id)
-
+    scope = await _notification_scope_for_user(db, current_user)
     stmt = (
         update(Notification)
-        .where(or_(*conditions), Notification.is_read == False)
+        .where(scope, Notification.is_read.is_(False))
         .values(is_read=True)
     )
     result = await db.execute(stmt)
     await db.commit()
 
-    return {"status": "success", "updated_count": result.rowcount}
+    return {"status": "success", "updated_count": result.rowcount or 0}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SMS Notification Endpoints (Admin & Staff via TextBee Android Gateway)
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestSmsRequest(BaseModel):
+    phone: str = Field(..., description="Philippine mobile number (e.g. 09171234567, +639171234567)")
+    message: str = Field(..., min_length=1, max_length=480, description="SMS text content")
+
+
+@router.get(
+    "/sms/status",
+    summary="Get TextBee Android Gateway device status and connectivity",
+)
+async def get_sms_status(
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
+):
+    """Fetches real-time TextBee Android Gateway device status (battery, online state)."""
+    return await get_sms_account_status()
+
+
+@router.post(
+    "/sms/send-test",
+    summary="Send a test SMS message via TextBee Android Gateway",
+)
+async def send_test_sms(
+    payload: TestSmsRequest,
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
+):
+    """Sends a transactional SMS to a single recipient."""
+    return await send_sms(payload.phone, payload.message)

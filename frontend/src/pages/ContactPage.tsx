@@ -63,15 +63,15 @@ export function ContactPage() {
       />
 
       {/* Hero */}
-      <div ref={heroRef} className="border-b border-white/8 section-padding">
+      <div ref={heroRef} className="border-b border-zinc-200 dark:border-white/8 section-padding">
         <div className="container-dgym">
-          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
+          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-4">
             Get in touch • Rosario, Batangas
           </p>
-          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-white mb-4 max-w-2xl">
+          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-zinc-950 dark:text-white mb-4 max-w-2xl">
             Contact Us
           </h1>
-          <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
+          <p className="hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-lg leading-relaxed">
             Questions about membership, group classes, or personal training in Rosario, Batangas? We're here to help.
           </p>
         </div>
@@ -82,7 +82,7 @@ export function ContactPage() {
 
           {/* Contact Info */}
           <div>
-            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-8">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-8">
               Find Us
             </h2>
 
@@ -96,11 +96,11 @@ export function ContactPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white mb-0.5">Location</p>
-                  <p className="text-sm text-white/70">
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Location</p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
                     {GYM_INFO.streetAddress}
                     <br />
-                    <span className="text-white/40 text-xs">{GYM_INFO.landmark}</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 text-xs">{GYM_INFO.landmark}</span>
                   </p>
                 </div>
               </div>
@@ -113,10 +113,10 @@ export function ContactPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white mb-0.5">Phone</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Phone</p>
                   <a
                     href={GYM_INFO.phoneHref}
-                    className="text-sm text-white/70 hover:text-white transition-colors underline underline-offset-2"
+                    className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors underline underline-offset-2"
                   >
                     {GYM_INFO.phoneDisplay} ({GYM_INFO.phoneInternational})
                   </a>
@@ -132,10 +132,10 @@ export function ContactPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white mb-0.5">Email</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Email</p>
                   <a
                     href={GYM_INFO.emailHref}
-                    className="text-sm text-white/70 hover:text-white transition-colors underline underline-offset-2 break-all"
+                    className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors underline underline-offset-2 break-all"
                   >
                     {GYM_INFO.email}
                   </a>
@@ -150,12 +150,12 @@ export function ContactPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white mb-0.5">Official Facebook</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Official Facebook</p>
                   <a
                     href={GYM_INFO.facebookUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-white/70 hover:text-white transition-colors underline underline-offset-2"
+                    className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors underline underline-offset-2"
                   >
                     {GYM_INFO.facebookLabel} (2,400+ followers)
                   </a>
@@ -184,7 +184,7 @@ export function ContactPage() {
 
           {/* Contact Form */}
           <div>
-            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-8">
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-8">
               Send a Message
             </h2>
 
@@ -195,10 +195,10 @@ export function ContactPage() {
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
-                <h3 className="font-display text-xl font-bold uppercase text-white mb-2">
+                <h3 className="font-display text-xl font-bold uppercase text-zinc-950 dark:text-white mb-2">
                   Message Sent
                 </h3>
-                <p className="text-sm text-white/50">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
                   We'll be in touch. You can also reach us on Facebook for a faster response.
                 </p>
               </div>
@@ -211,6 +211,7 @@ export function ContactPage() {
               >
                 <Input
                   label="Full Name"
+                  labelClassName="text-zinc-700 dark:text-white/70"
                   placeholder="Your name"
                   value={form.name}
                   onChange={update('name')}
@@ -219,6 +220,7 @@ export function ContactPage() {
                 />
                 <Input
                   label="Email Address"
+                  labelClassName="text-zinc-700 dark:text-white/70"
                   type="email"
                   placeholder="your@email.com"
                   value={form.email}
@@ -229,7 +231,7 @@ export function ContactPage() {
 
                 {/* Textarea — manual since we only have Input */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="message" className="text-sm font-medium text-white/70">
+                  <label htmlFor="message" className="text-sm font-medium text-zinc-700 dark:text-white/70">
                     Message
                   </label>
                   <textarea
@@ -261,7 +263,7 @@ export function ContactPage() {
                   Send Message
                 </Button>
 
-                <p className="text-xs text-white/40 text-center">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center">
                   We typically respond to inquiries within 24 hours.
                 </p>
               </form>

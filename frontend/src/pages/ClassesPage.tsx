@@ -71,15 +71,15 @@ export function ClassesPage() {
       />
 
       {/* Hero */}
-      <div ref={heroRef} className="border-b border-white/8 section-padding">
+      <div ref={heroRef} className="border-b border-zinc-200 dark:border-white/8 section-padding">
         <div className="container-dgym">
-          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
+          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-4">
             Group Training • Rosario, Batangas
           </p>
-          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-white mb-4 max-w-2xl">
+          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-zinc-950 dark:text-white mb-4 max-w-2xl">
             Classes Built<br />Around Results
           </h1>
-          <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
+          <p className="hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-lg leading-relaxed">
             Unlimited free (₱0) access to our 6:00 PM TABATA and HIIT group sessions for all active members—led by Coach Marta and Coach Kresler.
           </p>
         </div>
@@ -139,10 +139,10 @@ export function ClassesPage() {
         {visibleSessions.length > 0 && (
           <div className="mb-16">
             <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2">
                 Live Portal Schedule
               </p>
-              <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+              <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white">
                 Upcoming Scheduled Sessions
               </h2>
             </div>
@@ -191,8 +191,8 @@ export function ClassesPage() {
         {/* Real community photos */}
         <div className="mb-16">
           <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-2">Class Atmosphere</p>
-            <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">Community in Action</h2>
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2">Class Atmosphere</p>
+            <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white">Community in Action</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-video relative group">
@@ -227,7 +227,7 @@ export function ClassesPage() {
 
         {/* CTA */}
         <div className="mt-8 text-center">
-          <p className="text-sm text-white/40 mb-4">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             Unlimited free (₱0) access to all 6:00 PM group classes is included with every active membership.
           </p>
           <Link to="/membership">

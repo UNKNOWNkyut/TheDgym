@@ -21,6 +21,7 @@ from app.routers import (
     members_router,
     membership_plans_router,
     notifications_router,
+    payments_router,
     pt_sessions_router,
     retention_router,
     users_router,
@@ -259,6 +260,7 @@ app.include_router(analytics_router)
 app.include_router(retention_router)
 app.include_router(notifications_router)
 app.include_router(access_control_router)
+app.include_router(payments_router)
 
 
 # =========================================================

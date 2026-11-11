@@ -10,9 +10,11 @@ import type {
   AppNotification,
   AssignMembershipCreate,
   AtRiskMemberItem,
+  CheckoutSessionResponse,
   ChurnOverview,
   ClassSession,
   ClassSessionCreate,
+  CreateCheckoutPayload,
   Expense,
   ExpenseCategory,
   ExpenseCategoryCreate,
@@ -31,6 +33,7 @@ import type {
   MembershipSummary,
   MemberStats,
   PairingSessionStatus,
+  PaymentVerifyResponse,
   PTSession,
   PTSessionBookCreate,
   PTSessionCreate,
@@ -590,6 +593,19 @@ export const api = {
     })
   },
 
+  async autoDispatchHighRiskSms(): Promise<{
+    status: string
+    total_high_risk: number
+    dispatched_count: number
+    skipped_count: number
+    dispatched: Array<{ member_name: string; phone: string; offer_title: string }>
+    skipped: Array<{ member_id: number; reason: string }>
+  }> {
+    return request('/api/retention/auto-dispatch-high-risk', {
+      method: 'POST',
+    })
+  },
+
   async getMyNotifications(): Promise<AppNotification[]> {
     return request<AppNotification[]>('/api/notifications')
   },
@@ -610,6 +626,32 @@ export const api = {
 
   async clearAllNotifications(): Promise<{ status: string; deleted_count: number }> {
     return request('/api/notifications/clear-all', { method: 'DELETE' })
+  },
+
+  // ─── SMS Integration (TextBee Gateway) ─────────────────────────────────
+
+  async getSmsStatus(): Promise<{
+    configured: boolean
+    provider?: string
+    status?: string
+    device_id?: string
+    brand?: string
+    model?: string
+    battery?: number
+    device_count?: number
+    message?: string
+  }> {
+    return request('/api/notifications/sms/status')
+  },
+
+  async sendTestSms(
+    phone: string,
+    message: string
+  ): Promise<{ status: string; data?: unknown; message?: string }> {
+    return request('/api/notifications/sms/send-test', {
+      method: 'POST',
+      body: JSON.stringify({ phone, message }),
+    })
   },
 
   // ─── Smart Keycard Access Control ────────────────────────────────────────
@@ -678,5 +720,27 @@ export const api = {
   getAccessLiveFeedWsUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${protocol}//${window.location.host}/api/access/ws/live-feed`
+  },
+
+  async createPaymentCheckout(
+    data: CreateCheckoutPayload,
+  ): Promise<CheckoutSessionResponse> {
+    return request<CheckoutSessionResponse>('/api/payments/create-checkout', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async verifyPayment(invoiceId: string): Promise<PaymentVerifyResponse> {
+    return request<PaymentVerifyResponse>(`/api/payments/verify/${encodeURIComponent(invoiceId)}`)
+  },
+
+  async getPaymentGatewayStatus(): Promise<{
+    provider: string
+    configured: boolean
+    is_test_mode: boolean
+    supported_channels: string[]
+  }> {
+    return request('/api/payments/status')
   },
 }

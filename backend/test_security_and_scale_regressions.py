@@ -149,7 +149,7 @@ async def run_regression_suite() -> None:
         user_hdrs = {"Authorization": f"Bearer {user_tok}"}
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            # 1. ANTIGRAV-02: Online avail-plan creates PENDING PHP 0.00 membership
+            # 1. Online avail-plan creates PENDING PHP 0.00 membership
             r_avail = await ac.post(
                 "/api/auth/avail-plan",
                 json={"plan_slug": "monthly-pass"},
@@ -233,7 +233,7 @@ async def run_regression_suite() -> None:
             assert r_exp_visit.status_code == 400
             print("[PASS] 2. Step 12a duplicate check-in (409) & expired check-in (400) guards verified")
 
-            # 3. Step 12b: 10-way concurrent class enrollment on max_capacity=3 + duplicate 409
+            # 10-way concurrent class enrollment on max_capacity=3 + duplicate 409
             r_cls = await ac.post(
                 "/api/classes",
                 json={
@@ -268,7 +268,6 @@ async def run_regression_suite() -> None:
                 headers=admin_hdrs,
             )
             assert r_dup_enroll.status_code == 409
-            print("[PASS] 3. Step 12b atomic 10-way capacity lock (3/3 admitted, 7 rejected, dup 409) verified")
 
             # 4. ANTIGRAV-07 / 09 / 10: GET webhook-tap 405, Cookie CSRF 403, Security headers, Logout JTI revoke
             r_get_webhook = await ac.get("/api/access/webhook-tap?uid=AA:BB:CC:DD")

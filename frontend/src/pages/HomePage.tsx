@@ -1,114 +1,153 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PUBLIC_PLANS } from '@/constants/plans'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
+import { ChevronLeft, ChevronRight, Plus, Minus } from 'lucide-react'
 import { SEO } from '@/components/ui/SEO'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { NewsletterSection } from '@/components/sections/NewsletterSection'
+import { DotPattern, useDotTheme } from '@/components/ui/dot-pattern'
+import { cn } from '@/lib/utils'
 
 gsap.registerPlugin(ScrollTrigger)
 
-// --- Feature icons (inline SVG, no external icon lib needed) ---
-function IconStrength() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6.5 6.5L3 10l9 9 3.5-3.5" /><path d="M14 4l6 6" /><path d="M4 20l2-2" /><path d="M9 5l10 10" />
-    </svg>
-  )
-}
-function IconSchedule() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  )
-}
-function IconCoach() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  )
-}
-function IconEquipment() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-    </svg>
-  )
-}
+// --- Structured Program Cards (Image 4 Essence) ---
+const PROGRAM_CARDS = [
+  {
+    title: 'Strength & Barbell Program',
+    tags: ['STRENGTH DEVELOPMENT', 'PROGRESSIVE OVERLOAD', 'MOVEMENT QUALITY', 'CORE STABILITY'],
+    description:
+      'A PROGRESSIVE STRENGTH PROGRAM FOCUSED ON BUILDING MUSCLE, POWER, STABILITY, AND CONFIDENCE UNDER HEAVY BARBELL LOAD.',
+    ctaLabel: 'Explore Strength',
+    href: '/membership',
+    image: '/assets/images/img7.jpg',
+    alt: 'The DGym dumbbell racks and barbell strength zone in Rosario, Batangas',
+  },
+  {
+    title: 'Conditioning & Tabata',
+    tags: ['CARDIO', 'INTERVALS', 'FUNCTIONAL CONDITIONING', 'ENDURANCE'],
+    description:
+      'IMPROVE ENDURANCE, CARDIOVASCULAR FITNESS, AND WORK CAPACITY THROUGH STRUCTURED 6:00 PM GROUP CONDITIONING SESSIONS.',
+    ctaLabel: 'Explore Conditioning',
+    href: '/classes',
+    image: '/assets/images/img12.jpg',
+    alt: 'The DGym conditioning and plate-loaded floor in Rosario, Batangas',
+  },
+  {
+    title: '1-on-1 Personal Coaching',
+    tags: ['BIOMECHANICS', 'BOXING PADWORK', 'CUSTOM PROGRAMMING', 'ACCOUNTABILITY'],
+    description:
+      'DEDICATED ONE-ON-ONE SESSIONS ENGINEERED AROUND YOUR GOALS, FORM REFINEMENT, AND MEASURABLE ATHLETIC MILESTONES.',
+    ctaLabel: 'Explore Coaching',
+    href: '/trainers',
+    image: '/assets/images/img6.jpg',
+    alt: 'Personal training session with coach at The DGym Rosario Batangas',
+  },
+] as const
 
-const FEATURES = [
+// --- Pillars Bento Data (Image 3 Essence) ---
+const PILLAR_CARDS = [
   {
-    icon: <IconStrength />,
-    title: 'Full Strength Zone',
-    body: 'A full floor of free weights, barbells, and resistance machines built for serious training.',
+    tag: 'STRENGTH & POWERLIFTING',
+    colSpan: 'lg:col-span-6',
+    body: 'BUILD STRONGER, MORE EFFICIENT LIFTING PATTERNS ON COMPETITION DEADLIFT PLATFORMS, ROGUE BARBELLS, AND FULL TECHNOGYM DUMBBELL RUNS UP TO 40KG.',
   },
   {
-    icon: <IconCoach />,
-    title: 'Personal Training',
-    body: 'One-on-one sessions with dedicated coaches who program around your goals, not a template.',
+    tag: 'MOBILITY & CONDITIONING',
+    colSpan: 'lg:col-span-3',
+    body: 'IMPROVE JOINT CONTROL, METABOLIC WORK CAPACITY, AND STAMINA WITH COMPLIMENTARY DAILY 6:00 PM TABATA AND HIIT GROUP CLASSES.',
   },
   {
-    icon: <IconSchedule />,
-    title: 'Group Classes',
-    body: 'Structured group sessions that keep your training consistent and your motivation high.',
+    tag: 'RECOVERY & LOUNGE',
+    colSpan: 'lg:col-span-3',
+    body: 'REDUCE TRAINING FATIGUE IN OUR AIR-CONDITIONED FACILITY FEATURING DEDICATED COACHING, LOCKER ACCESS, AND HIGH-SPEED MEMBER WI-FI.',
+  },
+] as const
+
+// --- Home FAQ Data (Image 6 Essence) ---
+const HOME_FAQS = [
+  {
+    question: 'Is The DGym suitable for beginners?',
+    answer:
+      'YES. OUR CERTIFIED COACHES PROVIDE FORM ASSESSMENTS, GUIDED EQUIPMENT ORIENTATION, AND SCALABLE WORKOUTS SO BEGINNERS CAN TRAIN SAFELY FROM DAY ONE.',
   },
   {
-    icon: <IconEquipment />,
-    title: 'Premium Equipment',
-    body: 'Maintained machines, updated regularly. Train without compromising on equipment quality.',
+    question: 'Can I try the gym before committing to a monthly plan?',
+    answer:
+      'YES. WE OFFER A ₱400 DAY PASS SO YOU CAN EXPERIENCE OUR TECHNOGYM & ROGUE EQUIPMENT, TRAINING FLOOR, AND ATMOSPHERE BEFORE CHOOSING A MEMBERSHIP.',
   },
-]
+  {
+    question: 'What is included in a standard membership?',
+    answer:
+      'UNLIMITED ACCESS TO ALL CARDIO AND STRENGTH ZONES, FREE 6:00 PM TABATA & HIIT GROUP CLASSES, LOCKER USE, LOUNGE WORKSPACE, AND NFC SMART KEYCARD ENTRY.',
+  },
+  {
+    question: 'Do you offer 1-on-1 personal training and boxing?',
+    answer:
+      'YES. COACH IVAN, COACH MARTA, AND COACH KRESLER OFFER DEDICATED 1-ON-1 STRENGTH CONDITIONING AND 90-MINUTE BOXING SESSIONS TAILORED TO YOUR GOALS.',
+  },
+  {
+    question: 'How do I activate my membership pass?',
+    answer:
+      'CHOOSE ANY PLAN ONLINE VIA GCASH, MAYA, QR PH, OR CARD—OR PAY AT THE FRONT DESK. YOUR PASS ACTIVATES INSTANTLY WITH AN AUTOMATED SMS CONFIRMATION.',
+  },
+] as const
 
 export function HomePage() {
   const heroRef = useRef<HTMLElement>(null)
-  const featuresRef = useRef<HTMLElement>(null)
-  const ctaRef = useRef<HTMLElement>(null)
+  const sectionsRef = useRef<HTMLDivElement>(null)
+  const programsScrollRef = useRef<HTMLDivElement>(null)
+  const [openFaqIndex, setOpenFaqIndex] = useState<number>(1)
+  const { theme } = useDotTheme()
+  const isLight = theme === 'light'
+  const dotFillClass = isLight
+    ? 'fill-zinc-400/60 md:fill-zinc-500/55'
+    : 'fill-slate-500/25 md:fill-slate-500/35'
+  const headingColor = isLight ? 'text-zinc-900' : 'text-white'
+  const subTextColor = isLight ? 'text-zinc-600' : 'text-white/65'
 
   // Hero entrance
-  useGSAP(() => {
-    const el = heroRef.current
-    if (!el) return
-    gsap.fromTo(
-      el.querySelectorAll('.hero-item'),
-      { opacity: 0, y: 50 },
-      { opacity: 1, y: 0, duration: 0.9, ease: 'power3.out', stagger: 0.12, delay: 0.2 }
-    )
-  }, { scope: heroRef })
-
-  // Features reveal
-  useGSAP(() => {
-    const cards = featuresRef.current?.querySelectorAll('.feature-card')
-    if (!cards) return
-    cards.forEach((card) => {
+  useGSAP(
+    () => {
+      const el = heroRef.current
+      if (!el) return
       gsap.fromTo(
-        card,
+        el.querySelectorAll('.hero-item'),
         { opacity: 0, y: 36 },
-        {
-          opacity: 1, y: 0, duration: 0.6, ease: 'power3.out',
-          scrollTrigger: { trigger: card, start: 'top 90%', once: true },
-        }
+        { opacity: 1, y: 0, duration: 0.85, ease: 'power3.out', stagger: 0.1, delay: 0.15 }
       )
-    })
-  }, { scope: featuresRef })
+    },
+    { scope: heroRef }
+  )
 
-  // CTA reveal
-  useGSAP(() => {
-    const el = ctaRef.current
-    if (!el) return
-    gsap.fromTo(
-      el.querySelectorAll('.cta-item'),
-      { opacity: 0, y: 24 },
-      {
-        opacity: 1, y: 0, duration: 0.6, ease: 'power3.out', stagger: 0.1,
-        scrollTrigger: { trigger: el, start: 'top 85%', once: true },
-      }
-    )
-  }, { scope: ctaRef })
+  // Scroll-triggered section reveals
+  useGSAP(
+    () => {
+      const blocks = sectionsRef.current?.querySelectorAll('.reveal-block')
+      if (!blocks) return
+      blocks.forEach((block) => {
+        gsap.fromTo(
+          block,
+          { opacity: 0, y: 32 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.65,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: block, start: 'top 88%', once: true },
+          }
+        )
+      })
+    },
+    { scope: sectionsRef }
+  )
+
+  const scrollPrograms = (direction: 'prev' | 'next') => {
+    const container = programsScrollRef.current
+    if (!container) return
+    const offset = direction === 'next' ? 420 : -420
+    container.scrollBy({ left: offset, behavior: 'smooth' })
+  }
 
   return (
     <>
@@ -120,319 +159,512 @@ export function HomePage() {
       />
 
       {/* ============================================================
-          HERO — Full viewport, real gym photo background
+          1. HERO — Framed Rounded-3xl Monochrome & Red Showcase (Image 1)
           ============================================================ */}
       <section
         ref={heroRef}
-        className="relative flex items-end min-h-screen overflow-hidden"
+        className="px-3 sm:px-6 pb-8"
         aria-label="The DGym — High End Premium Fitness Gym in Rosario, Batangas"
       >
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/assets/images/dgym_bg.jpg')" }}
-          role="img"
-          aria-label="The DGym interior — dark athletic training space with red LED lighting in Rosario, Batangas"
-        />
+        <div className="relative rounded-3xl overflow-hidden min-h-[84vh] flex flex-col justify-between border border-white/10 bg-[#09090b] shadow-2xl">
+          {/* Background image */}
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
+            style={{ backgroundImage: "url('/assets/images/dgym_bg.jpg')" }}
+            role="img"
+            aria-label="The DGym interior — dark athletic training space with red LED lighting in Rosario, Batangas"
+          />
 
-        {/* Layered overlay: bottom-heavy gradient for text legibility + subtle dark veil */}
-        <div className="absolute inset-0 bg-black/45" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
+          {/* Dramatic monochrome + subtle crimson atmospheric overlays */}
+          <div className="absolute inset-0 bg-black/55" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_35%,rgba(229,32,26,0.22),transparent_60%)]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/30" />
 
-        {/* Content — sits at the bottom of the hero */}
-        <div className="container-dgym relative z-10 pb-20 md:pb-28 pt-36">
-          {/* <p className="hero-item text-xs font-semibold uppercase tracking-[0.25em] text-red mb-5">
-            Rosario, Batangas • High End Premium Fitness
-          </p> */}
+          {/* Top Spacer */}
+          <div className="pt-8" />
 
-          <h1 className="hero-item font-display text-6xl sm:text-7xl md:text-8xl lg:text-[7rem] font-black uppercase leading-none tracking-tight text-white mb-6 max-w-4xl">
-            Train Hard.<br />
-            <span className="text-red">Get Stronger.</span>
-          </h1>
-
-          <p className="hero-item text-lg md:text-xl text-white/75 max-w-2xl mb-10 leading-relaxed font-light">
-            High End Premium Weightlifting, Powerlifting, and Fitness Gym in Rosario, Batangas. Real Technogym & Rogue equipment, dedicated coaching, and an authentic lifting atmosphere.
-          </p>
-
-          <div className="hero-item flex flex-wrap gap-4">
-            <Link to="/membership">
-              <Button size="lg">
-                View Membership
-              </Button>
-            </Link>
-            <Link to="/classes">
-              <Button variant="secondary" size="lg">
-                See Classes
-              </Button>
-            </Link>
+          {/* Middle Horizontal Axis Micro-Labels */}
+          <div className="hero-item container-dgym relative z-10 my-auto py-12">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-mono uppercase tracking-[0.22em] text-white/75 border-y border-white/10 py-3.5">
+              <span>BUILD CONSISTENCY</span>
+              <span className="text-white">BUILD SPIRITS</span>
+              <span>BUILD HABITS</span>
+            </div>
           </div>
-        </div>
 
-        {/* Scroll cue */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-40" aria-hidden="true">
-          <span className="text-xs uppercase tracking-widest text-white">Scroll</span>
-          <div className="w-px h-8 bg-white/40 animate-pulse" />
-        </div>
-      </section>
-
-      {/* ============================================================
-          FEATURES — What The DGym offers
-          ============================================================ */}
-      <section
-        ref={featuresRef}
-        className="section-padding border-b border-white/8"
-        aria-labelledby="features-heading"
-      >
-        <div className="container-dgym">
-          <div className="mb-12 md:mb-16">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">
-              What we offer
+          {/* Bottom Centered Headline & CTA */}
+          <div className="container-dgym relative z-10 pb-14 md:pb-20 text-center space-y-5">
+            <p className="hero-item text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red">
+              CHOOSE YOUR FOCUS.
             </p>
-            <h2
-              id="features-heading"
-              className="font-display text-4xl md:text-5xl font-bold uppercase tracking-tight text-white"
-            >
-              Built for<br className="sm:hidden" /> Serious Training
-            </h2>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {FEATURES.map((f) => (
-              <Card key={f.title} className="feature-card group">
-                <div className="w-11 h-11 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red mb-5 group-hover:bg-red/20 transition-colors duration-200">
-                  {f.icon}
-                </div>
-                <h3 className="font-display text-lg font-bold uppercase tracking-wide text-white mb-2">
-                  {f.title}
-                </h3>
-                <p className="text-sm text-white/50 leading-relaxed">
-                  {f.body}
-                </p>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+            <h1 className="hero-item text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-[1.05]">
+              Programs built to
+              <br />
+              make you stronger
+            </h1>
 
-      {/* ============================================================
-          FACILITY SHOWCASE — Authentic Photos of The DGym Rosario Batangas
-          ============================================================ */}
-      <section
-        className="section-padding border-b border-white/8 relative overflow-hidden"
-        aria-labelledby="facility-heading"
-      >
-        <div className="container-dgym">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">
-                The Facility • Rosario, Batangas
-              </p>
-              <h2
-                id="facility-heading"
-                className="font-display text-4xl md:text-5xl font-bold uppercase tracking-tight text-white"
-              >
-                Inside The DGym
-              </h2>
-            </div>
-            <p className="text-sm text-white/50 max-w-md mt-4 md:mt-0 leading-relaxed">
-              Equipped with Technogym and Rogue equipment, dedicated deadlift platforms, custom plate-loaded machines, and air-conditioned training zones.
+            <p className="hero-item text-xs sm:text-sm font-mono uppercase tracking-widest text-white/70 max-w-xl mx-auto leading-relaxed">
+              FOCUSED TRAINING PROGRAMS DESIGNED AROUND STRENGTH, PERFORMANCE, MOVEMENT, AND MEASURABLE PROGRESS IN ROSARIO, BATANGAS.
             </p>
-          </div>
 
-          {/* Photo Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Feature 1: Free weights */}
-            <div className="group relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-[4/3] md:aspect-[3/4]">
-              <img
-                src="/assets/images/img7.jpg"
-                alt="The DGym dumbbell racks with Technogym weights, red benches, and STRONGER neon"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-red">Weightlifting Zone</span>
-                <h3 className="font-display text-xl font-bold uppercase text-white mt-0.5">Technogym Dumbbell Racks</h3>
-                <p className="text-xs text-white/60 mt-1">Full dumbbell run up to 40kg with competition benches</p>
-              </div>
-            </div>
-
-            {/* Feature 2: Plate-loaded machines (center featured) */}
-            <div className="group relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-[4/3] md:aspect-[3/4]">
-              <img
-                src="/assets/images/img12.jpg"
-                alt="The DGym plate-loaded strength machines with STRONGER mirror sign"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-red">Strength Machinery</span>
-                <h3 className="font-display text-xl font-bold uppercase text-white mt-0.5">Plate-Loaded Floor</h3>
-                <p className="text-xs text-white/60 mt-1">Heavy-duty chest, back, and leg selectorized equipment</p>
-              </div>
-            </div>
-
-            {/* Feature 3: Powerlifting & Platforms */}
-            <div className="group relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-[4/3] md:aspect-[3/4]">
-              <img
-                src="/assets/images/img10.jpg"
-                alt="Member deadlifting on lifting platform with Rogue competition plates at The DGym"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-red">Powerlifting</span>
-                <h3 className="font-display text-xl font-bold uppercase text-white mt-0.5">Rogue Lifting Platforms</h3>
-                <p className="text-xs text-white/60 mt-1">Dedicated deadlift platforms with Olympic bumper plates</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Secondary photo row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div className="group relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-[16/9]">
-              <img
-                src="/assets/images/img6.jpg"
-                alt="Coach personal training session at The DGym Rosario Batangas"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-red">Coaching</span>
-                <h3 className="font-display text-xl font-bold uppercase text-white mt-0.5">1-on-1 Personal Training</h3>
-                <p className="text-xs text-white/60 mt-1">Hands-on technique refinement and custom progressive programming</p>
-              </div>
-            </div>
-
-            <div className="group relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-[16/9]">
-              <img
-                src="/assets/images/img18.jpg"
-                alt="The DGym members and coaches under hexagonal lighting in Rosario, Batangas"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-red">Community</span>
-                <h3 className="font-display text-xl font-bold uppercase text-white mt-0.5">The DGym Rosario Community</h3>
-                <p className="text-xs text-white/60 mt-1">Over 2,400+ followers and athletes training under one roof</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================
-          MEMBERSHIP PREVIEW
-          ============================================================ */}
-      <section
-        className="section-padding border-b border-white/8 bg-surface"
-        aria-labelledby="membership-preview-heading"
-      >
-        <div className="container-dgym">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">
-                Membership
-              </p>
-              <h2
-                id="membership-preview-heading"
-                className="font-display text-4xl md:text-5xl font-bold uppercase tracking-tight text-white mb-5"
+            <div className="hero-item pt-3 flex flex-wrap items-center justify-center gap-3">
+              <Link
+                to="/membership"
+                className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium tracking-wide transition-all shadow-[0_0_24px_rgba(229,32,26,0.4)]"
               >
-                Plans for<br />Every Goal
-              </h2>
-              <p className="text-base text-white/60 max-w-md mb-8 leading-relaxed">
-                Whether you're starting out or training at an advanced level, we have a membership plan that fits your schedule and your budget.
-              </p>
-              <Link to="/membership">
-                <Button>View All Plans</Button>
+                <span>Avail Membership</span>
+                <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+              </Link>
+              <Link
+                to="/classes"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-mono uppercase tracking-widest transition-all"
+              >
+                <span>Explore Classes</span>
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
 
-            {/* Membership tier preview cards */}
-            <div className="space-y-3">
-              {PUBLIC_PLANS.map((plan) => (
+      <div ref={sectionsRef} className="space-y-8">
+        {/* ============================================================
+            2. INTRO STATEMENT & SPLIT BENTO SHOWCASE (Image 2)
+            ============================================================ */}
+        <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="intro-heading">
+          <DotPattern className={dotFillClass} />
+
+          <div className="container-dgym space-y-16">
+            {/* Centered Statement */}
+            <div className="reveal-block max-w-3xl mx-auto text-center space-y-6">
+              <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red">
+                CHOOSE YOUR FOCUS.
+              </p>
+
+              <h2
+                id="intro-heading"
+                className={`text-2xl sm:text-4xl md:text-[2.65rem] font-medium tracking-tight leading-[1.2] transition-colors duration-300 ${headingColor}`}
+              >
+                Whether you&apos;re building your foundation, pushing your performance, or training toward a specific goal, The DGym gives you a structured path forward.
+              </h2>
+
+              {/* Social Proof Avatar Pill */}
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <div className="flex -space-x-2">
+                  <span className="w-7 h-7 rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white">
+                    IV
+                  </span>
+                  <span className="w-7 h-7 rounded-full bg-zinc-700 border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white">
+                    MR
+                  </span>
+                  <span className="w-7 h-7 rounded-full bg-red/80 border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white">
+                    KR
+                  </span>
+                </div>
+                <span className={`text-[11px] font-mono uppercase tracking-widest transition-colors duration-300 ${subTextColor}`}>
+                  2,400+ ACTIVE COMMUNITY ATHLETES
+                </span>
+              </div>
+
+              <div className="pt-2">
                 <Link
-                  key={plan.slug}
-                  to={`/payment?plan=${plan.slug}`}
-                  className={[
-                    'flex items-center justify-between',
-                    'p-5 rounded-xl border transition-all duration-200',
-                    plan.highlight
-                      ? 'bg-red/8 border-red/30 hover:border-red/50'
-                      : 'bg-surface-2 border-white/8 hover:border-white/15',
-                  ].join(' ')}
+                  to="/about"
+                  className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all shadow-[0_0_20px_rgba(229,32,26,0.3)]"
                 >
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="font-display text-lg font-bold uppercase tracking-wide text-white">
-                        {plan.name}
-                      </h3>
-                      {plan.highlight && (
-                        <span className="text-xs font-semibold uppercase tracking-widest text-red border border-red/30 px-2 py-0.5 rounded-full">
-                          Popular
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-white/50">{plan.shortDesc}</p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <div className="text-right">
-                      <p className="font-mono font-bold text-base text-white">{plan.priceFormatted}</p>
-                      <p className="text-[11px] text-white/40">{plan.period}</p>
-                    </div>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
+                  <span>About The DGym</span>
+                  <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
                 </Link>
-              ))}
+              </div>
+            </div>
+
+            {/* Split 2-Column Rounded-3xl Monochrome Bento Photos */}
+            <div className="reveal-block grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="group relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d0d11] aspect-[4/3]">
+                <img
+                  src="/assets/images/img18.jpg"
+                  alt="The DGym Rosario Batangas hexagonal lighting and training floor"
+                  className="w-full h-full object-cover grayscale contrast-125 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-6 left-6 right-6">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-red">
+                    ROSARIO, BATANGAS FACILITY
+                  </span>
+                  <h3 className="text-xl font-bold text-white mt-1">
+                    Atmospheric LED Strength Floor
+                  </h3>
+                </div>
+              </div>
+
+              <div className="group relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d0d11] aspect-[4/3]">
+                <img
+                  src="/assets/images/img10.jpg"
+                  alt="Athlete lifting on Rogue competition platform at The DGym"
+                  className="w-full h-full object-cover grayscale contrast-125 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-6 left-6 right-6">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-red">
+                    COMPETITION GRADE
+                  </span>
+                  <h3 className="text-xl font-bold text-white mt-1">
+                    Technogym &amp; Rogue Equipment
+                  </h3>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ============================================================
-          CTA BAND
-          ============================================================ */}
-      <section
-        ref={ctaRef}
-        className="section-padding relative overflow-hidden"
-        aria-labelledby="cta-heading"
-      >
-        {/* Ambient glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[200px] bg-red/6 rounded-full blur-[100px] pointer-events-none" aria-hidden="true" />
+        {/* ============================================================
+            3. DARK BENTO PILLARS — Move Better / Recover Better (Image 3)
+            ============================================================ */}
+        <section className="px-3 sm:px-6" aria-labelledby="pillars-heading">
+          <div className="reveal-block relative rounded-3xl overflow-hidden border border-white/10 bg-[#09090b] py-16 md:py-24 px-6 sm:px-12">
+            {/* Subtle blurred monochrome backdrop */}
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-20 grayscale blur-[2px]"
+              style={{ backgroundImage: "url('/assets/images/img12.jpg')" }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/80 to-black/95" />
 
-        <div className="container-dgym text-center relative z-10">
-          <p className="cta-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
-            Ready to start
-          </p>
-          <h2
-            id="cta-heading"
-            className="cta-item font-display text-4xl md:text-6xl font-black uppercase tracking-tight text-white mb-5"
-          >
-            Your Next Rep<br />
-            <span className="text-red">Starts Here</span>
-          </h2>
-          <p className="cta-item text-base text-white/50 max-w-md mx-auto mb-10">
-            Come in, see the space, and start training. No long commitments required to get started.
-          </p>
-          <div className="cta-item flex flex-wrap justify-center gap-4">
-            <Link to="/contact">
-              <Button size="lg">Find Us</Button>
-            </Link>
-            <Link to="/membership">
-              <Button variant="secondary" size="lg">View Plans</Button>
-            </Link>
+            <div className="relative z-10 max-w-7xl mx-auto space-y-12">
+              {/* Split Header */}
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-10 border-b border-white/10">
+                <div className="space-y-3">
+                  <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red">
+                    PERFORMANCE &amp; RECOVERY
+                  </p>
+                  <h2
+                    id="pillars-heading"
+                    className="text-4xl sm:text-5xl font-bold tracking-tight text-white leading-[1.08]"
+                  >
+                    Move better.
+                    <br />
+                    Recover better.
+                  </h2>
+                </div>
+
+                <div className="max-w-md space-y-5">
+                  <p className="text-xs font-mono uppercase tracking-wider text-white/70 leading-relaxed">
+                    TRAINING ISN&apos;T ONLY ABOUT INTENSITY. TECHNIQUE, CONDITIONING, AND RECOVERY HELP YOUR BODY PERFORM, ADAPT, AND STAY CONSISTENT.
+                  </p>
+                  <Link
+                    to="/classes"
+                    className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all"
+                  >
+                    <span>Explore Classes</span>
+                    <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                  </Link>
+                </div>
+              </div>
+
+              {/* 3-Card Asymmetric Dark Bento Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                {PILLAR_CARDS.map((card) => (
+                  <div
+                    key={card.tag}
+                    className={`${card.colSpan} rounded-3xl bg-[#070709]/95 border border-white/10 p-8 min-h-[300px] sm:min-h-[340px] flex flex-col justify-between hover:border-white/20 transition-colors`}
+                  >
+                    <span className="text-xs font-mono uppercase tracking-widest text-white/80">
+                      {card.tag}
+                    </span>
+                    <p className="text-xs font-mono uppercase tracking-wider text-white/65 leading-relaxed max-w-md">
+                      {card.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Newsletter */}
-      <NewsletterSection />
+        {/* ============================================================
+            4. STRUCTURED PROGRAMS & MEMBERSHIP TIERS (Image 4)
+            ============================================================ */}
+        <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="programs-heading">
+          <DotPattern className={dotFillClass} />
+
+          <div className="container-dgym space-y-12">
+            {/* Header + Red Circular Nav Arrows */}
+            <div className="reveal-block flex flex-col md:flex-row md:items-end justify-between gap-6">
+              <div className="space-y-4 max-w-xl">
+                <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red">
+                  HOW PROGRAMS WORK
+                </p>
+                <h2
+                  id="programs-heading"
+                  className={`text-4xl sm:text-5xl font-bold tracking-tight transition-colors duration-300 ${headingColor}`}
+                >
+                  A structure for progress
+                </h2>
+                <p className={`text-xs font-mono uppercase tracking-wider leading-relaxed transition-colors duration-300 ${subTextColor}`}>
+                  EVERY DGYM PROGRAM IS BUILT AROUND CONSISTENCY AND PROGRESSION. WE FOCUS ON WHERE YOU ARE TODAY AND CREATE A CLEAR PATH TOWARD WHERE YOU WANT TO BE.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => scrollPrograms('prev')}
+                  aria-label="Previous program"
+                  className="w-10 h-10 rounded-full bg-red hover:bg-red-hover text-white flex items-center justify-center transition-transform active:scale-95 cursor-pointer shadow-[0_0_16px_rgba(229,32,26,0.35)]"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollPrograms('next')}
+                  aria-label="Next program"
+                  className="w-10 h-10 rounded-full bg-red hover:bg-red-hover text-white flex items-center justify-center transition-transform active:scale-95 cursor-pointer shadow-[0_0_16px_rgba(229,32,26,0.35)]"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Tall Monochrome Program Bento Cards */}
+            <div
+              ref={programsScrollRef}
+              className="reveal-block grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-x-auto pb-2"
+            >
+              {PROGRAM_CARDS.map((prog) => (
+                <div
+                  key={prog.title}
+                  className="group relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d0d11] min-h-[480px] sm:min-h-[540px] flex flex-col justify-between p-7"
+                >
+                  {/* Monochrome Background Photo */}
+                  <img
+                    src={prog.image}
+                    alt={prog.alt}
+                    className="absolute inset-0 w-full h-full object-cover grayscale contrast-125 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/35 to-black/90" />
+
+                  {/* Top Micro-Tags Row */}
+                  <div className="relative z-10 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-mono uppercase tracking-widest text-white/80">
+                    {prog.tags.map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                  </div>
+
+                  {/* Bottom Content & Red Button */}
+                  <div className="relative z-10 space-y-4 pt-12">
+                    <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                      {prog.title}
+                    </h3>
+                    <p className="text-xs font-mono uppercase tracking-wider text-white/70 leading-relaxed">
+                      {prog.description}
+                    </p>
+                    <div className="pt-1">
+                      <Link
+                        to={prog.href}
+                        className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all"
+                      >
+                        <span>{prog.ctaLabel}</span>
+                        <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Membership Quick-Select Bento Strip */}
+            <div className="reveal-block rounded-3xl border border-white/10 bg-[#0d0d11]/90 p-8 md:p-10">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <div>
+                  <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red mb-2">
+                    TRANSPARENT RATES
+                  </p>
+                  <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                    Choose your training pass
+                  </h3>
+                </div>
+                <Link
+                  to="/membership"
+                  className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-white/70 hover:text-white transition-colors"
+                >
+                  <span>View All 7 Membership Tiers →</span>
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {PUBLIC_PLANS.map((plan) => (
+                  <Link
+                    key={plan.slug}
+                    to={`/payment?plan=${plan.slug}`}
+                    className={[
+                      'rounded-2xl p-6 border transition-all duration-200 flex flex-col justify-between gap-6',
+                      plan.highlight
+                        ? 'bg-red/10 border-red/40 hover:border-red shadow-[0_0_25px_rgba(229,32,26,0.12)]'
+                        : 'bg-white/[0.02] border-white/10 hover:border-white/25',
+                    ].join(' ')}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono uppercase tracking-widest text-white/60">
+                          {plan.name}
+                        </span>
+                        {plan.badge && (
+                          <span className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-red text-white">
+                            {plan.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl font-bold font-mono text-white">
+                          {plan.priceFormatted}
+                        </span>
+                        <span className="text-xs font-mono text-white/40">{plan.period}</span>
+                      </div>
+                      <p className="text-xs text-white/60 leading-relaxed">{plan.shortDesc}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-white pt-3 border-t border-white/10">
+                      <span>Avail Pass</span>
+                      <span className="w-1.5 h-1.5 rounded-[1px] bg-red inline-block" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================
+            5. DOT PATTERN CTA — "Not sure where to start?" (Image 5)
+            ============================================================ */}
+        <section className="px-3 sm:px-6" aria-labelledby="start-cta-heading">
+          <div className="reveal-block relative rounded-3xl overflow-hidden border border-white/10 bg-[#09090b] py-28 md:py-40 px-6">
+            <DotPattern
+              cy={1}
+              cr={1}
+              cx={1}
+              className={cn(
+                '[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]',
+                theme === 'light'
+                  ? 'fill-zinc-200/70 md:fill-white/80'
+                  : 'fill-slate-500/45 md:fill-slate-400/60'
+              )}
+            />
+
+            {/* Centered Call to Action */}
+            <div className="relative z-10 max-w-md mx-auto text-center space-y-5">
+              <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red">
+                FIND YOUR PROGRAM
+              </p>
+              <h2
+                id="start-cta-heading"
+                className="text-4xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]"
+              >
+                Not sure where
+                <br />
+                to start?
+              </h2>
+              <div className="pt-2">
+                <Link
+                  to="/trainers"
+                  className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all shadow-[0_0_24px_rgba(229,32,26,0.4)]"
+                >
+                  <span>Talk To A Coach</span>
+                  <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================
+            6. SPLIT FAQ ACCORDION + MONOCHROME PHOTO (Image 6)
+            ============================================================ */}
+        <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="faq-heading">
+          <DotPattern className={dotFillClass} />
+
+          <div className="container-dgym space-y-14">
+            {/* Top Split Header */}
+            <div className="reveal-block grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
+              <div className="lg:col-span-7 space-y-3">
+                <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.25em] text-red">
+                  FAQ
+                </p>
+                <h2
+                  id="faq-heading"
+                  className={`text-3xl sm:text-5xl font-bold tracking-tight leading-[1.1] transition-colors duration-300 ${headingColor}`}
+                >
+                  Everything you need to know
+                  <br />
+                  before getting started
+                </h2>
+              </div>
+
+              <div className="lg:col-span-5">
+                <p className={`text-xs font-mono uppercase tracking-wider leading-relaxed transition-colors duration-300 ${subTextColor}`}>
+                  STARTING YOUR FITNESS JOURNEY SHOULD FEEL SIMPLE. FIND ANSWERS ABOUT MEMBERSHIPS, FACILITIES, PERSONAL TRAINING, AND WHAT TO EXPECT AT THE DGYM ROSARIO.
+                </p>
+              </div>
+            </div>
+
+            {/* Bottom Split: Accordion Left + Rounded-3xl Photo Right */}
+            <div className="reveal-block grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+              {/* Left Accordion */}
+              <div className={`lg:col-span-7 divide-y border-y transition-colors duration-300 ${isLight ? 'divide-zinc-300 border-zinc-300' : 'divide-white/10 border-white/10'}`}>
+                {HOME_FAQS.map((item, idx) => {
+                  const isOpen = openFaqIndex === idx
+                  return (
+                    <div key={item.question} className="py-5">
+                      <button
+                        type="button"
+                        onClick={() => setOpenFaqIndex(isOpen ? -1 : idx)}
+                        className="w-full flex items-center justify-between gap-4 text-left cursor-pointer group"
+                        aria-expanded={isOpen}
+                      >
+                        <span
+                          className={[
+                            'text-base sm:text-lg font-medium transition-colors',
+                            isOpen
+                              ? 'text-red'
+                              : isLight
+                                ? 'text-zinc-900 group-hover:text-red'
+                                : 'text-white/85 group-hover:text-white',
+                          ].join(' ')}
+                        >
+                          {item.question}
+                        </span>
+                        <span className={`${isLight ? 'text-zinc-500 group-hover:text-zinc-900' : 'text-white/50 group-hover:text-white'} shrink-0`}>
+                          {isOpen ? <Minus className="w-4 h-4 text-red" /> : <Plus className="w-4 h-4" />}
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <p className={`mt-3.5 text-xs font-mono uppercase tracking-wider leading-relaxed pr-8 ${subTextColor}`}>
+                          {item.answer}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Right Monochrome Rounded-3xl Feature Photo */}
+              <div className="lg:col-span-5">
+                <div className="rounded-3xl overflow-hidden border border-white/10 bg-[#0d0d11] aspect-[4/3] lg:aspect-[5/4]">
+                  <img
+                    src="/assets/images/img10.jpg"
+                    alt="Athlete training at The DGym Rosario Batangas"
+                    className="w-full h-full object-cover grayscale contrast-125 hover:grayscale-0 transition-all duration-700"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </>
   )
 }

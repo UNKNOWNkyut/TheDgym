@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, Integer, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, Integer, Text, text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -24,6 +24,13 @@ class Visit(Base):
     __tablename__ = "visits"
     __table_args__ = (
         Index("ix_visits_member_checked_in", "member_id", "checked_in_at"),
+        Index(
+            "uq_visits_member_active_open",
+            "member_id",
+            unique=True,
+            sqlite_where=text("checked_out_at IS NULL"),
+            postgresql_where=text("checked_out_at IS NULL"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

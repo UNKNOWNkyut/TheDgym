@@ -42,15 +42,15 @@ export function AboutPage() {
       />
 
       {/* Page header */}
-      <div ref={heroRef} className="border-b border-white/8 section-padding">
+      <div ref={heroRef} className="border-b border-zinc-200 dark:border-white/8 section-padding">
         <div className="container-dgym">
-          <p className="about-hero-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
+          <p className="about-hero-item text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-4">
             Our story • Rosario, Batangas
           </p>
-          <h1 className="about-hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-white mb-6 max-w-3xl">
+          <h1 className="about-hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-zinc-950 dark:text-white mb-6 max-w-3xl">
             About The DGym
           </h1>
-          <p className="about-hero-item text-lg text-white/60 max-w-xl leading-relaxed">
+          <p className="about-hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-xl leading-relaxed">
             High End Premium Weightlifting, Powerlifting, and Fitness Gym in Rosario, Batangas — built for people who demand real results.
           </p>
         </div>
@@ -61,14 +61,14 @@ export function AboutPage() {
         {/* Mission */}
         <div className="reveal grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">What we're about</p>
-            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white mb-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">What we're about</p>
+            <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white mb-5">
               Elevate Your Fitness Journey
             </h2>
-            <p className="text-base text-white/60 leading-relaxed mb-4 max-w-lg">
+            <p className="text-base text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4 max-w-lg">
               The DGym Rosario Batangas was built with one purpose: give every lifter and athlete an environment where serious training thrives. Premium Technogym machines, Rogue powerlifting platforms, dedicated coaching, and an electric atmosphere.
             </p>
-            <p className="text-base text-white/60 leading-relaxed max-w-lg">
+            <p className="text-base text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-lg">
               Located in Rosario, Batangas, we provide the community with an unmatched facility that never cuts corners on equipment quality or athletic support.
             </p>
           </div>
@@ -95,8 +95,8 @@ export function AboutPage() {
 
         {/* Values */}
         <div className="reveal">
-          <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-3">What drives us</p>
-          <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-white mb-10">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">What drives us</p>
+          <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white mb-10">
             Our Standards
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">

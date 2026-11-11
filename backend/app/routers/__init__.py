@@ -11,6 +11,7 @@ from app.routers.analytics import router as analytics_router
 from app.routers.retention import router as retention_router
 from app.routers.notifications import router as notifications_router
 from app.routers.access_control import router as access_control_router
+from app.routers.payments import router as payments_router
 
 __all__ = [
     "auth_router",
@@ -26,4 +27,5 @@ __all__ = [
     "retention_router",
     "notifications_router",
     "access_control_router",
+    "payments_router",
 ]

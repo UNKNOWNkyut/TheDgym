@@ -37,7 +37,6 @@ class Settings:
         self.ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower().strip()
 
         # Database: defaults to async SQLite for local standalone development,
-        # or PostgreSQL (e.g. postgresql+asyncpg://user:pass@localhost:5432/dgym)
         self.DATABASE_URL: str = os.getenv(
             "DATABASE_URL", f"sqlite+aiosqlite:///{base_dir / 'dgym.db'}"
         )

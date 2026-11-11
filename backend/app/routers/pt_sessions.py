@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from app.seed_members import generate_member_code
 
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
@@ -18,6 +21,7 @@ from app.schemas.phase5 import (
     PTSessionResponse,
     TrainerPublicResponse,
 )
+from app.services.sms_service import notify_pt_booking_status_sms
 
 router = APIRouter(prefix="/api/pt-sessions", tags=["PT Sessions"])
 
@@ -70,35 +74,31 @@ async def _load_pt_session(session_id: int, db: AsyncSession) -> Optional[PTSess
 
 async def _get_or_create_member_for_user(user: User, db: AsyncSession) -> Member:
     """Finds or creates a Member record linked to the authenticated user."""
-    # Try finding by email
-    stmt = select(Member).where(Member.email == user.email)
+    # Try finding by normalized email (case-insensitive)
+    normalized_email = user.email.lower().strip()
+    stmt = select(Member).where(func.lower(Member.email) == normalized_email)
     result = await db.execute(stmt)
     member = result.scalar_one_or_none()
     if member:
         return member
 
-    # Generate sequential member code
-    count_stmt = select(func.count()).select_from(Member)
-    count_res = await db.execute(count_stmt)
-    count = count_res.scalar() or 0
-    member_code = f"DGM-{(count + 1):04d}"
+    member_code = await generate_member_code(db)
 
-    parts = user.full_name.strip().split(" ", 1)
-    first_name = parts[0]
-    last_name = parts[1] if len(parts) > 1 else "Member"
+    parts = [p for p in (user.full_name or "").strip().split(" ", 1) if p]
+    first_name = parts[0] if parts else "Member"
+    last_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else "Member"
 
     member = Member(
         member_code=member_code,
         first_name=first_name,
         last_name=last_name,
-        email=user.email,
+        email=normalized_email,
         phone=user.phone,
-        status=MemberStatus.ACTIVE,
+        status=MemberStatus.INACTIVE,
         notes=f"Auto-registered via portal account #{user.id}",
     )
     db.add(member)
-    await db.commit()
-    await db.refresh(member)
+    await db.flush()
     return member
 
 
@@ -180,8 +180,24 @@ async def book_pt_session(
     if not trainer or not trainer.is_active or trainer.role not in [UserRole.TRAINER, UserRole.ADMIN]:
         raise HTTPException(status_code=404, detail="Fitness instructor not found or unavailable.")
 
+    sched_utc = (
+        payload.scheduled_at.astimezone(timezone.utc)
+        if payload.scheduled_at.tzinfo is not None
+        else payload.scheduled_at.replace(tzinfo=timezone.utc)
+    )
+    if sched_utc < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot book a personal training session in the past.",
+        )
+
     # Get or create member record for the logged-in user
     member = await _get_or_create_member_for_user(current_user, db)
+    if not member.is_active or member.status == MemberStatus.SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your member account is currently suspended or deactivated. Please contact the gym desk.",
+        )
 
     pt = PTSession(
         trainer_id=payload.trainer_id,
@@ -206,7 +222,7 @@ async def list_my_bookings(
 ):
     """Returns the list of PT bookings submitted by the current member."""
     # Find member for current user
-    stmt = select(Member).where(Member.email == current_user.email)
+    stmt = select(Member).where(func.lower(Member.email) == current_user.email.lower().strip())
     result = await db.execute(stmt)
     member = result.scalar_one_or_none()
     if not member:
@@ -239,7 +255,7 @@ async def cancel_my_booking(
 
     # Verify ownership or staff privilege
     if current_user.role == UserRole.MEMBER:
-        stmt = select(Member).where(Member.email == current_user.email)
+        stmt = select(Member).where(func.lower(Member.email) == current_user.email.lower().strip())
         res = await db.execute(stmt)
         member = res.scalar_one_or_none()
         if not member or session.member_id != member.id:
@@ -276,6 +292,11 @@ async def approve_pt_booking(
     if current_user.role == UserRole.TRAINER and session.trainer_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only approve bookings assigned to you.")
 
+    if session.status != PTSessionStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only pending PT bookings can be approved (current status: {session.status.value}).",
+        )
     session.status = PTSessionStatus.CONFIRMED
     if payload.coach_notes:
         session.coach_notes = payload.coach_notes
@@ -283,6 +304,19 @@ async def approve_pt_booking(
 
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
+
+    # Dispatch SMS notification if member phone is available (non-blocking)
+    if loaded and loaded.member and loaded.member.phone:
+        dt_str = loaded.scheduled_at.strftime("%b %d, %Y at %I:%M %p") if loaded.scheduled_at else "Scheduled Time"
+        trainer_name = loaded.trainer.full_name if loaded.trainer else "Assigned Coach"
+        await notify_pt_booking_status_sms(
+            member_name=loaded.member.first_name,
+            coach_name=trainer_name,
+            session_date_str=dt_str,
+            status="confirmed",
+            to_phone=loaded.member.phone,
+        )
+
     return _format_pt_session(loaded)
 
 
@@ -303,11 +337,30 @@ async def reject_pt_booking(
     if current_user.role == UserRole.TRAINER and session.trainer_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only reject bookings assigned to you.")
 
+    if session.status != PTSessionStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only pending PT bookings can be rejected (current status: {session.status.value}).",
+        )
     session.status = PTSessionStatus.REJECTED
     session.rejection_reason = payload.reason or "Trainer is unavailable at the requested time slot."
 
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
+
+    # Dispatch SMS notification if member phone is available (non-blocking)
+    if loaded and loaded.member and loaded.member.phone:
+        dt_str = loaded.scheduled_at.strftime("%b %d, %Y at %I:%M %p") if loaded.scheduled_at else "Scheduled Time"
+        trainer_name = loaded.trainer.full_name if loaded.trainer else "Assigned Coach"
+        await notify_pt_booking_status_sms(
+            member_name=loaded.member.first_name,
+            coach_name=trainer_name,
+            session_date_str=dt_str,
+            status="rejected",
+            reason=loaded.rejection_reason,
+            to_phone=loaded.member.phone,
+        )
+
     return _format_pt_session(loaded)
 
 

@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, and_, case, func, or_, select
+from sqlalchemy import and_, case, extract, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -481,7 +481,7 @@ async def get_annual_finance_breakdown(
     rev_by_month = {m: Decimal(rev_row[m - 1] or 0) for m in range(1, max_month + 1)}
 
     # Expenses (single GROUP BY month query instead of 12 sequential queries)
-    month_expr = func.cast(func.strftime("%m", Expense.expense_date), Integer)
+    month_expr = extract("month", Expense.expense_date)
     exp_rows = (
         await db.execute(
             select(month_expr, func.coalesce(func.sum(Expense.amount), 0))

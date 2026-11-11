@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -119,6 +120,7 @@ async def check_in_member(
     now = datetime.now(timezone.utc)
     active_ms = _require_active_membership(member, now)
 
+    member_label = f"{member.full_name} ({member.member_code})"
     open_visit_id = (
         await db.execute(
             select(Visit.id)
@@ -129,7 +131,7 @@ async def check_in_member(
     if open_visit_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"{member.full_name} ({member.member_code}) is already checked in.",
+            detail=f"{member_label} is already checked in.",
         )
 
     visit = Visit(
@@ -139,7 +141,14 @@ async def check_in_member(
         recorded_by_user_id=current_user.id,
     )
     db.add(visit)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{member_label} is already checked in.",
+        )
     await notify_admins_on_checkin(
         db,
         member=member,

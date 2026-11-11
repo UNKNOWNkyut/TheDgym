@@ -303,6 +303,7 @@ async def google_auth(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+
     """
     Authenticate or register a user using Google OAuth ID Token (JWT).
     Verifies token with Google's public tokeninfo service, extracts profile,
@@ -313,6 +314,12 @@ async def google_auth(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google credential token is required.",
+        )
+
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google authentication is not configured on this server.",
         )
 
     # 1. Verify token with Google's public tokeninfo endpoint
@@ -333,14 +340,14 @@ async def google_auth(
             detail="Unable to connect to Google authentication service.",
         )
 
-    # 2. Check issuer and audience (Check 30)
+    # 2. Check issuer and audience fail-closed (Check 30)
     token_iss = google_data.get("iss")
-    if token_iss and token_iss not in ("accounts.google.com", "https://accounts.google.com"):
+    if token_iss not in ("accounts.google.com", "https://accounts.google.com"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token issuer."
         )
 
-    if settings.GOOGLE_CLIENT_ID and google_data.get("aud") != settings.GOOGLE_CLIENT_ID:
+    if google_data.get("aud") != settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Google token was not issued for this application client.",
@@ -361,11 +368,10 @@ async def google_auth(
             detail="Google account did not provide an email address.",
         )
 
-    # 3. Check if user already exists
+    # 3. Check if user already exists (keep User + INACTIVE Member creation atomic)
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
 
     if not user:
-        # Create user account
         user = User(
             email=email,
             hashed_password=hash_password(secrets.token_urlsafe(32)),
@@ -374,8 +380,7 @@ async def google_auth(
             is_active=True,
         )
         db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        await db.flush()
 
         # Ensure Member record exists as INACTIVE (registered account until plan is availed)
         existing_mem = (
@@ -394,7 +399,6 @@ async def google_auth(
                     is_active=True,
                 )
             )
-            await db.commit()
 
     if not user.is_active:
         raise HTTPException(
@@ -412,6 +416,7 @@ async def google_auth(
         request=request,
     )
     await db.commit()
+    await db.refresh(user)
 
     # 4. Generate DGym JWT access token
     return await _issue_auth_response(user, response, db)
@@ -449,7 +454,7 @@ async def avail_plan(
             last_name=last_name,
             email=normalized_email,
             phone=current_user.phone,
-            status=MemberStatus.ACTIVE,
+            status=MemberStatus.INACTIVE,
             is_active=True,
         )
         db.add(member)
@@ -461,8 +466,6 @@ async def avail_plan(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your member profile is restricted. Please contact the front desk.",
             )
-        if member.status == MemberStatus.INACTIVE:
-            member.status = MemberStatus.ACTIVE
         existing_memberships = list(member.memberships or [])
 
     now = datetime.now(timezone.utc)

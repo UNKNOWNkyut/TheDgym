@@ -2,6 +2,7 @@ import type { InputHTMLAttributes, ReactNode } from 'react'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
+  labelClassName?: string
   error?: string
   hint?: string
   leftIcon?: ReactNode
@@ -10,6 +11,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export function Input({
   label,
+  labelClassName = 'text-white/70',
   error,
   hint,
   leftIcon,
@@ -25,7 +27,7 @@ export function Input({
       {label && (
         <label
           htmlFor={inputId}
-          className="text-sm font-medium text-white/70"
+          className={`text-sm font-medium ${labelClassName}`}
         >
           {label}
         </label>
