@@ -132,8 +132,6 @@ class BiometricProvidersResponse(BaseModel):
     face_provider: str
     ocr_api_configured: bool
     face_api_configured: bool
-    id_image_base64: Optional[str] = Field(None, max_length=2_200_000)
-    live_image_base64: Optional[str] = Field(None, max_length=2_200_000)
 
 
 class AuditLogResponse(BaseModel):
