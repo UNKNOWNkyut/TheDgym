@@ -93,6 +93,10 @@ _STATIC_ASSET_EXTENSIONS = frozenset(
         ".txt",
         ".xml",
         ".webmanifest",
+        ".wasm",
+        ".bin",
+        ".gz",
+        ".traineddata",
     }
 )
 
@@ -104,6 +108,8 @@ for _ext, _mime in (
     (".webp", "image/webp"),
     (".woff2", "font/woff2"),
     (".webmanifest", "application/manifest+json"),
+    (".wasm", "application/wasm"),
+    (".bin", "application/octet-stream"),
 ):
     mimetypes.add_type(_mime, _ext)
 
@@ -199,11 +205,12 @@ async def lifespan(app: FastAPI):
 _is_prod = settings.ENVIRONMENT == "production"
 _SPA_CSP = (
     "default-src 'self'; "
-    "script-src 'self' https://accounts.google.com/gsi/client; "
+    "script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client; "
+    "worker-src 'self' blob:; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; "
     "font-src 'self' https://fonts.gstatic.com data:; "
     "img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com; "
-    f"connect-src 'self' https://accounts.google.com {'wss:' if _is_prod else 'ws: wss:'}; "
+    f"connect-src 'self' blob: https://accounts.google.com {'wss:' if _is_prod else 'ws: wss:'}; "
     "frame-src https://accounts.google.com/gsi/; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "

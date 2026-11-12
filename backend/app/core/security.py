@@ -125,12 +125,65 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
             options={"require": ["exp", "iat", "sub", "jti", "iss", "aud"]},
         )
 
+        # Prevent pre-auth 2FA challenge tokens from bypassing full authentication
+        if payload.get("token_use") == "face_2fa":
+            return None
+
         # Check JTI revocation list (Check 25)
         jti = str(payload.get("jti", "")).strip()
         if not jti or jti in _REVOKED_JTIS:
             return None
 
         # Check user-wide session invalidation timestamp
+        sub = str(payload.get("sub", ""))
+        iat = payload.get("iat")
+        if sub in _USER_MIN_IAT and float(iat) < _USER_MIN_IAT[sub]:
+            return None
+
+        return payload
+    except (jwt.PyJWTError, TypeError, ValueError):
+        return None
+
+
+def create_face_challenge_token(
+    user_id: int,
+    purpose: str,
+    expires_minutes: int = 5,
+) -> str:
+    """Create a short-lived pre-auth token used exclusively for Step 2 face verify/enroll."""
+    return create_access_token(
+        {
+            "sub": str(user_id),
+            "purpose": purpose,
+            "token_use": "face_2fa",
+        },
+        expires_delta=timedelta(minutes=expires_minutes),
+    )
+
+
+def decode_face_challenge_token(
+    token: str,
+    expected_purpose: str,
+) -> Optional[Dict[str, Any]]:
+    """Decode and validate a single-purpose Step 2 face challenge token."""
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+            options={"require": ["exp", "iat", "sub", "jti", "iss", "aud"]},
+        )
+        if payload.get("token_use") != "face_2fa":
+            return None
+        if payload.get("purpose") != expected_purpose:
+            return None
+
+        jti = str(payload.get("jti", "")).strip()
+        if not jti or jti in _REVOKED_JTIS:
+            return None
+
         sub = str(payload.get("sub", ""))
         iat = payload.get("iat")
         if sub in _USER_MIN_IAT and float(iat) < _USER_MIN_IAT[sub]:

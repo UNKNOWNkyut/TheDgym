@@ -9,6 +9,9 @@ import {
 
 import type {
   AuthContextType,
+  FaceEnrollPayload,
+  FaceVerifyPayload,
+  LoginChallengeResponse,
   LoginCredentials,
   RegisterCredentials,
   User,
@@ -116,9 +119,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const runChallengeAction = useCallback(
+    async (
+      action: () => Promise<LoginChallengeResponse>,
+      fallbackMessage: string,
+    ): Promise<LoginChallengeResponse> => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        return await action()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : fallbackMessage
+        setError(message)
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [],
+  )
+
   const login = useCallback(
-    (credentials: LoginCredentials): Promise<User> =>
-      runAuthAction(async () => (await api.login(credentials)).user, 'Login failed'),
+    (credentials: LoginCredentials): Promise<LoginChallengeResponse> =>
+      runChallengeAction(() => api.login(credentials), 'Login failed'),
+    [runChallengeAction],
+  )
+
+  const verifyFaceLogin = useCallback(
+    (payload: FaceVerifyPayload): Promise<User> =>
+      runAuthAction(async () => (await api.verifyFace(payload)).user, 'Face verification failed'),
+    [runAuthAction],
+  )
+
+  const enrollFaceAndLogin = useCallback(
+    (payload: FaceEnrollPayload): Promise<User> =>
+      runAuthAction(async () => (await api.enrollFace(payload)).user, 'Face enrollment failed'),
     [runAuthAction],
   )
 
@@ -132,12 +167,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const loginWithGoogle = useCallback(
-    (credential: string): Promise<User> =>
-      runAuthAction(
-        async () => (await api.loginWithGoogle(credential)).user,
-        'Google sign-in failed',
-      ),
-    [runAuthAction],
+    (credential: string): Promise<LoginChallengeResponse> =>
+      runChallengeAction(() => api.loginWithGoogle(credential), 'Google sign-in failed'),
+    [runChallengeAction],
   )
 
   const availPlan = useCallback(
@@ -177,6 +209,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error,
 
         login,
+
+        verifyFaceLogin,
+
+        enrollFaceAndLogin,
 
         register,
 

@@ -35,3 +35,9 @@ services:
         sync: false
       - key: ADMIN_FULL_NAME
         value: DGym Admin
+      - key: OCR_SPACE_API_KEY
+        sync: false
+      - key: FACEPP_API_KEY
+        sync: false
+      - key: FACEPP_API_SECRET
+        sync: false

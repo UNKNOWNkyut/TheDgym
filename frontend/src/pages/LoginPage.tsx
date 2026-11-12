@@ -8,7 +8,9 @@ import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { QuarterRing } from '@/components/ui/quarter-ring'
-import type { User } from '@/types/auth'
+import { IdScannerStep, type IdScanCompletedData } from '@/components/auth/IdScannerStep'
+import { FaceLivenessStep, type FaceLivenessResult } from '@/components/auth/FaceLivenessStep'
+import type { LoginChallengeResponse, User } from '@/types/auth'
 
 const DEMO_ACCOUNTS = [
   { role: 'Admin', email: 'admin@thedgym.com', pass: 'admin12345', badge: 'Full Access' },
@@ -62,13 +64,23 @@ function resolvePostLoginDestination(loggedInUser: User, redirectTarget: string 
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [challenge, setChallenge] = useState<LoginChallengeResponse | null>(null)
+  const [enrollIdData, setEnrollIdData] = useState<IdScanCompletedData | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [showLoading, setShowLoading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
   const googleBtnContainerRef = useRef<HTMLDivElement>(null)
   const [gisLoaded, setGisLoaded] = useState(false)
 
-  const { login, loginWithGoogle, isLoading, error, clearError } = useAuth()
+  const {
+    login,
+    loginWithGoogle,
+    verifyFaceLogin,
+    enrollFaceAndLogin,
+    isLoading,
+    error,
+    clearError,
+  } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -88,7 +100,21 @@ export function LoginPage() {
       { opacity: 0, y: 30, scale: 0.98 },
       { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' }
     )
-  }, { scope: cardRef })
+  }, [Boolean(challenge), Boolean(enrollIdData)])
+
+  const completeAuthenticatedSession = useCallback(
+    (loggedInUser: User) => {
+      navigate(resolvePostLoginDestination(loggedInUser, redirectTarget), { replace: true })
+    },
+    [navigate, redirectTarget],
+  )
+
+  const handleResetChallenge = () => {
+    setChallenge(null)
+    setEnrollIdData(null)
+    setValidationError(null)
+    clearError()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,39 +130,75 @@ export function LoginPage() {
       return
     }
 
-    // Show loading screen
-    setShowLoading(true)
-
     try {
-      // Keep loading ring visible for a snappy, polished transition
-      const [loggedInUser] = await Promise.all([
-        login({ email, password }),
-        new Promise<void>((resolve) => setTimeout(resolve, 800)),
-      ])
-
-      navigate(resolvePostLoginDestination(loggedInUser, redirectTarget), { replace: true })
+      const challengeRes = await login({ email, password })
+      if (challengeRes.requires_face_verification) {
+        setEnrollIdData(null)
+        setChallenge(challengeRes)
+      }
     } catch {
-      // Hide loading screen if login fails
-      setShowLoading(false)
       // Error is stored in context and displayed
     }
   }
 
   const handleGoogleCredential = useCallback(
     async (credential: string) => {
-      setShowLoading(true)
+      setValidationError(null)
+      clearError()
       try {
-        const [loggedInUser] = await Promise.all([
-          loginWithGoogle(credential),
-          new Promise<void>((resolve) => setTimeout(resolve, 800)),
-        ])
-        navigate(resolvePostLoginDestination(loggedInUser, redirectTarget), { replace: true })
+        const challengeRes = await loginWithGoogle(credential)
+        if (challengeRes.requires_face_verification) {
+          setEnrollIdData(null)
+          setChallenge(challengeRes)
+        }
       } catch {
-        setShowLoading(false)
+        // Error is stored in context and displayed
       }
     },
-    [loginWithGoogle, navigate, redirectTarget],
+    [clearError, loginWithGoogle],
   )
+
+  const handleFaceVerified = async (result: FaceLivenessResult) => {
+    if (!challenge) return
+    setValidationError(null)
+    clearError()
+    setShowLoading(true)
+
+    try {
+      const authPromise = challenge.enrollment_required
+        ? (() => {
+            if (!enrollIdData || typeof result.idMatchScore !== 'number') {
+              throw new Error('Please scan your valid ID first to complete biometric enrollment.')
+            }
+            return enrollFaceAndLogin({
+              challenge_token: challenge.challenge_token,
+              face_descriptor: result.descriptor,
+              liveness_passed: result.livenessPassed,
+              id_type: enrollIdData.idType,
+              id_number: enrollIdData.idNumber || undefined,
+              id_ocr_name: enrollIdData.idOcrName || undefined,
+              id_face_match_score: result.idMatchScore,
+              id_image_base64: enrollIdData.idImageBase64,
+              live_image_base64: result.liveImageBase64,
+            })
+          })()
+        : verifyFaceLogin({
+            challenge_token: challenge.challenge_token,
+            face_descriptor: result.descriptor,
+            liveness_passed: result.livenessPassed,
+            live_image_base64: result.liveImageBase64,
+          })
+
+      const [loggedInUser] = await Promise.all([
+        authPromise,
+        new Promise<void>((resolve) => setTimeout(resolve, 800)),
+      ])
+
+      completeAuthenticatedSession(loggedInUser)
+    } catch {
+      setShowLoading(false)
+    }
+  }
 
   const initializeGoogleWidget = useCallback(
     (clientId: string) => {
@@ -197,6 +259,7 @@ export function LoginPage() {
   )
 
   useEffect(() => {
+    if (challenge) return
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) return
 
@@ -215,7 +278,7 @@ export function LoginPage() {
     return () => {
       if (intervalId) clearInterval(intervalId)
     }
-  }, [initializeGoogleWidget])
+  }, [initializeGoogleWidget, challenge])
 
   const handleGoogleSignInClick = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -278,7 +341,9 @@ export function LoginPage() {
 
         <div
           ref={cardRef}
-          className="relative z-10 w-full max-w-md p-8 md:p-10 rounded-2xl bg-surface/90 border border-white/10 backdrop-blur-xl shadow-2xl"
+          className={`relative z-10 w-full ${
+            challenge ? 'max-w-2xl' : 'max-w-md'
+          } p-6 sm:p-8 md:p-10 rounded-2xl bg-surface/90 border border-white/10 backdrop-blur-xl shadow-2xl transition-all duration-300`}
         >
           {/* Header */}
           <div className="text-center mb-8">
@@ -292,10 +357,16 @@ export function LoginPage() {
               />
             </Link>
             <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
-              Welcome Back
+              {challenge
+                ? challenge.enrollment_required
+                  ? 'First-Login Biometric Setup'
+                  : 'Face 2-Step Verification'
+                : 'Welcome Back'}
             </h1>
             <p className="text-xs uppercase tracking-widest text-white/40 mt-1">
-              Sign in to your DGym account
+              {challenge
+                ? `${challenge.user.full_name} • Role: ${challenge.user.role}`
+                : 'Sign in to your DGym account'}
             </p>
           </div>
 
@@ -314,7 +385,53 @@ export function LoginPage() {
             </div>
           )}
 
-          {/* Form */}
+          {challenge ? (
+            <div className="space-y-5">
+              {challenge.enrollment_required && !enrollIdData ? (
+                <IdScannerStep
+                  title="One-Time Valid ID Enrollment"
+                  subtitle="Your account needs biometric enrollment before accessing your workspace. Scan or upload a valid Philippine ID."
+                  initialFullName={challenge.user.full_name}
+                  confirmLabel="Continue to Live Face Enrollment →"
+                  onBack={handleResetChallenge}
+                  onConfirm={(data) => {
+                    setValidationError(null)
+                    clearError()
+                    setEnrollIdData(data)
+                  }}
+                />
+              ) : (
+                <FaceLivenessStep
+                  mode={challenge.enrollment_required ? 'enroll_match' : 'verify'}
+                  title={
+                    challenge.enrollment_required
+                      ? 'Complete Biometric Enrollment'
+                      : 'Verify Your Identity'
+                  }
+                  subtitle={
+                    challenge.enrollment_required
+                      ? 'Match your live face to your scanned ID to activate 2-step face login.'
+                      : 'Align your face in the frame and blink or turn your head slightly to complete sign-in.'
+                  }
+                  referenceIdDescriptor={enrollIdData?.idDescriptor}
+                  submitting={isLoading || showLoading}
+                  onVerified={handleFaceVerified}
+                  onBack={
+                    challenge.enrollment_required
+                      ? () => setEnrollIdData(null)
+                      : handleResetChallenge
+                  }
+                  backLabel={
+                    challenge.enrollment_required
+                      ? '← Rescan Valid ID'
+                      : '← Use a different account'
+                  }
+                />
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <Input
@@ -443,6 +560,8 @@ export function LoginPage() {
                 ))}
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

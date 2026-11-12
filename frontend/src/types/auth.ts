@@ -2,6 +2,16 @@
 
 export type UserRole = 'admin' | 'staff' | 'trainer' | 'member'
 
+export type SupportedIdType =
+  | 'philsys'
+  | 'drivers_license'
+  | 'school_id'
+  | 'umid'
+  | 'passport'
+  | 'postal_id'
+  | 'voters_id'
+  | 'other_gov_id'
+
 export interface User {
   id: number
   email: string
@@ -14,6 +24,7 @@ export interface User {
   membership_status?: 'active' | 'pending' | 'inactive' | 'suspended' | 'expired' | 'none'
   plan_name?: string | null
   profile_picture_url?: string | null
+  face_enrolled?: boolean
 }
 
 export interface LoginCredentials {
@@ -27,12 +38,66 @@ export interface RegisterCredentials {
   full_name: string
   phone?: string
   plan_slug?: string
+  face_descriptor: number[]
+  liveness_passed: boolean
+  id_type: SupportedIdType
+  id_number?: string
+  id_ocr_name?: string
+  id_face_match_score: number
+  id_image_base64?: string
+  live_image_base64?: string
 }
 
 export interface TokenResponse {
   access_token: string
   token_type: string
   user: User
+}
+
+export interface LoginUserPreview {
+  id: number
+  email: string
+  full_name: string
+  role: UserRole
+}
+
+export interface LoginChallengeResponse {
+  requires_face_verification: boolean
+  enrollment_required: boolean
+  challenge_token: string
+  user: LoginUserPreview
+}
+
+export interface FaceVerifyPayload {
+  challenge_token: string
+  face_descriptor: number[]
+  liveness_passed: boolean
+  live_image_base64?: string
+}
+
+export interface FaceEnrollPayload {
+  challenge_token: string
+  face_descriptor: number[]
+  liveness_passed: boolean
+  id_type: SupportedIdType
+  id_number?: string
+  id_ocr_name?: string
+  id_face_match_score: number
+  id_image_base64?: string
+  live_image_base64?: string
+}
+
+export interface OcrScanResponse {
+  provider: string
+  raw_text: string
+  used_external_api: boolean
+}
+
+export interface BiometricProvidersStatus {
+  ocr_provider: string
+  face_provider: string
+  ocr_api_configured: boolean
+  face_api_configured: boolean
 }
 
 export interface AuthContextType {
@@ -44,13 +109,21 @@ export interface AuthContextType {
 
   login: (
     credentials: LoginCredentials,
+  ) => Promise<LoginChallengeResponse>
+
+  verifyFaceLogin: (
+    payload: FaceVerifyPayload,
+  ) => Promise<User>
+
+  enrollFaceAndLogin: (
+    payload: FaceEnrollPayload,
   ) => Promise<User>
 
   register: (
     credentials: RegisterCredentials,
   ) => Promise<User>
 
-  loginWithGoogle: (credential: string) => Promise<User>
+  loginWithGoogle: (credential: string) => Promise<LoginChallengeResponse>
   availPlan: (planSlug: string) => Promise<User>
   logout: () => Promise<void>
 

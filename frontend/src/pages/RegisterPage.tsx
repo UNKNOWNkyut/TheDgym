@@ -9,9 +9,22 @@ import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 import { PUBLIC_PLANS } from '@/constants/plans'
+import { IdScannerStep, type IdScanCompletedData } from '@/components/auth/IdScannerStep'
+import { FaceLivenessStep, type FaceLivenessResult } from '@/components/auth/FaceLivenessStep'
+
+type RegisterStep = 'id_scan' | 'face_liveness' | 'account' | 'plan'
+
+const REGISTER_STEPS: { id: RegisterStep; label: string }[] = [
+  { id: 'id_scan', label: '1. Valid ID' },
+  { id: 'face_liveness', label: '2. Face Scan' },
+  { id: 'account', label: '3. Account' },
+  { id: 'plan', label: '4. Plan' },
+]
 
 export function RegisterPage() {
-  const [step, setStep] = useState<1 | 2>(1)
+  const [step, setStep] = useState<RegisterStep>('id_scan')
+  const [idScanData, setIdScanData] = useState<IdScanCompletedData | null>(null)
+  const [livenessData, setLivenessData] = useState<FaceLivenessResult | null>(null)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -34,7 +47,7 @@ export function RegisterPage() {
     )
   }, [step])
 
-  const handleStep1Next = (e: React.FormEvent) => {
+  const handleAccountNext = (e: React.FormEvent) => {
     e.preventDefault()
     setValidationError(null)
     clearError()
@@ -56,12 +69,19 @@ export function RegisterPage() {
       return
     }
 
-    setStep(2)
+    setStep('plan')
   }
 
   const handleCompleteRegistration = async (withPlan: boolean) => {
     setValidationError(null)
     clearError()
+
+    if (!idScanData || !livenessData || typeof livenessData.idMatchScore !== 'number') {
+      setValidationError('Please complete Valid ID and live face verification first.')
+      setStep(idScanData ? 'face_liveness' : 'id_scan')
+      return
+    }
+
     setShowLoading(true)
 
     const chosenSlug = withPlan ? selectedPlan : null
@@ -72,7 +92,16 @@ export function RegisterPage() {
           full_name: fullName.trim(),
           email: email.trim(),
           phone: phone.trim() || undefined,
+          plan_slug: chosenSlug ?? undefined,
           password,
+          face_descriptor: livenessData.descriptor,
+          liveness_passed: livenessData.livenessPassed,
+          id_type: idScanData.idType,
+          id_number: idScanData.idNumber || undefined,
+          id_ocr_name: idScanData.idOcrName || undefined,
+          id_face_match_score: livenessData.idMatchScore,
+          id_image_base64: idScanData.idImageBase64,
+          live_image_base64: livenessData.liveImageBase64,
         }),
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
@@ -123,11 +152,11 @@ export function RegisterPage() {
         <div
           ref={cardRef}
           className={`relative z-10 w-full ${
-            step === 1 ? 'max-w-md' : 'max-w-2xl'
-          } p-8 md:p-10 rounded-2xl bg-surface/90 border border-white/10 backdrop-blur-xl shadow-2xl transition-all duration-300`}
+            step === 'account' ? 'max-w-md' : 'max-w-2xl'
+          } p-6 sm:p-8 md:p-10 rounded-2xl bg-surface/90 border border-white/10 backdrop-blur-xl shadow-2xl transition-all duration-300`}
         >
           {/* Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <Link to="/" className="inline-block mb-4">
               <img
                 src="/assets/logos/thedgym.png"
@@ -138,7 +167,29 @@ export function RegisterPage() {
               />
             </Link>
 
-            {step === 1 ? (
+            {step === 'id_scan' && (
+              <>
+                <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+                  Scan Valid ID
+                </h1>
+                <p className="text-xs uppercase tracking-widest text-white/40 mt-1 max-w-md mx-auto">
+                  Auto-fill your details &amp; extract your reference face photo
+                </p>
+              </>
+            )}
+
+            {step === 'face_liveness' && (
+              <>
+                <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+                  Live Face Verification
+                </h1>
+                <p className="text-xs uppercase tracking-widest text-white/40 mt-1 max-w-md mx-auto">
+                  Match your live selfie against your ID &amp; complete liveness check
+                </p>
+              </>
+            )}
+
+            {step === 'account' && (
               <>
                 <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
                   Create Account
@@ -147,7 +198,9 @@ export function RegisterPage() {
                   Join The DGym Rosario Batangas
                 </p>
               </>
-            ) : (
+            )}
+
+            {step === 'plan' && (
               <>
                 <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
                   Start Your Training Plan?
@@ -157,6 +210,31 @@ export function RegisterPage() {
                 </p>
               </>
             )}
+
+            {/* 4-Step Progress Indicator */}
+            <div className="grid grid-cols-4 gap-2 mt-5 max-w-lg mx-auto">
+              {REGISTER_STEPS.map((item, idx) => {
+                const currentIdx = REGISTER_STEPS.findIndex((s) => s.id === step)
+                const isDone = idx < currentIdx
+                const isActive = idx === currentIdx
+                return (
+                  <div key={item.id} className="text-left">
+                    <div
+                      className={`h-1 rounded-full transition-colors ${
+                        isActive ? 'bg-red' : isDone ? 'bg-green-500/70' : 'bg-white/10'
+                      }`}
+                    />
+                    <p
+                      className={`mt-1.5 text-[10px] uppercase tracking-wider font-mono truncate ${
+                        isActive ? 'text-white' : isDone ? 'text-green-400/80' : 'text-white/35'
+                      }`}
+                    >
+                      {item.label}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* Error Banner */}
@@ -174,9 +252,81 @@ export function RegisterPage() {
             </div>
           )}
 
-          {/* STEP 1: Account Information */}
-          {step === 1 && (
-            <form onSubmit={handleStep1Next} className="space-y-4">
+          {/* STEP 1: Valid ID Scanner + OCR Auto-Fill */}
+          {step === 'id_scan' && (
+            <div className="space-y-4">
+              <IdScannerStep
+                title="Philippine Valid ID"
+                subtitle="Scan or upload PhilSys National ID, Driver's License, School ID, UMID, or Passport"
+                initialFullName={fullName}
+                initialIdType={idScanData?.idType}
+                confirmLabel="Continue to Live Face Scan →"
+                onConfirm={(data) => {
+                  setValidationError(null)
+                  clearError()
+                  setIdScanData(data)
+                  setFullName(data.fullName)
+                  setLivenessData(null)
+                  setStep('face_liveness')
+                }}
+              />
+              <p className="text-center text-xs text-white/40 pt-2">
+                Already have an account?{' '}
+                <Link
+                  to="/login"
+                  className="text-white hover:text-red font-medium underline underline-offset-2 transition-colors duration-150"
+                >
+                  Sign in
+                </Link>
+              </p>
+            </div>
+          )}
+
+          {/* STEP 2: Live Selfie + Liveness + ID Face Match */}
+          {step === 'face_liveness' && idScanData && (
+            <FaceLivenessStep
+              mode="enroll_match"
+              title="Match Face to Valid ID"
+              subtitle="Align your face in the frame and blink or turn your head slightly to verify liveness"
+              referenceIdDescriptor={idScanData.idDescriptor}
+              onBack={() => {
+                setValidationError(null)
+                clearError()
+                setStep('id_scan')
+              }}
+              backLabel="← Rescan Valid ID"
+              onVerified={(result) => {
+                setValidationError(null)
+                clearError()
+                setLivenessData(result)
+                setStep('account')
+              }}
+            />
+          )}
+
+          {/* STEP 3: Account Information */}
+          {step === 'account' && (
+            <form onSubmit={handleAccountNext} className="space-y-4">
+              {idScanData && livenessData && (
+                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-green-500/25 bg-green-500/10 text-xs">
+                  <div className="text-green-300">
+                    <span className="font-semibold">ID &amp; Live Face Verified</span>
+                    {typeof livenessData.idMatchScore === 'number' && (
+                      <span className="text-green-300/75 ml-2 font-mono">
+                        ({Math.round(livenessData.idMatchScore * 100)}% match)
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep('id_scan')}
+                    className="text-[11px] uppercase tracking-wider text-white/60 hover:text-white underline underline-offset-2 cursor-pointer"
+                  >
+                    Rescan
+                  </button>
+                </div>
+              )}
+
               <Input
                 label="Full Name"
                 type="text"
@@ -226,13 +376,28 @@ export function RegisterPage() {
                 required
               />
 
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full mt-4"
-              >
-                Next Step →
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => {
+                    setValidationError(null)
+                    clearError()
+                    setStep('face_liveness')
+                  }}
+                  className="sm:w-1/3"
+                >
+                  ← Back
+                </Button>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="flex-1"
+                >
+                  Next Step →
+                </Button>
+              </div>
 
               <p className="text-center text-[11px] text-white/35 mt-4 leading-relaxed">
                 By creating an account, you agree to our separate{' '}
@@ -257,8 +422,8 @@ export function RegisterPage() {
             </form>
           )}
 
-          {/* STEP 2: Training Plan Selection */}
-          {step === 2 && (
+          {/* STEP 4: Training Plan Selection */}
+          {step === 'plan' && (
             <div className="space-y-6">
               {/* Plan Options Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
@@ -347,7 +512,7 @@ export function RegisterPage() {
                     type="button"
                     onClick={() => {
                       setValidationError(null)
-                      setStep(1)
+                      setStep('account')
                     }}
                     className="text-xs text-white/40 hover:text-white transition-colors"
                   >

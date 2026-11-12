@@ -21,9 +21,12 @@ import type {
   ExpenseCategoryCreate,
   ExpenseCreate,
   ExpenseUpdate,
+  FaceEnrollPayload,
+  FaceVerifyPayload,
   FinanceSummary,
   KeycardStatus,
   KeycardTapLog,
+  LoginChallengeResponse,
   LoginCredentials,
   Member,
   MemberChurnDetail,
@@ -61,6 +64,8 @@ const CREDENTIAL_AUTH_ENDPOINTS = new Set([
   '/api/auth/register',
   '/api/auth/google',
   '/api/auth/logout',
+  '/api/auth/face/verify',
+  '/api/auth/face/enroll',
 ])
 
 export type RequestOptions = RequestInit & {
@@ -229,19 +234,44 @@ async function request<T>(
 export const api = {
   // ─── Authentication ───────────────────────────────────────────────────────
 
-  async login(credentials: LoginCredentials): Promise<TokenResponse> {
-    const data = await request<TokenResponse>('/api/auth/login', {
+  async login(credentials: LoginCredentials): Promise<LoginChallengeResponse> {
+    return request<LoginChallengeResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
+    })
+  },
+
+  async loginWithGoogle(credential: string): Promise<LoginChallengeResponse> {
+    return request<LoginChallengeResponse>('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    })
+  },
+
+  async getBiometricProviders(): Promise<import('@/types/auth').BiometricProvidersStatus> {
+    return request<import('@/types/auth').BiometricProvidersStatus>('/api/auth/biometrics/providers')
+  },
+
+  async ocrScanId(imageBase64: string): Promise<import('@/types/auth').OcrScanResponse> {
+    return request<import('@/types/auth').OcrScanResponse>('/api/auth/biometrics/ocr', {
+      method: 'POST',
+      body: JSON.stringify({ image_base64: imageBase64 }),
+    })
+  },
+
+  async verifyFace(payload: FaceVerifyPayload): Promise<TokenResponse> {
+    const data = await request<TokenResponse>('/api/auth/face/verify', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
     setSessionHint()
     return data
   },
 
-  async loginWithGoogle(credential: string): Promise<TokenResponse> {
-    const data = await request<TokenResponse>('/api/auth/google', {
+  async enrollFace(payload: FaceEnrollPayload): Promise<TokenResponse> {
+    const data = await request<TokenResponse>('/api/auth/face/enroll', {
       method: 'POST',
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify(payload),
     })
     setSessionHint()
     return data

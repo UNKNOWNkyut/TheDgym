@@ -75,3 +75,25 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
                 logger.info(
                     "[MIGRATION] Created partial unique index uq_member_memberships_payment_reference_nonempty"
                 )
+
+        biometric_cols = await conn.run_sync(_get_existing_columns, "user_biometrics")
+        if biometric_cols:
+            ts_type = "TIMESTAMP WITH TIME ZONE" if conn.dialect.name == "postgresql" else "TIMESTAMP"
+            biometric_migrations = (
+                ("descriptor_version", "VARCHAR(32) NOT NULL DEFAULT 'faceapi-128-v1'"),
+                ("id_type", "VARCHAR(50) NULL"),
+                ("id_number_masked", "VARCHAR(32) NULL"),
+                ("id_number_hash", "VARCHAR(64) NULL"),
+                ("id_ocr_name", "VARCHAR(255) NULL"),
+                ("id_face_match_score", "FLOAT NULL"),
+                ("reference_selfie_b64", "TEXT NULL"),
+                ("verification_provider", "VARCHAR(32) NOT NULL DEFAULT 'faceapi_local'"),
+                ("is_enrolled", "BOOLEAN NOT NULL DEFAULT TRUE"),
+                ("last_verified_at", f"{ts_type} NULL"),
+            )
+            for col_name, col_ddl in biometric_migrations:
+                if col_name not in biometric_cols:
+                    await conn.execute(
+                        text(f"ALTER TABLE user_biometrics ADD COLUMN {col_name} {col_ddl}")
+                    )
+                    logger.info("[MIGRATION] Added column user_biometrics.%s", col_name)

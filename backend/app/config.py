@@ -97,6 +97,16 @@ class Settings:
             "XENDIT_WEBHOOK_VERIFICATION_TOKEN", ""
         ).strip()
 
+        # External Biometric & OCR Cloud APIs (Free-tier REST integrations)
+        self.OCR_SPACE_API_KEY: str = os.getenv("OCR_SPACE_API_KEY", "").strip()
+        self.FACEPP_API_KEY: str = os.getenv("FACEPP_API_KEY", "").strip()
+        self.FACEPP_API_SECRET: str = os.getenv("FACEPP_API_SECRET", "").strip()
+        self.FACEPP_API_BASE_URL: str = (
+            os.getenv("FACEPP_API_BASE_URL", "https://api-us.faceplusplus.com/facepp/v3")
+            .strip()
+            .rstrip("/")
+        )
+
         # CORS (Check 27): fallback to RENDER_EXTERNAL_URL on Render or localhost in dev/testing
         render_external_url = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
         render_origins = (

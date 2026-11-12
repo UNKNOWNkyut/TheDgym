@@ -1,5 +1,6 @@
 from app.models.user import User, UserRole
 from app.models.user_profile import UserProfile
+from app.models.user_biometric import UserBiometric
 from app.models.member import (
     Member,
     MemberStatus,
@@ -51,6 +52,7 @@ __all__ = [
     "User",
     "UserRole",
     "UserProfile",
+    "UserBiometric",
     "Member",
     "MemberStatus",
     "Gender",
