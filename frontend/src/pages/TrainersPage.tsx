@@ -8,21 +8,36 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { OFFICIAL_COACHES, OFFICIAL_PT_PACKAGES } from '@/constants/coaches'
 import { GYM_INFO } from '@/constants/gymInfo'
+import type { User } from '@/types/auth'
 
 /*
  * TRAINERS NOTE:
  * Official coaches and 12-session PT packages verified from TDGGYM-QUESTIONNAIRES-1.
  */
 
+function resolveTrainerBookingAction(
+  isAuthenticated: boolean,
+  user: User | null,
+): { href: string; label: string } {
+  if (!isAuthenticated || !user) {
+    return { href: '/contact', label: 'Inquire for PT Sessions' }
+  }
+  if (user.role === 'admin' || user.role === 'trainer') {
+    return { href: '/manage/pt-sessions', label: 'Manage PT Sessions' }
+  }
+  if (user.role === 'member' && user.has_active_membership) {
+    return { href: '/dashboard/book', label: 'Book a PT Session' }
+  }
+  return { href: '/contact', label: 'Inquire for PT Sessions' }
+}
+
 export function TrainersPage() {
   const heroRef = useRef<HTMLDivElement>(null)
   const { isAuthenticated, user } = useAuth()
-  const bookingHref =
-    isAuthenticated && user?.has_active_membership ? '/manage/book-pt' : '/contact'
-  const bookingLabel =
-    isAuthenticated && user?.has_active_membership
-      ? 'Book a PT Session'
-      : 'Inquire for PT Sessions'
+  const { href: bookingHref, label: bookingLabel } = resolveTrainerBookingAction(
+    isAuthenticated,
+    user,
+  )
 
   useGSAP(() => {
     if (!heroRef.current) return
@@ -88,7 +103,7 @@ export function TrainersPage() {
           </div>
 
           {/* Real Photo: 1-on-1 Coaching session in action */}
-          <div className="relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-video lg:aspect-[4/3] shadow-2xl">
+          <div className="relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-white/8 bg-surface-2 aspect-video lg:aspect-[4/3] shadow-2xl">
             <img
               src="/assets/images/img6.jpg"
               alt="Coach personal training session in action at The DGym Rosario Batangas"
@@ -127,10 +142,10 @@ export function TrainersPage() {
                   <h3 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-1">
                     {coach.name}
                   </h3>
-                  <p className="text-xs text-white/40 font-mono mb-4">
+                  <p className="text-xs text-white/60 font-mono mb-4">
                     Focus: {coach.primaryFocus}
                   </p>
-                  <p className="text-sm text-white/60 leading-relaxed mb-5">
+                  <p className="text-sm text-white/70 leading-relaxed mb-5">
                     {coach.bio}
                   </p>
                 </div>
@@ -148,7 +163,7 @@ export function TrainersPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             {/* Team photo */}
-            <div className="relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-video shadow-xl">
+            <div className="relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-white/8 bg-surface-2 aspect-video shadow-xl">
               <img
                 src="/assets/images/img4.jpg"
                 alt="The DGym Coaching Team in official uniform at Rosario, Batangas"
@@ -163,7 +178,7 @@ export function TrainersPage() {
             </div>
 
             {/* Coach Creed & Details */}
-            <div className="relative rounded-2xl overflow-hidden border border-white/8 bg-surface-2 aspect-video shadow-xl">
+            <div className="relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-white/8 bg-surface-2 aspect-video shadow-xl">
               <img
                 src="/assets/images/img5.jpg"
                 alt="The DGym Coach shirt with Philippians 4:13 verse"
@@ -202,7 +217,7 @@ export function TrainersPage() {
                     <Badge variant="red" size="sm">
                       {pkg.sessionsCount} Sessions
                     </Badge>
-                    <span className="text-xs text-white/40 font-mono">
+                    <span className="text-xs text-white/60 font-mono">
                       {pkg.durationLabel}
                     </span>
                   </div>
@@ -215,16 +230,22 @@ export function TrainersPage() {
                     {pkg.priceFormatted}
                   </p>
 
-                  <p className="text-xs uppercase tracking-widest text-white/40 mb-3">
-                    Assigned: <span className="text-white/80">{pkg.coachesLabel}</span>
+                  <p className="text-xs uppercase tracking-widest text-white/60 mb-3">
+                    Assigned: <span className="text-white/90">{pkg.coachesLabel}</span>
                   </p>
 
-                  <p className="text-sm text-white/60 leading-relaxed mb-6">
+                  <p className="text-sm text-white/70 leading-relaxed mb-6">
                     {pkg.description}
                   </p>
                 </div>
 
-                <Link to={bookingHref}>
+                <Link
+                  to={
+                    bookingHref === '/dashboard/book'
+                      ? `/dashboard/book?package=${encodeURIComponent(pkg.id)}`
+                      : bookingHref
+                  }
+                >
                   <Button fullWidth variant="secondary">
                     {bookingLabel}
                   </Button>
@@ -245,7 +266,13 @@ export function TrainersPage() {
           <div className="flex flex-wrap justify-center gap-3">
             <Link to={bookingHref}><Button size="lg">{bookingLabel}</Button></Link>
             <a href={GYM_INFO.facebookUrl} target="_blank" rel="noopener noreferrer">
-              <Button variant="secondary" size="lg">Facebook Page</Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="!border-zinc-300 !text-zinc-900 hover:!bg-zinc-900/5 hover:!border-zinc-400 dark:!border-white/15 dark:!text-white dark:hover:!bg-white/5 dark:hover:!border-white/25"
+              >
+                Facebook Page
+              </Button>
             </a>
           </div>
         </div>

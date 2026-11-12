@@ -1,6 +1,6 @@
 
-import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { useAuth } from '@/context/AuthContext'
@@ -8,6 +8,7 @@ import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { QuarterRing } from '@/components/ui/quarter-ring'
+import type { User } from '@/types/auth'
 
 const DEMO_ACCOUNTS = [
   { role: 'Admin', email: 'admin@thedgym.com', pass: 'admin12345', badge: 'Full Access' },
@@ -15,6 +16,48 @@ const DEMO_ACCOUNTS = [
   { role: 'Active Member', email: 'member@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
   { role: 'Registered User', email: 'user@thedgym.com', pass: 'user12345', badge: 'No Plan' },
 ]
+
+function sanitizeInternalRedirect(raw: string | null): string | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/\\')) {
+    return null
+  }
+  return trimmed
+}
+
+function resolvePostLoginDestination(loggedInUser: User, redirectTarget: string | null): string {
+  const defaultDest =
+    loggedInUser.role === 'admin'
+      ? '/manage'
+      : loggedInUser.role === 'staff'
+        ? '/manage/scanner'
+        : loggedInUser.role === 'trainer'
+          ? '/dashboard'
+          : loggedInUser.has_active_membership
+            ? '/dashboard'
+            : '/'
+
+  if (
+    !redirectTarget ||
+    redirectTarget === '/' ||
+    redirectTarget === '/dashboard' ||
+    redirectTarget.startsWith('/login')
+  ) {
+    return defaultDest
+  }
+  if (loggedInUser.role === 'member' && redirectTarget.startsWith('/manage')) {
+    return defaultDest
+  }
+  if (
+    loggedInUser.role === 'staff' &&
+    redirectTarget.startsWith('/manage') &&
+    !redirectTarget.startsWith('/manage/scanner')
+  ) {
+    return defaultDest
+  }
+  return redirectTarget
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -28,10 +71,14 @@ export function LoginPage() {
   const { login, loginWithGoogle, isLoading, error, clearError } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
 
   // Redirect destination after login (validated against open redirects)
-  const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard'
-  const from = rawFrom.startsWith('/') && !rawFrom.startsWith('//') ? rawFrom : '/dashboard'
+  const stateFrom = (location.state as { from?: { pathname: string; search?: string } })?.from
+  const rawFrom =
+    searchParams.get('redirect') ||
+    (stateFrom ? `${stateFrom.pathname}${stateFrom.search || ''}` : null)
+  const redirectTarget = sanitizeInternalRedirect(rawFrom)
 
   // Animate card entrance
   useGSAP(() => {
@@ -67,22 +114,7 @@ export function LoginPage() {
         new Promise<void>((resolve) => setTimeout(resolve, 800)),
       ])
 
-      const defaultDest = loggedInUser.role === 'admin'
-        ? '/manage'
-        : loggedInUser.role === 'trainer'
-        ? '/dashboard'
-        : loggedInUser.has_active_membership
-        ? '/dashboard'
-        : '/'
-
-      let dest = defaultDest
-      if (loggedInUser.role === 'member') {
-        if (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login') && !from.startsWith('/manage')) {
-          dest = from
-        }
-      }
-
-      navigate(dest, { replace: true })
+      navigate(resolvePostLoginDestination(loggedInUser, redirectTarget), { replace: true })
     } catch {
       // Hide loading screen if login fails
       setShowLoading(false)
@@ -90,106 +122,60 @@ export function LoginPage() {
     }
   }
 
-  const handleGoogleCredential = async (credential: string) => {
-    setShowLoading(true)
-    try {
-      const [loggedInUser] = await Promise.all([
-        loginWithGoogle(credential),
-        new Promise<void>((resolve) => setTimeout(resolve, 800)),
-      ])
-      const defaultDest = loggedInUser.role === 'admin'
-        ? '/manage'
-        : loggedInUser.role === 'trainer'
-        ? '/dashboard'
-        : loggedInUser.has_active_membership
-        ? '/dashboard'
-        : '/'
-
-      let dest = defaultDest
-      if (loggedInUser.role === 'member') {
-        if (from && from !== '/dashboard' && from !== '/' && !from.startsWith('/login') && !from.startsWith('/manage')) {
-          dest = from
-        }
+  const handleGoogleCredential = useCallback(
+    async (credential: string) => {
+      setShowLoading(true)
+      try {
+        const [loggedInUser] = await Promise.all([
+          loginWithGoogle(credential),
+          new Promise<void>((resolve) => setTimeout(resolve, 800)),
+        ])
+        navigate(resolvePostLoginDestination(loggedInUser, redirectTarget), { replace: true })
+      } catch {
+        setShowLoading(false)
       }
+    },
+    [loginWithGoogle, navigate, redirectTarget],
+  )
 
-      navigate(dest, { replace: true })
-    } catch {
-      setShowLoading(false)
-    }
-  }
+  const initializeGoogleWidget = useCallback(
+    (clientId: string) => {
+      const googleApi =
+        typeof window !== 'undefined'
+          ? (window as unknown as {
+              google?: {
+                accounts?: {
+                  id?: {
+                    initialize: (cfg: {
+                      client_id: string
+                      callback: (res: { credential?: string }) => void
+                    }) => void
+                    renderButton: (el: HTMLElement, opts: Record<string, unknown>) => void
+                    prompt: () => void
+                  }
+                }
+              }
+            }).google
+          : undefined
 
-  useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId) return
+      if (!googleApi?.accounts?.id) return false
 
-    const initGIS = () => {
-      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
-        const google = (window as any).google
-        google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (res: { credential?: string }) => {
-            if (res?.credential) {
-              handleGoogleCredential(res.credential)
-            }
-          },
-        })
-
-        if (googleBtnContainerRef.current) {
-          googleBtnContainerRef.current.innerHTML = ''
-          const containerWidth = Math.min(Math.max(googleBtnContainerRef.current.offsetWidth || 360, 200), 400)
-          google.accounts.id.renderButton(googleBtnContainerRef.current, {
-            theme: 'filled_black',
-            size: 'large',
-            shape: 'pill',
-            width: containerWidth,
-            text: 'signin_with',
-            logo_alignment: 'left',
-          })
-          setGisLoaded(true)
-        }
-
-        try {
-          google.accounts.id.prompt()
-        } catch {
-          // Ignore One Tap prompt errors if dismissed or in cooldown
-        }
-      }
-    }
-
-    if ((window as any).google?.accounts?.id) {
-      initGIS()
-    } else {
-      const interval = setInterval(() => {
-        if ((window as any).google?.accounts?.id) {
-          initGIS()
-          clearInterval(interval)
-        }
-      }, 250)
-      return () => clearInterval(interval)
-    }
-  }, [from, navigate])
-
-  const handleGoogleSignInClick = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId) {
-      setValidationError('Google Client ID is not yet configured. Please set VITE_GOOGLE_CLIENT_ID in your environment file.')
-      return
-    }
-
-    if (typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
-      const google = (window as any).google
-      google.accounts.id.initialize({
+      googleApi.accounts.id.initialize({
         client_id: clientId,
         callback: (res: { credential?: string }) => {
           if (res?.credential) {
-            handleGoogleCredential(res.credential)
+            void handleGoogleCredential(res.credential)
           }
         },
       })
+
       if (googleBtnContainerRef.current) {
         googleBtnContainerRef.current.innerHTML = ''
-        const containerWidth = Math.min(Math.max(googleBtnContainerRef.current.offsetWidth || 360, 200), 400)
-        google.accounts.id.renderButton(googleBtnContainerRef.current, {
+        const containerWidth = Math.min(
+          Math.max(googleBtnContainerRef.current.offsetWidth || 360, 200),
+          400,
+        )
+        googleApi.accounts.id.renderButton(googleBtnContainerRef.current, {
           theme: 'filled_black',
           size: 'large',
           shape: 'pill',
@@ -199,12 +185,46 @@ export function LoginPage() {
         })
         setGisLoaded(true)
       }
+
       try {
-        google.accounts.id.prompt()
+        googleApi.accounts.id.prompt()
       } catch {
-        // Ignore One Tap prompt errors
+        // Ignore One Tap prompt errors if dismissed or in cooldown
       }
-    } else {
+      return true
+    },
+    [handleGoogleCredential],
+  )
+
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) return
+
+    let intervalId: ReturnType<typeof setInterval> | undefined
+    const tryInit = () => {
+      if (initializeGoogleWidget(clientId) && intervalId) {
+        clearInterval(intervalId)
+        intervalId = undefined
+      }
+    }
+
+    if (!initializeGoogleWidget(clientId)) {
+      intervalId = setInterval(tryInit, 250)
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [initializeGoogleWidget])
+
+  const handleGoogleSignInClick = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      setValidationError('Google Client ID is not yet configured. Please set VITE_GOOGLE_CLIENT_ID in your environment file.')
+      return
+    }
+
+    if (!initializeGoogleWidget(clientId)) {
       setValidationError('Google Sign-In SDK is loading. Please check your internet connection and refresh.')
     }
   }

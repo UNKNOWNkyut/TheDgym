@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { Sparkles } from 'lucide-react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { api } from '@/services/api'
+import { SEO } from '@/components/ui/SEO'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 import type {
   AnalyticsOverview,
@@ -33,28 +35,8 @@ export function ManageAnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRetraining, setIsRetraining] = useState(false)
   const [notification, setNotification] = useState<string | null>(null)
-  const [isAutoDispatching, setIsAutoDispatching] = useState(false)
-  const [autoDispatchResult, setAutoDispatchResult] = useState<string | null>(null)
 
   const [isRefreshing, setIsRefreshing] = useState(false)
-
-  const handleAutoDispatchHighRisk = async () => {
-    setIsAutoDispatching(true)
-    setAutoDispatchResult(null)
-    try {
-      const res = await api.autoDispatchHighRiskSms()
-      if (res.dispatched_count > 0) {
-        setAutoDispatchResult(`⚡ Successfully auto-dispatched SMS offer to ${res.dispatched_count} HIGH RISK athlete(s)!`)
-      } else {
-        setAutoDispatchResult(`Notice: All high-risk athletes already received an offer recently (${res.skipped_count} protected by 30-day anti-spam).`)
-      }
-      await loadData(true)
-    } catch (err: any) {
-      setAutoDispatchResult(err?.message || 'Failed to auto-dispatch.')
-    } finally {
-      setIsAutoDispatching(false)
-    }
-  }
 
   // Fetch initial data
   const loadData = async (silent = false) => {
@@ -209,6 +191,7 @@ export function ManageAnalyticsPage() {
 
   return (
     <div ref={containerRef} className="space-y-8 py-4">
+      <SEO title="Analytics & Churn" description="The DGym operational analytics and churn insights." noIndex />
       {/* ─── Header & Model Action ────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/10 pb-6">
         <div>
@@ -562,28 +545,8 @@ export function ManageAnalyticsPage() {
                 />
               </svg>
             </div>
-
-            {/* 100% Auto-Dispatch High Risk SMS */}
-            <button
-              onClick={handleAutoDispatchHighRisk}
-              disabled={isAutoDispatching}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-mono text-xs transition-all disabled:opacity-50"
-              title="Automatically scan and dispatch SMS offers via TextBee to all HIGH RISK members"
-            >
-              <span>{isAutoDispatching ? '⚡ Auto-Dispatching...' : '⚡ Auto-SMS High Risk'}</span>
-            </button>
           </div>
         </div>
-
-        {/* Auto Dispatch Result Feedback Banner */}
-        {autoDispatchResult && (
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-mono text-amber-200 flex items-center justify-between">
-            <span>{autoDispatchResult}</span>
-            <button onClick={() => setAutoDispatchResult(null)} className="text-white/40 hover:text-white ml-2 text-sm">
-              &times;
-            </button>
-          </div>
-        )}
 
         {/* Table Container */}
         <div className="rounded-xl border border-white/10 bg-[#0c0c0e] overflow-hidden">
@@ -780,7 +743,7 @@ export function ManageAnalyticsPage() {
                     : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
                 }`}
               >
-                <span>🤖 AI Retention Strategy & Offer</span>
+                <span>AI Retention Strategy & Offer</span>
                 {strategy && (
                   <span className="w-2 h-2 rounded-full bg-red animate-pulse" />
                 )}
@@ -795,7 +758,7 @@ export function ManageAnalyticsPage() {
                     : 'border-white/10 bg-white/5 text-white/60 hover:text-white'
                 }`}
               >
-                📊 Risk Signals & Feature Vector
+                Risk Signals & Feature Vector
               </button>
             </div>
 
@@ -829,8 +792,8 @@ export function ManageAnalyticsPage() {
                   </div>
                 ) : !strategy ? (
                   <div className="p-8 rounded-2xl border border-white/10 bg-white/[0.02] text-center space-y-4">
-                    <div className="w-12 h-12 rounded-full bg-red/10 border border-red/20 mx-auto flex items-center justify-center text-xl">
-                      🤖
+                    <div className="w-12 h-12 rounded-full bg-red/10 border border-red/20 mx-auto flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-red" aria-hidden="true" />
                     </div>
                     <div>
                       <h4 className="text-base font-bold text-white uppercase tracking-tight">
@@ -944,9 +907,9 @@ export function ManageAnalyticsPage() {
                             {isDispatchingOffer ? (
                               <span>Sending...</span>
                             ) : strategy.status === 'dispatched' ? (
-                              <span>✓ Re-send Offer</span>
+                              <span>Re-send Offer</span>
                             ) : (
-                              <span>🚀 Dispatch Offer to Member</span>
+                              <span>Dispatch Offer to Member</span>
                             )}
                           </button>
                         </div>

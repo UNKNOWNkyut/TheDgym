@@ -1,7 +1,7 @@
 """
 Online Payment Gateway Router powered by Xendit (https://xendit.co).
 Supports automated online membership payments via GCash, Maya, QR Ph, & Cards,
-with real-time webhook callback processing and instant TextBee SMS activation.
+with real-time webhook callback processing and instant portal membership activation.
 """
 import hmac
 import logging
@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.deps import get_current_user, require_roles
+from app.core.rate_limit import require_rate_limit
 from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
@@ -44,6 +45,8 @@ from app.services.xendit_service import (
 logger = logging.getLogger("dgym.payments")
 
 router = APIRouter(prefix="/api/payments", tags=["Online Payments & Checkout"])
+rate_limit_checkout = require_rate_limit("payment_checkout", max_requests=10, window_seconds=60)
+rate_limit_webhook = require_rate_limit("payment_webhook", max_requests=60, window_seconds=60)
 
 
 class CreateCheckoutRequest(BaseModel):
@@ -202,6 +205,7 @@ async def _activate_membership_from_xendit(
 @router.post(
     "/create-checkout",
     summary="Create a secure Xendit hosted checkout invoice for a membership plan",
+    dependencies=[Depends(rate_limit_checkout)],
 )
 async def create_checkout_session(
     payload: CreateCheckoutRequest,
@@ -325,6 +329,7 @@ async def create_checkout_session(
 @router.post(
     "/webhook/xendit",
     summary="Asynchronous webhook receiver for Xendit payment events",
+    dependencies=[Depends(rate_limit_webhook)],
 )
 async def xendit_webhook(
     request: Request,
@@ -333,7 +338,7 @@ async def xendit_webhook(
 ):
     """
     Receives automated invoice notifications from Xendit.
-    When an invoice status is 'PAID', activates the membership and sends Welcome SMS.
+    When an invoice status is 'PAID', activates the membership and sends an in-app admin notification.
     """
     # 1. Fail-closed callback token verification
     configured_token = get_xendit_webhook_token()

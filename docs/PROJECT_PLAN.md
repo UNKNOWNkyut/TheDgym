@@ -1,6 +1,6 @@
 # PROJECT_PLAN.md — THE DGYM
 
-> Version: 0.9.0 | Status: Phase 9 Complete | Last Updated: 2026-11-07
+> Version: 1.0.0 | Status: Phase 10 Complete (VPS Cutover Ready) | Last Updated: 2026-11-12
 
 ---
 
@@ -41,15 +41,15 @@ It consists of:
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite, TypeScript, Tailwind CSS, GSAP, Lenis |
-| Backend | Python, FastAPI, SQLAlchemy (async), Pydantic v2 |
-| Database | PostgreSQL |
-| Data Processing | Pandas, Polars |
-| Validation | Pandera (data), Pydantic (API) |
-| ML | scikit-learn, XGBoost |
-| AI | OpenAI GPT-4o-mini (Python SDK) |
-| Auth | JWT via httpOnly cookies |
-| Migrations | Alembic |
+| Frontend | React 19, Vite, TypeScript, Tailwind CSS v4, GSAP, Lenis |
+| Backend | Python 3.13, FastAPI, SQLAlchemy (async), Pydantic v2 |
+| Database | PostgreSQL 16 (production/Docker) • SQLite aiosqlite (local dev/tests) |
+| Data & ML | NumPy, scikit-learn, XGBoost (JSON-only model/scaler artifacts) |
+| Validation | Pydantic v2 (API & settings) |
+| AI | OpenAI GPT-4o-mini HTTP API (optional, heuristic fallback) |
+| Auth | PyJWT via httpOnly cookies + X-Requested-With CSRF defense |
+| Payments & SMS | Xendit Online Checkout/Webhooks • TextBee SMS Gateway |
+| Deployment | Docker Compose + Nginx TLS reverse proxy + Certbot + `pg_dump` backups |
 
 ---
 
@@ -67,7 +67,7 @@ It consists of:
 | **7** | AI Retention Strategies | ✅ COMPLETE |
 | **8** | Security + Performance Hardening | ✅ COMPLETE |
 | **9** | Full QA + Integration Testing | ✅ COMPLETE |
-| **10** | Deployment + Documentation | ⏳ Next Phase |
+| **10** | Deployment + Documentation | ✅ COMPLETE |
 
 ---
 
@@ -156,6 +156,7 @@ It consists of:
 - [x] Membership tiers and pricing (7 verified tiers + non-refundable & `₱1,000` annual renewal rules)
 - [x] Class schedule and types offered (`6:00 PM` TABATA & HIIT — `₱0` free w/ membership)
 - [x] Personal trainer names and packages (`Coach Ivan`, `Coach Marta`, `Coach Kresler` + 3 12-session PT packages)
-- [ ] PostgreSQL production connection details / hosting plan
-- [ ] OpenAI API key (to be provided as env variable in production)
-- [ ] Deployment target (VPS, cloud provider, etc.)
+- [x] PostgreSQL production packaging & backup strategy (`docker-compose.yml` PostgreSQL 16 + nightly `backup.sh`)
+- [x] Deployment target selected & packaged (User-controlled VPS with Docker Compose + Nginx + TLS on `thedgym.com`)
+- [ ] Run first VPS deploy, Let's Encrypt cert issuance, and Xendit `xnd_development_` -> `xnd_production_` live key/webhook cutover
+- [ ] Configure optional `OPENAI_API_KEY` & enable `AUTO_SMS_ENABLED=true` once TextBee SIM alerts go live

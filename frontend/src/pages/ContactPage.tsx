@@ -8,51 +8,100 @@ import { GYM_INFO } from '@/constants/gymInfo'
 
 /*
  * CONTACT INFO NOTE:
- * Verified address, phone, email, and operating hours ingested from TDGGYM-QUESTIONNAIRES-1.
- * The contact form is UI-only in Phase 2 — no backend submission yet (Phase 3).
+ * Verified address, phone, email, and operating hours from GYM_INFO.
+ * Inquiries prepare a pre-filled email draft to GYM_INFO.email rather than claiming server delivery.
  */
+
+interface ContactFormValues {
+  name: string
+  email: string
+  message: string
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function validateContactForm(form: ContactFormValues): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!form.name.trim()) errors.name = 'Name is required.'
+  if (!form.email.trim()) errors.email = 'Email is required.'
+  else if (!EMAIL_PATTERN.test(form.email.trim())) errors.email = 'Enter a valid email address.'
+  if (!form.message.trim()) errors.message = 'Message is required.'
+  else if (form.message.trim().length < 10) errors.message = 'Please write at least 10 characters.'
+  return errors
+}
+
+function buildContactMailtoUrl(form: ContactFormValues): string {
+  const trimmedName = form.name.trim()
+  const trimmedEmail = form.email.trim()
+  const trimmedMessage = form.message.trim()
+  const subject = `The DGym Inquiry from ${trimmedName}`
+  const body = `Name: ${trimmedName}\nReply Email: ${trimmedEmail}\n\n${trimmedMessage}`
+  return `mailto:${GYM_INFO.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+function formatInquiryClipboardText(form: ContactFormValues): string {
+  return `To: ${GYM_INFO.email}\nFrom: ${form.name.trim()} <${form.email.trim()}>\n\n${form.message.trim()}`
+}
+
+function getContactInputClasses(hasError: boolean): string {
+  return [
+    '!bg-white !text-zinc-900 placeholder:!text-zinc-400 dark:!bg-surface-2 dark:!text-white dark:placeholder:!text-white/30',
+    hasError
+      ? ''
+      : '!border-zinc-300 focus:!border-zinc-500 dark:!border-white/10 dark:focus:!border-white/30',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
 
 export function ContactPage() {
   const heroRef = useRef<HTMLDivElement>(null)
-  const [form, setForm] = useState({ name: '', email: '', message: '' })
+  const [form, setForm] = useState<ContactFormValues>({ name: '', email: '', message: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [submitted, setSubmitted] = useState(false)
+  const [draftUrl, setDraftUrl] = useState<string | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle')
 
-  useGSAP(() => {
-    if (!heroRef.current) return
-    gsap.fromTo(
-      heroRef.current.querySelectorAll('.hero-item'),
-      { opacity: 0, y: 36 },
-      { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1 }
-    )
-  }, { scope: heroRef })
-
-  const validate = () => {
-    const e: Record<string, string> = {}
-    if (!form.name.trim()) e.name = 'Name is required.'
-    if (!form.email.trim()) e.email = 'Email is required.'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email address.'
-    if (!form.message.trim()) e.message = 'Message is required.'
-    else if (form.message.trim().length < 10) e.message = 'Please write at least 10 characters.'
-    return e
-  }
+  useGSAP(
+    () => {
+      if (!heroRef.current) return
+      gsap.fromTo(
+        heroRef.current.querySelectorAll('.hero-item'),
+        { opacity: 0, y: 36 },
+        { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1 },
+      )
+    },
+    { scope: heroRef },
+  )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const errs = validate()
+    const errs = validateContactForm(form)
     if (Object.keys(errs).length > 0) {
       setErrors(errs)
       return
     }
-    // Phase 2: UI only — no backend yet
+    const mailtoUrl = buildContactMailtoUrl(form)
     setErrors({})
-    setSubmitted(true)
+    setCopyFeedback('idle')
+    setDraftUrl(mailtoUrl)
+    window.location.href = mailtoUrl
   }
 
-  const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }))
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }))
+  const handleCopyInquiry = async () => {
+    try {
+      await navigator.clipboard.writeText(formatInquiryClipboardText(form))
+      setCopyFeedback('copied')
+    } catch {
+      setCopyFeedback('failed')
+    }
   }
+
+  const update =
+    (field: keyof ContactFormValues) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setForm((prev) => ({ ...prev, [field]: e.target.value }))
+      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }))
+    }
 
   return (
     <>
@@ -72,14 +121,14 @@ export function ContactPage() {
             Contact Us
           </h1>
           <p className="hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-lg leading-relaxed">
-            Questions about membership, group classes, or personal training in Rosario, Batangas? We're here to help.
+            Questions about membership, group classes, or personal training in Rosario, Batangas?
+            Reach us directly or prepare an email inquiry below.
           </p>
         </div>
       </div>
 
       <div className="container-dgym section-padding">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-
           {/* Contact Info */}
           <div>
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-8">
@@ -90,17 +139,31 @@ export function ContactPage() {
               {/* Location */}
               <div className="flex gap-4">
                 <div className="w-10 h-10 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
                     <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
                     <circle cx="12" cy="10" r="3" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Location</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">
+                    Location
+                  </p>
                   <p className="text-sm text-zinc-600 dark:text-zinc-400">
                     {GYM_INFO.streetAddress}
                     <br />
-                    <span className="text-zinc-500 dark:text-zinc-400 text-xs">{GYM_INFO.landmark}</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 text-xs">
+                      {GYM_INFO.landmark}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -108,12 +171,24 @@ export function ContactPage() {
               {/* Phone */}
               <div className="flex gap-4">
                 <div className="w-10 h-10 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.17 11.63 19.79 19.79 0 0 1 1.08 3C1.08 1.95 1.95 1.08 3 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6.07 6.07l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Phone</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">
+                    Phone
+                  </p>
                   <a
                     href={GYM_INFO.phoneHref}
                     className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors underline underline-offset-2"
@@ -126,13 +201,25 @@ export function ContactPage() {
               {/* Email */}
               <div className="flex gap-4">
                 <div className="w-10 h-10 rounded-lg bg-red/10 border border-red/20 flex items-center justify-center text-red shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                     <polyline points="22,6 12,13 2,6" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Email</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">
+                    Email
+                  </p>
                   <a
                     href={GYM_INFO.emailHref}
                     className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors underline underline-offset-2 break-all"
@@ -150,21 +237,23 @@ export function ContactPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">Official Facebook</p>
+                  <p className="text-sm font-semibold text-zinc-950 dark:text-white mb-0.5">
+                    Official Facebook
+                  </p>
                   <a
                     href={GYM_INFO.facebookUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors underline underline-offset-2"
                   >
-                    {GYM_INFO.facebookLabel} (2,400+ followers)
+                    {GYM_INFO.facebookLabel}
                   </a>
                 </div>
               </div>
 
               {/* Operating Hours */}
-              <div className="mt-4 p-5 rounded-xl border border-white/10 bg-surface">
-                <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-3">
+              <div className="mt-4 p-5 rounded-xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-surface">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-white/55 mb-3">
                   Operating Hours
                 </p>
                 <div className="space-y-2">
@@ -173,8 +262,10 @@ export function ContactPage() {
                       key={entry.days}
                       className="flex items-center justify-between gap-4 text-sm"
                     >
-                      <span className="text-white/60">{entry.days}</span>
-                      <span className="text-white font-medium text-right">{entry.hours}</span>
+                      <span className="text-zinc-600 dark:text-white/65">{entry.days}</span>
+                      <span className="text-zinc-950 dark:text-white font-medium text-right">
+                        {entry.hours}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -182,32 +273,92 @@ export function ContactPage() {
             </div>
           </div>
 
-          {/* Contact Form */}
+          {/* Email Inquiry Composer */}
           <div>
             <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-8">
-              Send a Message
+              Send an Email Inquiry
             </h2>
 
-            {submitted ? (
-              <div className="p-8 rounded-xl border border-success/20 bg-success/5 text-center">
-                <div className="w-14 h-14 rounded-full bg-success/15 border border-success/20 flex items-center justify-center mx-auto mb-4">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12" />
+            {draftUrl ? (
+              <div
+                role="status"
+                className="p-8 rounded-xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-surface space-y-5 text-center"
+              >
+                <div className="w-12 h-12 rounded-full bg-red/10 border border-red/20 flex items-center justify-center mx-auto text-red">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
                   </svg>
                 </div>
-                <h3 className="font-display text-xl font-bold uppercase text-zinc-950 dark:text-white mb-2">
-                  Message Sent
-                </h3>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  We'll be in touch. You can also reach us on Facebook for a faster response.
-                </p>
+
+                <div className="space-y-2">
+                  <h3 className="font-display text-xl font-bold uppercase text-zinc-950 dark:text-white">
+                    Email Draft Prepared
+                  </h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-md mx-auto">
+                    If your default mail app did not open automatically, use the draft link below or
+                    copy your inquiry to email{' '}
+                    <span className="font-medium text-zinc-900 dark:text-white break-all">
+                      {GYM_INFO.email}
+                    </span>{' '}
+                    directly.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
+                  <a
+                    href={draftUrl}
+                    className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-red hover:bg-red-hover text-white text-sm font-semibold transition-colors"
+                  >
+                    Open Email Draft
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCopyInquiry}
+                    className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 rounded-lg border border-zinc-300 text-zinc-900 hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/10 text-sm font-semibold transition-colors cursor-pointer"
+                  >
+                    {copyFeedback === 'copied'
+                      ? 'Copied to Clipboard'
+                      : copyFeedback === 'failed'
+                        ? 'Clipboard Unavailable'
+                        : 'Copy Message'}
+                  </button>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-xs">
+                  <a
+                    href={GYM_INFO.facebookUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white underline underline-offset-2"
+                  >
+                    Message us on Facebook
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setDraftUrl(null)}
+                    className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white underline underline-offset-2 cursor-pointer"
+                  >
+                    Edit Inquiry
+                  </button>
+                </div>
               </div>
             ) : (
               <form
                 onSubmit={handleSubmit}
                 className="space-y-5"
                 noValidate
-                aria-label="Contact form"
+                aria-label="Email inquiry form"
               >
                 <Input
                   label="Full Name"
@@ -217,6 +368,7 @@ export function ContactPage() {
                   onChange={update('name')}
                   error={errors.name}
                   autoComplete="name"
+                  className={getContactInputClasses(Boolean(errors.name))}
                 />
                 <Input
                   label="Email Address"
@@ -227,11 +379,14 @@ export function ContactPage() {
                   onChange={update('email')}
                   error={errors.email}
                   autoComplete="email"
+                  className={getContactInputClasses(Boolean(errors.email))}
                 />
 
-                {/* Textarea — manual since we only have Input */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="message" className="text-sm font-medium text-zinc-700 dark:text-white/70">
+                  <label
+                    htmlFor="message"
+                    className="text-sm font-medium text-zinc-700 dark:text-white/70"
+                  >
                     Message
                   </label>
                   <textarea
@@ -243,13 +398,13 @@ export function ContactPage() {
                     aria-describedby={errors.message ? 'message-error' : undefined}
                     aria-invalid={errors.message ? true : undefined}
                     className={[
-                      'w-full bg-surface-2 text-white text-sm',
-                      'border rounded-lg px-4 py-3 resize-none',
-                      'placeholder:text-white/30 focus:outline-none',
-                      'transition-all duration-150',
+                      'w-full bg-white text-zinc-900 placeholder:text-zinc-400',
+                      'dark:bg-surface-2 dark:text-white dark:placeholder:text-white/30',
+                      'text-sm border rounded-lg px-4 py-3 resize-none',
+                      'focus:outline-none transition-all duration-150',
                       errors.message
                         ? 'border-danger focus:border-danger focus:ring-1 focus:ring-danger/30'
-                        : 'border-white/10 focus:border-white/30 focus:ring-1 focus:ring-white/10',
+                        : 'border-zinc-300 focus:border-zinc-500 dark:border-white/10 dark:focus:border-white/30 focus:ring-1 focus:ring-zinc-400/20 dark:focus:ring-white/10',
                     ].join(' ')}
                   />
                   {errors.message && (
@@ -260,11 +415,12 @@ export function ContactPage() {
                 </div>
 
                 <Button type="submit" fullWidth size="lg">
-                  Send Message
+                  Prepare Email Inquiry
                 </Button>
 
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center">
-                  We typically respond to inquiries within 24 hours.
+                  Opens a pre-filled email draft to {GYM_INFO.email}, or contact us by phone or
+                  Facebook above.
                 </p>
               </form>
             )}

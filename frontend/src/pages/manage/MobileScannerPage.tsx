@@ -19,6 +19,7 @@ import {
   Check,
 } from 'lucide-react'
 import { api, ApiError } from '@/services/api'
+import { SEO } from '@/components/ui/SEO'
 import { formatPhTime } from '@/utils/dateTime'
 import { playAccessChime } from '@/hooks/useRfidScanner'
 import type {
@@ -400,6 +401,7 @@ export function MobileScannerPage() {
 
   return (
     <div ref={pageRef} className="p-4 sm:p-6 md:p-8 max-w-2xl mx-auto space-y-6">
+      <SEO title="NFC Scanner" description="The DGym front-desk NFC tap terminal." noIndex />
       {/* Top Bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <Link

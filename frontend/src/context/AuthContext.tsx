@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -14,283 +15,151 @@ import type {
 } from '@/types/auth'
 
 import {
+  ApiError,
   api,
-  hasSessionHint,
   clearSessionHint,
+  hasSessionHint,
+  onAuthExpired,
 } from '@/services/api'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 
 
-const AuthContext =
-  createContext<
-    AuthContextType | undefined
-  >(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+function isAuthRejection(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 401 || err.status === 403)
+}
 
 
-export function AuthProvider({
-  children,
-}: {
-  children: ReactNode
-}) {
-  const [
-    user,
-    setUser,
-  ] =
-    useState<User | null>(
-      null,
-    )
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const [
-    isLoading,
-    setIsLoading,
-  ] =
-    useState<boolean>(
-      true,
-    )
-
-  const [
-    isLoggingOut,
-    setIsLoggingOut,
-  ] =
-    useState<boolean>(
-      false,
-    )
-
-  const [
-    error,
-    setError,
-  ] =
-    useState<
-      string | null
-    >(null)
-
+  useEffect(() => {
+    return onAuthExpired(() => {
+      setUser(null)
+      setError(null)
+      setIsLoading(false)
+    })
+  }, [])
 
   useEffect(() => {
     let isMounted = true
 
-
     async function initializeAuth() {
-      const token =
-        hasSessionHint()
-
-
-      if (!token) {
+      if (!hasSessionHint()) {
         setIsLoading(false)
-
         return
       }
 
-
       try {
-        const currentUser =
-          await api.getMe()
-
-
+        const currentUser = await api.getMe()
         if (isMounted) {
-          setUser(
-            currentUser,
-          )
+          setUser(currentUser)
         }
-      } catch {
-
-        if (isMounted) {
+      } catch (err) {
+        if (isMounted && isAuthRejection(err)) {
           clearSessionHint()
-
           setUser(null)
         }
-
       } finally {
-
         if (isMounted) {
-          setIsLoading(
-            false,
-          )
+          setIsLoading(false)
         }
       }
     }
 
-
     initializeAuth()
-
 
     return () => {
       isMounted = false
     }
-
   }, [])
 
+  const refreshUser = useCallback(async (): Promise<User | null> => {
+    if (!hasSessionHint()) {
+      setUser(null)
+      return null
+    }
 
-  const refreshUser =
-    async ():
-      Promise<User | null> => {
-
-      const token =
-        hasSessionHint()
-
-
-      if (!token) {
-        setUser(null)
-
-        return null
-      }
-
-
-      try {
-        const currentUser =
-          await api.getMe()
-
-        setUser(
-          currentUser,
-        )
-
-        return currentUser
-
-      } catch {
-
+    try {
+      const currentUser = await api.getMe()
+      setUser(currentUser)
+      return currentUser
+    } catch (err) {
+      if (isAuthRejection(err)) {
         clearSessionHint()
-
         setUser(null)
-
-        return null
       }
+      return null
     }
+  }, [])
 
-
-  const login =
-    async (
-      credentials:
-        LoginCredentials,
-    ): Promise<User> => {
-
+  const runAuthAction = useCallback(
+    async (action: () => Promise<User>, fallbackMessage: string): Promise<User> => {
       setIsLoading(true)
-
       setError(null)
-
-
       try {
-        const response =
-          await api.login(
-            credentials,
-          )
-
-        setUser(
-          response.user,
-        )
-
-        return response.user
-
+        const nextUser = await action()
+        setUser(nextUser)
+        return nextUser
       } catch (err) {
-
-        const message =
-          err instanceof Error
-            ? err.message
-            : 'Login failed'
-
-        setError(
-          message,
-        )
-
+        const message = err instanceof Error ? err.message : fallbackMessage
+        setError(message)
         throw err
-
       } finally {
-
         setIsLoading(false)
       }
-    }
+    },
+    [],
+  )
 
+  const login = useCallback(
+    (credentials: LoginCredentials): Promise<User> =>
+      runAuthAction(async () => (await api.login(credentials)).user, 'Login failed'),
+    [runAuthAction],
+  )
 
-  const register =
-    async (
-      credentials:
-        RegisterCredentials,
-    ): Promise<User> => {
+  const register = useCallback(
+    (credentials: RegisterCredentials): Promise<User> =>
+      runAuthAction(
+        async () => (await api.register(credentials)).user,
+        'Registration failed',
+      ),
+    [runAuthAction],
+  )
 
-      setIsLoading(true)
+  const loginWithGoogle = useCallback(
+    (credential: string): Promise<User> =>
+      runAuthAction(
+        async () => (await api.loginWithGoogle(credential)).user,
+        'Google sign-in failed',
+      ),
+    [runAuthAction],
+  )
 
-      setError(null)
+  const availPlan = useCallback(
+    (planSlug: string): Promise<User> =>
+      runAuthAction(() => api.availPlan(planSlug), 'Failed to avail plan'),
+    [runAuthAction],
+  )
 
-
-      try {
-        const response =
-          await api.register(
-            credentials,
-          )
-
-        setUser(
-          response.user,
-        )
-
-        return response.user
-
-      } catch (err) {
-
-        const message =
-          err instanceof Error
-            ? err.message
-            : 'Registration failed'
-
-        setError(
-          message,
-        )
-
-        throw err
-
-      } finally {
-
-        setIsLoading(false)
-      }
-    }
-
-
-  const loginWithGoogle = async (credential: string): Promise<User> => {
-    setIsLoading(true)
-    setError(null)
+  const logout = useCallback(async (): Promise<void> => {
+    setIsLoggingOut(true)
     try {
-      const response = await api.loginWithGoogle(credential)
-      setUser(response.user)
-      return response.user
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Google sign-in failed'
-      setError(message)
-      throw err
+      await api.logout()
+      // Brief loading animation duration for smooth feedback
+      await new Promise((resolve) => setTimeout(resolve, 750))
     } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const availPlan = async (planSlug: string): Promise<User> => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const updatedUser = await api.availPlan(planSlug)
-      setUser(updatedUser)
-      return updatedUser
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to avail plan'
-      setError(message)
-      throw err
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const logout =
-    async (): Promise<void> => {
-      setIsLoggingOut(true)
-      try {
-        await api.logout()
-        // Brief loading animation duration for smooth feedback
-        await new Promise((resolve) => setTimeout(resolve, 750))
-      } finally {
-        setUser(null)
-        setIsLoggingOut(false)
-      }
-    }
-
-
-  const clearError =
-    () =>
+      setUser(null)
       setError(null)
+      setIsLoggingOut(false)
+    }
+  }, [])
+
+  const clearError = useCallback(() => setError(null), [])
 
 
   return (

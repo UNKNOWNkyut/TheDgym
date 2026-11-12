@@ -55,8 +55,9 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
 
         members_cols = await conn.run_sync(_get_existing_columns, "members")
         if members_cols and "admin_viewed_at" not in members_cols:
+            ts_type = "TIMESTAMP WITH TIME ZONE" if conn.dialect.name == "postgresql" else "TIMESTAMP"
             await conn.execute(
-                text("ALTER TABLE members ADD COLUMN admin_viewed_at TIMESTAMP NULL")
+                text(f"ALTER TABLE members ADD COLUMN admin_viewed_at {ts_type} NULL")
             )
             logger.info("[MIGRATION] Added column members.admin_viewed_at")
 

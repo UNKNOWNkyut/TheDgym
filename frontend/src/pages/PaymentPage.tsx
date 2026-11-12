@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import {
@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  Clock,
   CreditCard,
   ExternalLink,
   Loader2,
@@ -20,29 +21,70 @@ import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
-import { ALL_PUBLIC_PLANS, getPublicPlanBySlug } from '@/constants/plans'
+import { ALL_PUBLIC_PLANS, getPublicPlanBySlug, type PlanSlug } from '@/constants/plans'
 import { api } from '@/services/api'
 import type { PaymentVerifyResponse } from '@/types/auth'
 
+const PENDING_CHECKOUT_STORAGE_KEY = 'dgym_pending_xendit_checkout'
+const FRONT_DESK_ONLY_SLUGS = new Set<PlanSlug>(['student-monthly', 'senior-pwd-monthly'])
+
+function savePendingCheckout(invoiceId: string, externalId?: string): void {
+  try {
+    sessionStorage.setItem(
+      PENDING_CHECKOUT_STORAGE_KEY,
+      JSON.stringify({ invoiceId, externalId: externalId ?? null }),
+    )
+  } catch {
+    // Ignore storage unavailability
+  }
+}
+
+function readPendingCheckoutId(externalIdParam: string | null): string | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_CHECKOUT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { invoiceId?: unknown; externalId?: unknown }
+    if (typeof parsed.invoiceId !== 'string' || !parsed.invoiceId.trim()) return null
+    if (externalIdParam && parsed.externalId && parsed.externalId !== externalIdParam) {
+      return null
+    }
+    return parsed.invoiceId
+  } catch {
+    return null
+  }
+}
+
+function clearPendingCheckout(): void {
+  try {
+    sessionStorage.removeItem(PENDING_CHECKOUT_STORAGE_KEY)
+  } catch {
+    // Ignore storage unavailability
+  }
+}
+
 export function PaymentPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, isAuthenticated } = useAuth()
+  const location = useLocation()
+  const { user, isAuthenticated, isLoading: isAuthLoading, refreshUser } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
+  const verifiedLookupRef = useRef<string | null>(null)
 
   const statusParam = searchParams.get('status')
   const invoiceIdParam = searchParams.get('invoice_id')
   const externalIdParam = searchParams.get('external_id')
-  const initialPlanSlug = searchParams.get('plan') || 'monthly'
+  const selectedSlug = searchParams.get('plan') || 'monthly'
 
-  const [selectedSlug, setSelectedSlug] = useState<string>(initialPlanSlug)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Verification state for redirected returns
   const [isVerifying, setIsVerifying] = useState<boolean>(false)
   const [verifyResult, setVerifyResult] = useState<PaymentVerifyResponse | null>(null)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
 
   const activePlan = getPublicPlanBySlug(selectedSlug) ?? ALL_PUBLIC_PLANS[1] // Default to Monthly
+  const isFrontDeskOnly = FRONT_DESK_ONLY_SLUGS.has(activePlan.slug)
+  const lookupId = invoiceIdParam || externalIdParam || readPendingCheckoutId(externalIdParam)
 
   const backPath = isAuthenticated ? '/dashboard' : '/membership'
   const backLabel = isAuthenticated ? 'Back to Athlete Portal' : 'Back to Membership Plans'
@@ -59,31 +101,59 @@ export function PaymentPage() {
     { scope: containerRef, dependencies: [statusParam] },
   )
 
+  const verifyCheckout = useCallback(
+    async (targetId: string, isActiveCheck?: () => boolean) => {
+      setIsVerifying(true)
+      setVerifyError(null)
+      try {
+        const res = await api.verifyPayment(targetId)
+        if (isActiveCheck && !isActiveCheck()) return
+        setVerifyResult(res)
+        if (res.membership_activated) {
+          clearPendingCheckout()
+          await refreshUser()
+        }
+      } catch (err) {
+        if (isActiveCheck && !isActiveCheck()) return
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Unable to verify payment status with gateway.'
+        setVerifyError(msg)
+      } finally {
+        if (!isActiveCheck || isActiveCheck()) {
+          setIsVerifying(false)
+        }
+      }
+    },
+    [refreshUser],
+  )
+
+  // Clear pending checkout marker when user cancels or checkout fails
+  useEffect(() => {
+    if (statusParam === 'failed') {
+      clearPendingCheckout()
+    }
+  }, [statusParam])
+
   // Auto-verify if returning from Xendit checkout
   useEffect(() => {
-    const lookupId = invoiceIdParam || externalIdParam
-    if (statusParam === 'success' && lookupId && !verifyResult && !isVerifying) {
-      let isMounted = true
-      setIsVerifying(true)
-      api
-        .verifyPayment(lookupId)
-        .then((res) => {
-          if (isMounted) setVerifyResult(res)
-        })
-        .catch((err) => {
-          console.warn('Payment status verification check failed:', err)
-        })
-        .finally(() => {
-          if (isMounted) setIsVerifying(false)
-        })
-      return () => {
-        isMounted = false
-      }
+    if (statusParam !== 'success' || isAuthLoading || !isAuthenticated || !lookupId) {
+      return
     }
-  }, [statusParam, invoiceIdParam, externalIdParam, verifyResult, isVerifying])
+    if (verifiedLookupRef.current === lookupId) {
+      return
+    }
+    verifiedLookupRef.current = lookupId
+    let isMounted = true
+    void verifyCheckout(lookupId, () => isMounted)
+    return () => {
+      isMounted = false
+    }
+  }, [statusParam, isAuthLoading, isAuthenticated, lookupId, verifyCheckout])
 
   const handleCheckout = async () => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated || isFrontDeskOnly) return
     setIsSubmitting(true)
     setErrorMessage(null)
 
@@ -93,8 +163,11 @@ export function PaymentPage() {
       })
 
       if (res?.invoice_url) {
+        if (res.invoice_id) {
+          savePendingCheckout(res.invoice_id, res.external_id)
+        }
         // Redirect to Xendit's secure hosted payment page
-        window.location.href = res.invoice_url
+        window.location.assign(res.invoice_url)
       } else {
         setErrorMessage('Failed to generate checkout invoice. Please try again.')
         setIsSubmitting(false)
@@ -124,65 +197,166 @@ export function PaymentPage() {
           </Link>
 
           {/* ─────────────────────────────────────────────────────────────
-              CASE 1: SUCCESS RETURN FROM XENDIT
+              CASE 1: RETURN FROM XENDIT CHECKOUT
           ───────────────────────────────────────────────────────────── */}
           {statusParam === 'success' ? (
-            <div className="rounded-2xl border border-white/10 bg-surface p-8 md:p-10 space-y-8 shadow-[0_0_50px_rgba(34,197,94,0.06)]">
-              <div className="text-center space-y-4">
-                <div className="w-16 h-16 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.2)]">
-                  {isVerifying ? (
-                    <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
-                  ) : (
-                    <CheckCircle2 className="w-8 h-8" />
-                  )}
-                </div>
+            (() => {
+              const isConfirmed = Boolean(verifyResult?.membership_activated)
+              const isPendingGateway = Boolean(verifyResult && !verifyResult.membership_activated)
+              const needsSignIn = !isAuthLoading && !isAuthenticated
+              const isChecking = isAuthLoading || isVerifying
+              const redirectTarget = `${location.pathname}${location.search}`
 
-                <div className="space-y-2 max-w-md mx-auto">
-                  <span className="text-xs uppercase tracking-widest text-emerald-400 font-mono">
-                    Transaction Settled • Xendit
-                  </span>
-                  <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
-                    Payment Confirmed!
-                  </h1>
-                  <p className="text-sm font-light tracking-wide text-white/60 leading-relaxed">
-                    {verifyResult?.membership_activated || !isVerifying
-                      ? 'Your membership pass has been activated in the system. An automated welcome SMS confirmation has been dispatched to your mobile number.'
-                      : 'Verifying payment details with the gateway...'}
-                  </p>
-                </div>
-              </div>
+              return (
+                <div className="rounded-2xl border border-white/10 bg-surface p-8 md:p-10 space-y-8 shadow-[0_0_50px_rgba(34,197,94,0.06)]">
+                  <div className="text-center space-y-4">
+                    <div
+                      className={`w-16 h-16 rounded-2xl border flex items-center justify-center mx-auto ${
+                        isConfirmed
+                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.2)]'
+                          : isChecking
+                            ? 'border-sky-500/20 bg-sky-500/10 text-sky-400'
+                            : 'border-amber-500/20 bg-amber-500/10 text-amber-400'
+                      }`}
+                    >
+                      {isChecking ? (
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                      ) : isConfirmed ? (
+                        <CheckCircle2 className="w-8 h-8" />
+                      ) : isPendingGateway ? (
+                        <Clock className="w-8 h-8" />
+                      ) : (
+                        <AlertCircle className="w-8 h-8" />
+                      )}
+                    </div>
 
-              {/* Status details pill */}
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="uppercase tracking-widest text-white/40">Activation Status</span>
-                  <Badge variant="success">Active & Ready</Badge>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="uppercase tracking-widest text-white/40">SMS Notification</span>
-                  <span className="text-white/80 font-mono">Dispatched via TextBee</span>
-                </div>
-                {externalIdParam && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="uppercase tracking-widest text-white/40">Reference Code</span>
-                    <span className="text-white/60 font-mono">{externalIdParam}</span>
+                    <div className="space-y-2 max-w-md mx-auto">
+                      <span
+                        className={`text-xs uppercase tracking-widest font-mono ${
+                          isConfirmed
+                            ? 'text-emerald-400'
+                            : isChecking
+                              ? 'text-sky-400'
+                              : 'text-amber-400'
+                        }`}
+                      >
+                        {isConfirmed
+                          ? 'Transaction Verified • Xendit'
+                          : isChecking
+                            ? 'Gateway Verification In Progress'
+                            : isPendingGateway
+                              ? `Gateway Status: ${verifyResult?.invoice_status || 'PENDING'}`
+                              : 'Verification Required'}
+                      </span>
+                      <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+                        {isChecking
+                          ? 'Verifying Payment...'
+                          : isConfirmed
+                            ? 'Payment Confirmed!'
+                            : isPendingGateway
+                              ? 'Payment Pending Settlement'
+                              : needsSignIn
+                                ? 'Sign In to Verify Payment'
+                                : 'Unable to Confirm Payment'}
+                      </h1>
+                      <p className="text-sm font-light tracking-wide text-white/60 leading-relaxed">
+                        {isChecking
+                          ? 'Confirming your transaction directly with Xendit. Please wait a moment...'
+                          : isConfirmed
+                            ? 'Your membership pass has been activated in the system. Your active plan details are now available in your member portal.'
+                            : isPendingGateway
+                              ? 'Xendit has not marked this invoice as paid yet. If you completed the payment just now, check again in a few seconds.'
+                              : needsSignIn
+                                ? 'Please sign in to your account so we can securely verify your invoice and activate your membership pass.'
+                                : verifyError ||
+                                  'Missing a verifiable Xendit invoice reference for this redirect. Please retry verification or start checkout again.'}
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link to="/dashboard" className="w-full sm:w-auto">
-                  <Button variant="primary" fullWidth>
-                    Go to Athlete Portal
-                  </Button>
-                </Link>
-                <Link to="/membership" className="w-full sm:w-auto">
-                  <Button variant="secondary" fullWidth>
-                    View All Plans
-                  </Button>
-                </Link>
-              </div>
-            </div>
+                  {/* Status details pill */}
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-5 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="uppercase tracking-widest text-white/40">Activation Status</span>
+                      {isChecking ? (
+                        <Badge variant="info">Checking Gateway</Badge>
+                      ) : isConfirmed ? (
+                        <Badge variant="success">Active & Ready</Badge>
+                      ) : isPendingGateway ? (
+                        <Badge variant="warning">{verifyResult?.invoice_status || 'Pending'}</Badge>
+                      ) : (
+                        <Badge variant="danger">Unverified</Badge>
+                      )}
+                    </div>
+                    {verifyResult?.amount !== undefined && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="uppercase tracking-widest text-white/40">Invoice Amount</span>
+                        <span className="text-white/80 font-mono">
+                          ₱{Number(verifyResult.amount).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                    {(externalIdParam || verifyResult?.invoice_id) && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="uppercase tracking-widest text-white/40">Reference Code</span>
+                        <span className="text-white/60 font-mono">
+                          {externalIdParam || verifyResult?.invoice_id}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    {isConfirmed ? (
+                      <>
+                        <Link to="/dashboard" className="w-full sm:w-auto">
+                          <Button variant="primary" fullWidth>
+                            Go to Athlete Portal
+                          </Button>
+                        </Link>
+                        <Link to="/membership" className="w-full sm:w-auto">
+                          <Button variant="secondary" fullWidth>
+                            View All Plans
+                          </Button>
+                        </Link>
+                      </>
+                    ) : needsSignIn ? (
+                      <Link
+                        to={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
+                        className="w-full sm:w-auto"
+                      >
+                        <Button variant="primary" fullWidth>
+                          Sign In to Verify
+                        </Button>
+                      </Link>
+                    ) : (
+                      <>
+                        {lookupId && (
+                          <Button
+                            variant="primary"
+                            loading={isVerifying}
+                            disabled={isVerifying}
+                            onClick={() => void verifyCheckout(lookupId)}
+                            fullWidth
+                            className="sm:w-auto"
+                          >
+                            {isPendingGateway ? 'Check Status Again' : 'Retry Verification'}
+                          </Button>
+                        )}
+                        <Button
+                          variant="secondary"
+                          onClick={() => setSearchParams({ plan: activePlan.slug })}
+                          fullWidth
+                          className="sm:w-auto"
+                        >
+                          Back to Checkout
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })()
           ) : statusParam === 'failed' ? (
             /* ─────────────────────────────────────────────────────────────
                 CASE 2: FAILED OR CANCELLED CHECKOUT
@@ -209,7 +383,7 @@ export function PaymentPage() {
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Button
                   variant="primary"
-                  onClick={() => setSearchParams({ plan: selectedSlug })}
+                  onClick={() => setSearchParams({ plan: activePlan.slug })}
                   fullWidth
                   className="sm:w-auto"
                 >
@@ -249,14 +423,13 @@ export function PaymentPage() {
                   Select Membership Tier
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {ALL_PUBLIC_PLANS.slice(0, 6).map((plan) => {
+                  {ALL_PUBLIC_PLANS.map((plan) => {
                     const isCurrent = plan.slug === activePlan.slug
                     return (
                       <button
                         key={plan.slug}
                         type="button"
                         onClick={() => {
-                          setSelectedSlug(plan.slug)
                           setSearchParams({ plan: plan.slug })
                         }}
                         className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
@@ -367,7 +540,37 @@ export function PaymentPage() {
               )}
 
               {/* Account / Action Area */}
-              {isAuthenticated ? (
+              {isFrontDeskOnly ? (
+                <div className="space-y-4 pt-4 border-t border-white/10">
+                  <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-200 text-xs space-y-1.5">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                      Front-Desk ID Verification Required ({activePlan.requirement || 'Valid ID Required'})
+                    </p>
+                    <p className="text-amber-200/70 font-light leading-relaxed">
+                      Discounted {activePlan.name} passes are processed exclusively in person at
+                      The DGym Rosario front desk so our staff can verify your qualifying ID before
+                      activation.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <Link to="/contact" className="w-full sm:flex-1">
+                      <Button variant="primary" fullWidth>
+                        View Front Desk Hours &amp; Location
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setSearchParams({ plan: 'monthly' })}
+                      fullWidth
+                      className="sm:w-auto"
+                    >
+                      Switch to Monthly (₱1,999)
+                    </Button>
+                  </div>
+                </div>
+              ) : isAuthenticated ? (
                 <div className="space-y-4 pt-2 border-t border-white/10">
                   <div className="flex items-center justify-between text-xs text-white/50 bg-white/[0.01] p-3 rounded-xl border border-white/5">
                     <span>
@@ -395,7 +598,7 @@ export function PaymentPage() {
 
                   <p className="text-center text-[11px] font-light text-white/40">
                     You will be redirected to Xendit&apos;s encrypted checkout portal to finalize your
-                    payment. Upon completion, access is activated immediately with SMS confirmation.
+                    payment. Upon completion, access activates directly in your member portal.
                   </p>
                 </div>
               ) : (

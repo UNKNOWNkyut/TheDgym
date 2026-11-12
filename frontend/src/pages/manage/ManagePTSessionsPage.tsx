@@ -3,6 +3,7 @@ import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
+import { SEO } from '@/components/ui/SEO'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import type { PTSession, Member, TrainerProfile } from '@/types/auth'
 
@@ -369,6 +370,7 @@ export function ManagePTSessionsPage() {
 
   return (
     <div ref={containerRef} className="p-6 md:p-8 space-y-8 max-w-6xl mx-auto">
+      <SEO title="PT Sessions" description="Manage personal training sessions at The DGym." noIndex />
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>

@@ -1,6 +1,8 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PUBLIC_PLANS } from '@/constants/plans'
+import { ALL_PUBLIC_PLANS, PUBLIC_PLANS } from '@/constants/plans'
+import { OFFICIAL_COACHES } from '@/constants/coaches'
+import { GYM_INFO } from '@/constants/gymInfo'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -65,6 +67,16 @@ const PILLAR_CARDS = [
 ] as const
 
 // --- Home FAQ Data (Image 6 Essence) ---
+const DAY_PASS_PRICE =
+  PUBLIC_PLANS.find((plan) => plan.slug === 'day-pass')?.priceFormatted ?? '₱400'
+
+const COACH_NAMES_SUMMARY = (() => {
+  const names = OFFICIAL_COACHES.map((coach) => coach.name.toUpperCase())
+  if (names.length <= 1) return names[0] ?? 'OUR COACHES'
+  if (names.length === 2) return `${names[0]} AND ${names[1]}`
+  return `${names.slice(0, -1).join(', ')}, AND ${names[names.length - 1]}`
+})()
+
 const HOME_FAQS = [
   {
     question: 'Is The DGym suitable for beginners?',
@@ -74,7 +86,7 @@ const HOME_FAQS = [
   {
     question: 'Can I try the gym before committing to a monthly plan?',
     answer:
-      'YES. WE OFFER A ₱400 DAY PASS SO YOU CAN EXPERIENCE OUR TECHNOGYM & ROGUE EQUIPMENT, TRAINING FLOOR, AND ATMOSPHERE BEFORE CHOOSING A MEMBERSHIP.',
+      `YES. WE OFFER A ${DAY_PASS_PRICE} DAY PASS SO YOU CAN EXPERIENCE OUR TECHNOGYM & ROGUE EQUIPMENT, TRAINING FLOOR, AND ATMOSPHERE BEFORE CHOOSING A MEMBERSHIP.`,
   },
   {
     question: 'What is included in a standard membership?',
@@ -84,12 +96,12 @@ const HOME_FAQS = [
   {
     question: 'Do you offer 1-on-1 personal training and boxing?',
     answer:
-      'YES. COACH IVAN, COACH MARTA, AND COACH KRESLER OFFER DEDICATED 1-ON-1 STRENGTH CONDITIONING AND 90-MINUTE BOXING SESSIONS TAILORED TO YOUR GOALS.',
+      `YES. ${COACH_NAMES_SUMMARY} OFFER DEDICATED 1-ON-1 STRENGTH CONDITIONING AND 90-MINUTE BOXING SESSIONS TAILORED TO YOUR GOALS.`,
   },
   {
     question: 'How do I activate my membership pass?',
     answer:
-      'CHOOSE ANY PLAN ONLINE VIA GCASH, MAYA, QR PH, OR CARD—OR PAY AT THE FRONT DESK. YOUR PASS ACTIVATES INSTANTLY WITH AN AUTOMATED SMS CONFIRMATION.',
+      'CHOOSE ANY PLAN ONLINE VIA GCASH, MAYA, QR PH, OR CARD—OR PAY AT THE FRONT DESK. ONCE PAYMENT IS CONFIRMED, YOUR PASS ACTIVATES DIRECTLY IN YOUR MEMBER PORTAL.',
   },
 ] as const
 
@@ -97,6 +109,7 @@ export function HomePage() {
   const heroRef = useRef<HTMLElement>(null)
   const sectionsRef = useRef<HTMLDivElement>(null)
   const programsScrollRef = useRef<HTMLDivElement>(null)
+  const faqBaseId = useId()
   const [openFaqIndex, setOpenFaqIndex] = useState<number>(1)
   const { theme } = useDotTheme()
   const isLight = theme === 'light'
@@ -145,14 +158,15 @@ export function HomePage() {
   const scrollPrograms = (direction: 'prev' | 'next') => {
     const container = programsScrollRef.current
     if (!container) return
-    const offset = direction === 'next' ? 420 : -420
+    const firstCard = container.firstElementChild as HTMLElement | null
+    const step = firstCard ? firstCard.getBoundingClientRect().width + 24 : 360
+    const offset = direction === 'next' ? step : -step
     container.scrollBy({ left: offset, behavior: 'smooth' })
   }
 
   return (
     <>
       <SEO
-        title="The DGym"
         description="High End Premium Weightlifting, Powerlifting, and Fitness Gym in Rosario, Batangas. Free weights, powerlifting platforms, selectorized machines, and elite coaching."
         canonical="https://thedgym.com/"
         ogImage="/assets/images/dgym_bg.jpg"
@@ -214,7 +228,7 @@ export function HomePage() {
                 className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium tracking-wide transition-all shadow-[0_0_24px_rgba(229,32,26,0.4)]"
               >
                 <span>Avail Membership</span>
-                <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
               </Link>
               <Link
                 to="/classes"
@@ -248,21 +262,22 @@ export function HomePage() {
                 Whether you&apos;re building your foundation, pushing your performance, or training toward a specific goal, The DGym gives you a structured path forward.
               </h2>
 
-              {/* Social Proof Avatar Pill */}
+              {/* Verified Coaching & Location Pill */}
               <div className="flex items-center justify-center gap-3 pt-1">
-                <div className="flex -space-x-2">
-                  <span className="w-7 h-7 rounded-full bg-zinc-800 border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white">
-                    IV
-                  </span>
-                  <span className="w-7 h-7 rounded-full bg-zinc-700 border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white">
-                    MR
-                  </span>
-                  <span className="w-7 h-7 rounded-full bg-red/80 border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white">
-                    KR
-                  </span>
+                <div className="flex -space-x-2" aria-hidden="true">
+                  {OFFICIAL_COACHES.map((coach, idx) => (
+                    <span
+                      key={coach.name}
+                      className={`w-7 h-7 rounded-full border border-white/20 flex items-center justify-center text-[10px] font-mono font-bold text-white ${
+                        idx === 0 ? 'bg-zinc-800' : idx === 1 ? 'bg-zinc-700' : 'bg-red/80'
+                      }`}
+                    >
+                      {coach.name.replace(/^Coach\s+/i, '').slice(0, 2).toUpperCase()}
+                    </span>
+                  ))}
                 </div>
                 <span className={`text-[11px] font-mono uppercase tracking-widest transition-colors duration-300 ${subTextColor}`}>
-                  2,400+ ACTIVE COMMUNITY ATHLETES
+                  {OFFICIAL_COACHES.length} DEDICATED COACHES • {GYM_INFO.cityRegion.toUpperCase()}
                 </span>
               </div>
 
@@ -272,7 +287,7 @@ export function HomePage() {
                   className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all shadow-[0_0_20px_rgba(229,32,26,0.3)]"
                 >
                   <span>About The DGym</span>
-                  <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
                 </Link>
               </div>
             </div>
@@ -357,7 +372,7 @@ export function HomePage() {
                     className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all"
                   >
                     <span>Explore Classes</span>
-                    <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
                   </Link>
                 </div>
               </div>
@@ -406,7 +421,7 @@ export function HomePage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex lg:hidden items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => scrollPrograms('prev')}
@@ -429,12 +444,12 @@ export function HomePage() {
             {/* Tall Monochrome Program Bento Cards */}
             <div
               ref={programsScrollRef}
-              className="reveal-block grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-x-auto pb-2"
+              className="reveal-block flex lg:grid lg:grid-cols-3 gap-6 overflow-x-auto lg:overflow-visible snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {PROGRAM_CARDS.map((prog) => (
                 <div
                   key={prog.title}
-                  className="group relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d0d11] min-h-[480px] sm:min-h-[540px] flex flex-col justify-between p-7"
+                  className="group relative shrink-0 w-[85%] sm:w-[62%] lg:w-auto snap-start rounded-3xl overflow-hidden border border-white/10 bg-[#0d0d11] min-h-[480px] sm:min-h-[540px] flex flex-col justify-between p-7"
                 >
                   {/* Monochrome Background Photo */}
                   <img
@@ -466,7 +481,7 @@ export function HomePage() {
                         className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all"
                       >
                         <span>{prog.ctaLabel}</span>
-                        <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
                       </Link>
                     </div>
                   </div>
@@ -489,7 +504,7 @@ export function HomePage() {
                   to="/membership"
                   className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-white/70 hover:text-white transition-colors"
                 >
-                  <span>View All 7 Membership Tiers →</span>
+                  <span>View All {ALL_PUBLIC_PLANS.length} Membership Tiers →</span>
                 </Link>
               </div>
 
@@ -527,7 +542,7 @@ export function HomePage() {
 
                     <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-white pt-3 border-t border-white/10">
                       <span>Avail Pass</span>
-                      <span className="w-1.5 h-1.5 rounded-[1px] bg-red inline-block" />
+                      <span aria-hidden="true" className="w-1.5 h-1.5 rounded-[1px] bg-red inline-block" />
                     </div>
                   </Link>
                 ))}
@@ -572,7 +587,7 @@ export function HomePage() {
                   className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-medium transition-all shadow-[0_0_24px_rgba(229,32,26,0.4)]"
                 >
                   <span>Talk To A Coach</span>
-                  <span className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-[1px] bg-white inline-block" />
                 </Link>
               </div>
             </div>
@@ -615,13 +630,17 @@ export function HomePage() {
               <div className={`lg:col-span-7 divide-y border-y transition-colors duration-300 ${isLight ? 'divide-zinc-300 border-zinc-300' : 'divide-white/10 border-white/10'}`}>
                 {HOME_FAQS.map((item, idx) => {
                   const isOpen = openFaqIndex === idx
+                  const buttonId = `${faqBaseId}-btn-${idx}`
+                  const panelId = `${faqBaseId}-panel-${idx}`
                   return (
                     <div key={item.question} className="py-5">
                       <button
+                        id={buttonId}
                         type="button"
                         onClick={() => setOpenFaqIndex(isOpen ? -1 : idx)}
                         className="w-full flex items-center justify-between gap-4 text-left cursor-pointer group"
                         aria-expanded={isOpen}
+                        aria-controls={panelId}
                       >
                         <span
                           className={[
@@ -635,16 +654,21 @@ export function HomePage() {
                         >
                           {item.question}
                         </span>
-                        <span className={`${isLight ? 'text-zinc-500 group-hover:text-zinc-900' : 'text-white/50 group-hover:text-white'} shrink-0`}>
+                        <span aria-hidden="true" className={`${isLight ? 'text-zinc-500 group-hover:text-zinc-900' : 'text-white/50 group-hover:text-white'} shrink-0`}>
                           {isOpen ? <Minus className="w-4 h-4 text-red" /> : <Plus className="w-4 h-4" />}
                         </span>
                       </button>
 
-                      {isOpen && (
+                      <div
+                        id={panelId}
+                        role="region"
+                        aria-labelledby={buttonId}
+                        hidden={!isOpen}
+                      >
                         <p className={`mt-3.5 text-xs font-mono uppercase tracking-wider leading-relaxed pr-8 ${subTextColor}`}>
                           {item.answer}
                         </p>
-                      )}
+                      </div>
                     </div>
                   )
                 })}

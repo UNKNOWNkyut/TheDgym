@@ -18,6 +18,11 @@ build/
 .env
 .env.local
 .env.*.local
+.env.prod
+
+# Deployment backups & local context-mode session telemetry
+backups/
+.github/context-mode/
 
 # IDE & OS
 .vscode/

@@ -4,7 +4,38 @@ import path from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+
+const DEFAULT_SITE_URL = 'https://thedgym.com'
+
+function resolveSiteUrl(raw?: string): string {
+  const cleaned = (raw || '').trim().replace(/\/+$/, '')
+  return /^https?:\/\/[^/\s]+/i.test(cleaned) ? cleaned : DEFAULT_SITE_URL
+}
+
+function dgymSiteUrlPlugin(siteUrl: string): Plugin {
+  let resolvedOutDir = path.resolve(import.meta.dirname, 'dist')
+
+  return {
+    name: 'dgym-site-url',
+    configResolved(config) {
+      resolvedOutDir = path.resolve(config.root, config.build.outDir)
+    },
+    transformIndexHtml(html) {
+      return html.replaceAll('__SITE_URL__', siteUrl)
+    },
+    closeBundle() {
+      if (siteUrl === DEFAULT_SITE_URL) return
+      for (const file of ['robots.txt', 'sitemap.xml']) {
+        const target = path.join(resolvedOutDir, file)
+        if (fs.existsSync(target)) {
+          const content = fs.readFileSync(target, 'utf8')
+          fs.writeFileSync(target, content.replaceAll(DEFAULT_SITE_URL, siteUrl), 'utf8')
+        }
+      }
+    },
+  }
+}
 
 function checkPortOpen(port: number, host = '127.0.0.1'): Promise<boolean> {
   return new Promise((resolve) => {
@@ -115,30 +146,36 @@ function dgymBackendAutoStartPlugin(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    dgymBackendAutoStartPlugin(),
-  ],
-  resolve: {
-    alias: {
-      '@': `${import.meta.dirname}/src`,
-    },
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-        ws: true,
-        xfwd: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, import.meta.dirname, '')
+  const siteUrl = resolveSiteUrl(env.VITE_SITE_URL)
+
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      dgymBackendAutoStartPlugin(),
+      dgymSiteUrlPlugin(siteUrl),
+    ],
+    resolve: {
+      alias: {
+        '@': `${import.meta.dirname}/src`,
       },
     },
-  },
-  build: {
-    sourcemap: false,
-  },
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+          ws: true,
+          xfwd: true,
+        },
+      },
+    },
+    build: {
+      sourcemap: false,
+    },
+  }
 })

@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import { AuthProvider } from '@/context/AuthContext'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
@@ -102,11 +102,111 @@ function IntroLoader() {
   )
 }
 
+interface ErrorBoundaryProps {
+  children: ReactNode
+  resetKey: string
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+  isChunkError: boolean
+  lastResetKey: string
+}
+
+function isChunkLoadError(error: Error): boolean {
+  return (
+    error.name === 'ChunkLoadError' ||
+    /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(
+      error.message,
+    )
+  )
+}
+
+class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, isChunkError: false, lastResetKey: '' }
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    return { hasError: true, isChunkError: isChunkLoadError(error) }
+  }
+
+  static getDerivedStateFromProps(
+    nextProps: ErrorBoundaryProps,
+    prevState: ErrorBoundaryState,
+  ): Partial<ErrorBoundaryState> | null {
+    if (nextProps.resetKey !== prevState.lastResetKey) {
+      return { hasError: false, isChunkError: false, lastResetKey: nextProps.resetKey }
+    }
+    return null
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Application error boundary caught an error:', error, info.componentStack)
+  }
+
+  private handleReload = () => {
+    window.location.reload()
+  }
+
+  private handleGoHome = () => {
+    this.setState({ hasError: false, isChunkError: false })
+    window.location.assign('/')
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          role="alert"
+          className="min-h-screen bg-[#070709] text-white flex items-center justify-center px-4 py-16"
+        >
+          <div className="max-w-md w-full rounded-2xl border border-white/10 bg-[#0d0d11] p-8 text-center space-y-5">
+            <p className="text-xs font-mono uppercase tracking-widest text-red-400">
+              {this.state.isChunkError ? 'App Update Available' : 'Unexpected Error'}
+            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-white">
+              {this.state.isChunkError ? 'A new version was loaded' : 'Something went wrong'}
+            </h1>
+            <p className="text-sm font-light text-white/60 leading-relaxed">
+              {this.state.isChunkError
+                ? 'This page bundle is out of date or failed to download. Reload to fetch the latest view.'
+                : 'An unexpected rendering error interrupted this page. Reload or return to the home page to continue.'}
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={this.handleReload}
+                className="px-4 py-2.5 rounded-xl bg-red hover:bg-red-hover text-white text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Reload Page
+              </button>
+              <button
+                type="button"
+                onClick={this.handleGoHome}
+                className="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Go Home
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  return <AppErrorBoundary resetKey={pathname}>{children}</AppErrorBoundary>
+}
+
 export function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Suspense fallback={<PageFallback />}>
+      <RoutedErrorBoundary>
+        <AuthProvider>
+          <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* ============================================================
                 STANDALONE MEMBER SETTINGS
@@ -272,11 +372,12 @@ export function App() {
               />
             </Route>
           </Routes>
-        </Suspense>
+          </Suspense>
 
-        <IntroLoader />
-        <CookieBanner />
-      </AuthProvider>
+          <IntroLoader />
+          <CookieBanner />
+        </AuthProvider>
+      </RoutedErrorBoundary>
     </BrowserRouter>
   )
 }

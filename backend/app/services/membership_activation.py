@@ -20,7 +20,6 @@ from app.models.membership_plan import MembershipPlan
 from app.models.notification import Notification
 from app.models.user import User, UserRole
 from app.services.access_service import live_feed_manager
-from app.services.sms_service import notify_membership_activated_sms
 
 
 def _is_day_pass_plan(plan: MembershipPlan) -> bool:
@@ -65,7 +64,7 @@ async def notify_admins_new_paid_member(
             Notification(
                 user_id=admin_user.id,
                 member_id=member.id,
-                title=f"🎉 New Active Member: {member.full_name}",
+                title=f"New Active Member: {member.full_name}",
                 message=(
                     f"{member.full_name} ({member.member_code}) is now active on the "
                     f"{plan.name} plan ({amount_label} paid)."
@@ -120,15 +119,6 @@ async def activate_member_and_notify_on_payment(
 
     if not is_new_member_activation:
         return False
-
-    # Dispatch welcome SMS to member if mobile number is present (non-blocking)
-    if member.phone:
-        await notify_membership_activated_sms(
-            member_name=member.first_name,
-            plan_name=plan.name,
-            member_code=member.member_code,
-            to_phone=member.phone,
-        )
 
     return await notify_admins_new_paid_member(
         db,

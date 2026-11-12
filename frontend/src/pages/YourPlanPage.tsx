@@ -721,8 +721,8 @@ function YourPlanWorkspace({
                               </div>
                               <div className="space-y-1.5">
                                 {RECOVERY_PILLARS.map((pillar) => (
-                                  <div key={pillar.title} className="flex items-start gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/5">
-                                    <span className="text-sm leading-none shrink-0 mt-0.5">{pillar.icon}</span>
+                                  <div key={pillar.title} className="flex items-start gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/5">
+                                    <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 mt-1.5" />
                                     <div>
                                       <p className="text-[11px] font-bold text-white font-mono">{pillar.title}</p>
                                       <p className="text-[9px] text-white/50 font-mono">{pillar.subtitle}</p>

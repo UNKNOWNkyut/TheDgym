@@ -21,7 +21,6 @@ from app.schemas.phase5 import (
     PTSessionResponse,
     TrainerPublicResponse,
 )
-from app.services.sms_service import notify_pt_booking_status_sms
 
 router = APIRouter(prefix="/api/pt-sessions", tags=["PT Sessions"])
 
@@ -305,18 +304,6 @@ async def approve_pt_booking(
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
 
-    # Dispatch SMS notification if member phone is available (non-blocking)
-    if loaded and loaded.member and loaded.member.phone:
-        dt_str = loaded.scheduled_at.strftime("%b %d, %Y at %I:%M %p") if loaded.scheduled_at else "Scheduled Time"
-        trainer_name = loaded.trainer.full_name if loaded.trainer else "Assigned Coach"
-        await notify_pt_booking_status_sms(
-            member_name=loaded.member.first_name,
-            coach_name=trainer_name,
-            session_date_str=dt_str,
-            status="confirmed",
-            to_phone=loaded.member.phone,
-        )
-
     return _format_pt_session(loaded)
 
 
@@ -347,19 +334,6 @@ async def reject_pt_booking(
 
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
-
-    # Dispatch SMS notification if member phone is available (non-blocking)
-    if loaded and loaded.member and loaded.member.phone:
-        dt_str = loaded.scheduled_at.strftime("%b %d, %Y at %I:%M %p") if loaded.scheduled_at else "Scheduled Time"
-        trainer_name = loaded.trainer.full_name if loaded.trainer else "Assigned Coach"
-        await notify_pt_booking_status_sms(
-            member_name=loaded.member.first_name,
-            coach_name=trainer_name,
-            session_date_str=dt_str,
-            status="rejected",
-            reason=loaded.rejection_reason,
-            to_phone=loaded.member.phone,
-        )
 
     return _format_pt_session(loaded)
 

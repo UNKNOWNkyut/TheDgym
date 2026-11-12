@@ -32,7 +32,7 @@ class ProcessedCustomer(Base):
     total_revenue_lifetime = Column(Numeric(12, 2), nullable=False, default=0.00)
     recent_activity_score = Column(Float, nullable=False, default=0.0)
     feature_calculated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )

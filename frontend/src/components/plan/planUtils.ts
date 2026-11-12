@@ -134,10 +134,10 @@ export const LIBRARY_CATEGORIES = [
 ];
 
 export const RECOVERY_PILLARS = [
-  { icon: '💧', title: 'Hydration Focus', subtitle: 'Electrolyte balance & water intake' },
-  { icon: '🧘', title: 'Stretching & Mobility', subtitle: 'Foam rolling & mobility flow' },
-  { icon: '😴', title: '8 Hours Deep Sleep', subtitle: 'Physical & nervous system repair' },
-  { icon: '🛡️', title: 'Non-Workout Day', subtitle: 'Deep recovery for muscle growth' },
+  { title: 'Hydration Focus', subtitle: 'Electrolyte balance & water intake' },
+  { title: 'Stretching & Mobility', subtitle: 'Foam rolling & mobility flow' },
+  { title: '8 Hours Deep Sleep', subtitle: 'Physical & nervous system repair' },
+  { title: 'Non-Workout Day', subtitle: 'Deep recovery for muscle growth' },
 ];
 
 export const MEAL_BLUEPRINT = [

@@ -3,6 +3,7 @@ import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { CreditCard } from 'lucide-react'
 import { api } from '@/services/api'
+import { SEO } from '@/components/ui/SEO'
 import { formatPhTime, isTodayPh, parseUtcDate } from '@/utils/dateTime'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import { LiveKeycardMonitor } from '@/components/manage/LiveKeycardMonitor'
@@ -254,6 +255,7 @@ export function ManageVisitsPage() {
 
   return (
     <div ref={containerRef} className="p-6 md:p-8 space-y-8 max-w-6xl mx-auto">
+      <SEO title="Visits & Keycards" description="Manage gym check-ins and NFC keycard access." noIndex />
       {/* Header */}
       <div>
         <p className="text-xs uppercase tracking-widest text-white/40 font-mono mb-1">

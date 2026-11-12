@@ -29,7 +29,7 @@ class Prediction(Base):
     top_risk_factor_3 = Column(String(150), nullable=True)
     model_version = Column(String(50), nullable=False, default="xgboost_v1.0")
     predicted_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )

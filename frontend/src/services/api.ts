@@ -12,6 +12,7 @@ import type {
   AtRiskMemberItem,
   CheckoutSessionResponse,
   ChurnOverview,
+  ClassEnrollment,
   ClassSession,
   ClassSessionCreate,
   CreateCheckoutPayload,
@@ -49,6 +50,22 @@ import type {
 
 const LEGACY_TOKEN_STORAGE_KEY = 'dgym_access_token'
 const SESSION_HINT_KEY = 'dgym_session_active'
+const DEFAULT_TIMEOUT_MS = 15_000
+const LONG_TASK_TIMEOUT_MS = 60_000
+export const AUTH_EXPIRED_EVENT = 'dgym:auth-expired'
+
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
+
+const CREDENTIAL_AUTH_ENDPOINTS = new Set([
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/google',
+  '/api/auth/logout',
+])
+
+export type RequestOptions = RequestInit & {
+  timeoutMs?: number
+}
 
 // Non-sensitive boolean marker so anonymous visits skip /api/auth/me while JWT lives only in httpOnly cookie
 export function hasSessionHint(): boolean {
@@ -68,6 +85,18 @@ export function setSessionHint(): void {
 export function clearSessionHint(): void {
   localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
   localStorage.removeItem(SESSION_HINT_KEY)
+}
+
+export function onAuthExpired(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  window.addEventListener(AUTH_EXPIRED_EVENT, listener)
+  return () => window.removeEventListener(AUTH_EXPIRED_EVENT, listener)
+}
+
+function resolveApiUrl(endpoint: string): string {
+  if (/^https?:\/\//i.test(endpoint)) return endpoint
+  const normalized = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  return RAW_API_BASE ? `${RAW_API_BASE}${normalized}` : normalized
 }
 
 export class ApiError extends Error {
@@ -96,29 +125,56 @@ function buildQuery(
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: RequestOptions = {},
 ): Promise<T> {
-  const headers = new Headers(options.headers)
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: externalSignal, ...fetchOptions } = options
+  const headers = new Headers(fetchOptions.headers)
 
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+  if (!headers.has('Content-Type') && !(fetchOptions.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
   if (!headers.has('X-Requested-With')) {
     headers.set('X-Requested-With', 'XMLHttpRequest')
   }
 
+  const controller = new AbortController()
+  let didTimeout = false
+  const timerId = globalThis.setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, timeoutMs)
+
+  const handleExternalAbort = () => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort()
+    } else {
+      externalSignal.addEventListener('abort', handleExternalAbort, { once: true })
+    }
+  }
+
   let response: Response
   try {
-    response = await fetch(endpoint, {
-      ...options,
+    response = await fetch(resolveApiUrl(endpoint), {
+      ...fetchOptions,
       headers,
+      signal: controller.signal,
       credentials: 'include',
     })
-  } catch {
+  } catch (err: unknown) {
+    if (didTimeout) {
+      throw new ApiError('Request timed out. Please try again.', 408)
+    }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw err
+    }
     throw new ApiError(
       'Unable to connect to the server. Please ensure the backend is running.',
       0,
     )
+  } finally {
+    globalThis.clearTimeout(timerId)
+    externalSignal?.removeEventListener('abort', handleExternalAbort)
   }
 
   if (response.status === 204) {
@@ -133,7 +189,18 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    let message = 'An unexpected error occurred'
+    const endpointPath = endpoint.split('?')[0]
+    if (response.status === 401 && !CREDENTIAL_AUTH_ENDPOINTS.has(endpointPath)) {
+      clearSessionHint()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT))
+      }
+    }
+
+    let message =
+      response.status === 401
+        ? 'Your session has expired. Please sign in again.'
+        : 'An unexpected error occurred'
     const detail =
       data && typeof data === 'object' && 'detail' in data
         ? (data as { detail?: unknown }).detail
@@ -398,6 +465,19 @@ export const api = {
     })
   },
 
+  async enrollSelfClass(sessionId: number, notes?: string): Promise<ClassEnrollment> {
+    return request<ClassEnrollment>(`/api/classes/${sessionId}/enroll/self`, {
+      method: 'POST',
+      body: JSON.stringify(notes !== undefined ? { notes } : {}),
+    })
+  },
+
+  async unenrollSelfClass(sessionId: number): Promise<void> {
+    return request<void>(`/api/classes/${sessionId}/enroll/self`, {
+      method: 'DELETE',
+    })
+  },
+
   // ─── PT Sessions ─────────────────────────────────────────────────────────────
 
   async getPTSessions(params?: {
@@ -559,7 +639,10 @@ export const api = {
     model_accuracy: number
     total_members_updated: number
   }> {
-    return request('/api/churn/retrain', { method: 'POST' })
+    return request('/api/churn/retrain', {
+      method: 'POST',
+      timeoutMs: LONG_TASK_TIMEOUT_MS,
+    })
   },
 
   // ─── AI Retention Strategies & Notifications (Phase 7) ───────────────────
@@ -567,6 +650,7 @@ export const api = {
   async generateRetentionStrategy(memberId: number): Promise<RetentionStrategy> {
     return request<RetentionStrategy>(`/api/retention/generate/${memberId}`, {
       method: 'POST',
+      timeoutMs: LONG_TASK_TIMEOUT_MS,
     })
   },
 
@@ -586,23 +670,12 @@ export const api = {
     message: string
     notification_id: number
     recipient_name: string
+    sms_status?: string | null
+    sms_reason?: string | null
   }> {
     return request('/api/retention/dispatch-offer', {
       method: 'POST',
       body: JSON.stringify(payload),
-    })
-  },
-
-  async autoDispatchHighRiskSms(): Promise<{
-    status: string
-    total_high_risk: number
-    dispatched_count: number
-    skipped_count: number
-    dispatched: Array<{ member_name: string; phone: string; offer_title: string }>
-    skipped: Array<{ member_id: number; reason: string }>
-  }> {
-    return request('/api/retention/auto-dispatch-high-risk', {
-      method: 'POST',
     })
   },
 
@@ -718,8 +791,19 @@ export const api = {
   },
 
   getAccessLiveFeedWsUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}/api/access/ws/live-feed`
+    const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    if (RAW_API_BASE) {
+      try {
+        const parsed = new URL(RAW_API_BASE)
+        const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:'
+        const basePath = parsed.pathname.replace(/\/+$/, '')
+        return `${wsProtocol}//${parsed.host}${basePath}/api/access/ws/live-feed`
+      } catch {
+        const relativePrefix = RAW_API_BASE.startsWith('/') ? RAW_API_BASE : `/${RAW_API_BASE}`
+        return `${fallbackProtocol}//${window.location.host}${relativePrefix}/api/access/ws/live-feed`
+      }
+    }
+    return `${fallbackProtocol}//${window.location.host}/api/access/ws/live-feed`
   },
 
   async createPaymentCheckout(

@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /manage
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /payment
+Disallow: /login
+Disallow: /register
+
+Sitemap: https://thedgym.com/sitemap.xml

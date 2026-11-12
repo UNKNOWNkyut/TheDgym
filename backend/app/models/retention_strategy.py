@@ -34,9 +34,9 @@ class RetentionStrategy(Base):
     offer_action_text = Column(String(100), nullable=False, default="Claim Offer")
     offer_action_url = Column(String(200), nullable=False, default="/membership")
     status = Column(String(20), nullable=False, default="generated")  # generated, dispatched, completed
-    dispatched_at = Column(DateTime, nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )

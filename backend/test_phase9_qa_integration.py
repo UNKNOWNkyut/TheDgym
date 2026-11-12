@@ -111,10 +111,14 @@ def verify_frontend_constants_and_placeholders() -> None:
 
 
 async def run_phase9_suite() -> None:
-    fd, db_file = tempfile.mkstemp(suffix="_phase9_qa.db")
-    os.close(fd)
-
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}", echo=False)
+    test_db_url = os.getenv("TEST_DATABASE_URL", "").strip()
+    db_file = None
+    if test_db_url:
+        engine = create_async_engine(test_db_url, echo=False, pool_pre_ping=True)
+    else:
+        fd, db_file = tempfile.mkstemp(suffix="_phase9_qa.db")
+        os.close(fd)
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}", echo=False)
     SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async def override_get_db():
@@ -127,6 +131,8 @@ async def run_phase9_suite() -> None:
 
     try:
         async with engine.begin() as conn:
+            if test_db_url:
+                await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
         # ── Suite 1: Double-run Seeder Idempotency ────────────────────────────
@@ -438,14 +444,18 @@ async def run_phase9_suite() -> None:
         await live_feed_manager.disconnect(ws_recorder)
         runtime_state.clear_pairing()
         app.dependency_overrides.clear()
+        if test_db_url:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
         await engine.dispose()
-        for ext in ("", "-wal", "-shm"):
-            p = db_file + ext
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except OSError:
-                    pass
+        if db_file:
+            for ext in ("", "-wal", "-shm"):
+                p = db_file + ext
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
 
 
 if __name__ == "__main__":

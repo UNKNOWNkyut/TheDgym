@@ -182,7 +182,7 @@ async def get_member_strategy(
 
 @router.post(
     "/dispatch-offer",
-    summary="Dispatch a personalized retention offer to a member's in-app notification bell",
+    summary="Manually dispatch a personalized retention offer via in-app notification and SMS",
     dependencies=[Depends(rate_limit_sensitive)],
 )
 async def dispatch_retention_offer(
@@ -246,76 +246,32 @@ async def dispatch_retention_offer(
     await db.commit()
     await db.refresh(notif)
 
-    # Dispatch SMS to member if mobile number is present (non-blocking)
-    sms_status = None
-    if member.phone:
-        sms_res = await notify_retention_offer_sms(
-            member_name=member.first_name,
-            offer_title=payload.title,
-            offer_message=payload.message,
-            to_phone=member.phone,
+    sms_res = await notify_retention_offer_sms(
+        member_name=member.first_name,
+        offer_title=payload.title,
+        offer_message=payload.message,
+        to_phone=member.phone,
+        manual_trigger=True,
+    )
+    sms_status = sms_res.get("status")
+    sms_reason = sms_res.get("reason") or sms_res.get("message")
+
+    if sms_status == "sent":
+        summary_msg = f"Retention offer dispatched to {member.first_name} via portal notification and SMS."
+    elif sms_status == "skipped" and sms_reason == "no_phone":
+        summary_msg = f"Retention offer sent to {member.first_name}'s portal notifications (SMS skipped: no phone number on file)."
+    else:
+        summary_msg = (
+            f"Retention offer sent to {member.first_name}'s portal notifications "
+            f"(SMS {sms_status}: {sms_reason or 'unavailable'})."
         )
-        sms_status = sms_res.get("status")
 
     return {
         "status": "success",
-        "message": f"Retention offer successfully dispatched to {member.first_name}.",
+        "message": summary_msg,
         "notification_id": notif.id,
         "recipient_name": member.full_name,
         "recipient_email": member.email,
         "sms_status": sms_status,
-    }
-
-
-@router.post(
-    "/auto-dispatch-high-risk",
-    summary="Automatically scan and dispatch personalized SMS retention offers to all HIGH RISK members",
-    dependencies=[Depends(rate_limit_sensitive)],
-)
-async def auto_dispatch_high_risk_endpoint(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
-):
-    """
-    Scans for members currently categorized as HIGH RISK by the XGBoost churn model,
-    generates tailored retention strategies, and automatically dispatches transactional
-    SMS notifications via TextBee with a 30-day anti-duplication guard.
-    """
-    from app.services.churn_pipeline import auto_dispatch_high_risk_retention_sms
-
-    stmt_high = (
-        select(Prediction.customer_id)
-        .where(Prediction.risk_tier == "HIGH")
-    )
-    high_member_ids = (await db.execute(stmt_high)).scalars().all()
-
-    dispatched = []
-    skipped = []
-    for mid in high_member_ids:
-        res = await auto_dispatch_high_risk_retention_sms(db, mid)
-        if res.get("status") == "dispatched":
-            dispatched.append(res)
-        else:
-            skipped.append(res)
-
-    await record_audit_log(
-        db,
-        action="AUTO_RETENTION_HIGH_RISK_DISPATCH",
-        outcome="SUCCESS",
-        actor=current_user,
-        target_type="batch",
-        target_id=len(high_member_ids),
-        request=request,
-        details=f"Auto-dispatched retention offers to {len(dispatched)} HIGH risk members ({len(skipped)} skipped/recently sent).",
-    )
-    await db.commit()
-
-    return {
-        "status": "success",
-        "total_high_risk": len(high_member_ids),
-        "dispatched_count": len(dispatched),
-        "skipped_count": len(skipped),
-        "dispatched": dispatched,
-        "skipped": skipped,
+        "sms_reason": sms_reason,
     }

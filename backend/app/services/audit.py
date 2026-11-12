@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import resolve_client_ip
 from app.models.audit_log import AuditLog
 from app.models.user import User
 
@@ -27,15 +28,8 @@ def redact_sensitive_text(text: Optional[str]) -> Optional[str]:
 
 
 def get_client_ip(request: Optional[Request]) -> str:
-    """Safely extract client IP address from request."""
-    if not request:
-        return "unknown"
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
-    if request.client and request.client.host:
-        return request.client.host[:64]
-    return "unknown"
+    """Safely extract client IP address without trusting spoofed headers."""
+    return resolve_client_ip(request, default="unknown")
 
 
 async def record_audit_log(

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { Dumbbell } from 'lucide-react'
 import { gsap } from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { api } from '@/services/api'
+import { SEO } from '@/components/ui/SEO'
 import { CLASS_TYPE_LABELS } from '@/constants/coaches'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import type { ClassSession, Member, TrainerProfile } from '@/types/auth'
@@ -469,6 +471,7 @@ export function ManageClassesPage() {
 
   return (
     <div ref={containerRef} className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
+      <SEO title="Classes" description="Manage group fitness classes at The DGym." noIndex />
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -522,7 +525,7 @@ export function ManageClassesPage() {
         <p className="text-white/40 text-sm">Loading sessions…</p>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-white/30">
-          <p className="text-5xl mb-4">🏋️</p>
+          <Dumbbell className="w-10 h-10 text-white/25 mx-auto mb-3" aria-hidden="true" />
           <p className="text-sm">No sessions found. Create the first one!</p>
         </div>
       ) : (

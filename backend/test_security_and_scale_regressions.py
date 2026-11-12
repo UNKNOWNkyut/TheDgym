@@ -38,11 +38,19 @@ from app.services.churn_pipeline import refresh_all_predictions
 
 
 async def run_regression_suite() -> None:
-    tmp_dir = tempfile.mkdtemp(prefix="dgym_reg_")
-    db_file = os.path.join(tmp_dir, "regression.db")
-    engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}", connect_args={"timeout": 30})
+    test_db_url = os.getenv("TEST_DATABASE_URL", "").strip()
+    tmp_dir = None
+    db_file = None
+    if test_db_url:
+        engine = create_async_engine(test_db_url, pool_pre_ping=True)
+    else:
+        tmp_dir = tempfile.mkdtemp(prefix="dgym_reg_")
+        db_file = os.path.join(tmp_dir, "regression.db")
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}", connect_args={"timeout": 30})
 
     async with engine.begin() as conn:
+        if test_db_url:
+            await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
@@ -54,7 +62,7 @@ async def run_regression_suite() -> None:
     app.dependency_overrides[get_db] = override_get_db
 
     try:
-        today = datetime.now(timezone(timedelta(hours=8))).date()
+        today_dt = datetime.now(timezone(timedelta(hours=8)))
         async with SessionLocal() as s:
             admin = User(
                 email="admin@thedgym.ph",
@@ -107,8 +115,8 @@ async def run_regression_suite() -> None:
                 MemberMembership(
                     member_id=exp_member.id,
                     plan_id=plan.id,
-                    start_date=date(2025, 3, 10),
-                    end_date=date(2025, 4, 9),
+                    start_date=datetime(2025, 3, 10, 0, 0, tzinfo=timezone.utc),
+                    end_date=datetime(2025, 4, 9, 0, 0, tzinfo=timezone.utc),
                     status=MembershipStatus.EXPIRED,
                     paid_amount=Decimal("1999.00"),
                     payment_method=PaymentMethod.CASH,
@@ -120,8 +128,8 @@ async def run_regression_suite() -> None:
                     MemberMembership(
                         member_id=m.id,
                         plan_id=plan.id,
-                        start_date=today - timedelta(days=5),
-                        end_date=today + timedelta(days=25),
+                        start_date=today_dt - timedelta(days=5),
+                        end_date=today_dt + timedelta(days=25),
                         status=MembershipStatus.ACTIVE,
                         paid_amount=Decimal("1999.00"),
                         payment_method=PaymentMethod.GCASH,
@@ -320,18 +328,23 @@ async def run_regression_suite() -> None:
         print("\n=== ALL 6 END-TO-END SECURITY & SCALE REGRESSION SUITES PASSED ===")
     finally:
         app.dependency_overrides.clear()
+        if test_db_url:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
         await engine.dispose()
-        for ext in ("", "-wal", "-shm"):
-            p = db_file + ext
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except OSError:
-                    pass
-        try:
-            os.rmdir(tmp_dir)
-        except OSError:
-            pass
+        if db_file:
+            for ext in ("", "-wal", "-shm"):
+                p = db_file + ext
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+        if tmp_dir:
+            try:
+                os.rmdir(tmp_dir)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

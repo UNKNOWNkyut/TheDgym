@@ -1,15 +1,18 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
 import logging
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import AsyncSessionLocal, Base, engine
+from app.database import AsyncSessionLocal, Base, engine, get_db
 from app.database_migrations import run_startup_column_migrations
 from app.routers import (
     access_control_router,
@@ -36,6 +39,22 @@ from app.services.audit import redact_sensitive_text
 from app.services.churn_pipeline import seed_simulated_gym_analytics
 from app.services.visit_sweeper import sweep_overdue_open_visits
 
+def _configure_logging() -> None:
+    raw_level = os.getenv("LOG_LEVEL", "INFO").upper().strip()
+    level = getattr(logging, raw_level, logging.INFO)
+    if not isinstance(level, int):
+        level = logging.INFO
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logging.getLogger("dgym").setLevel(level)
+    logging.getLogger("app").setLevel(level)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+_configure_logging()
 logger = logging.getLogger("dgym.security")
 
 _STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -268,9 +287,23 @@ app.include_router(payments_router)
 # =========================================================
 
 @app.get("/api/health", tags=["Health"])
-async def health_check():
+async def health_check(db: AsyncSession = Depends(get_db)):
+    try:
+        await asyncio.wait_for(db.execute(text("SELECT 1")), timeout=3.0)
+    except Exception as exc:
+        logger.error("Health check database ping failed: %s", redact_sensitive_text(str(exc)))
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "degraded",
+                "database": "unavailable",
+                "service": settings.PROJECT_NAME,
+                "version": settings.VERSION,
+            },
+        )
     return {
         "status": "online",
+        "database": "ok",
         "service": settings.PROJECT_NAME,
         "version": settings.VERSION,
     }

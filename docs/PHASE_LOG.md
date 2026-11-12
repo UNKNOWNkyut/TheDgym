@@ -485,4 +485,31 @@ Build: clean, 6 lazy page chunks.
 
 ## PHASE 10 — Deployment + Documentation
 
-**Status:** ⏳ Next Phase
+**Status:** ✅ COMPLETE (VPS Cutover Ready — live Docker/PostgreSQL & live Xendit verification pending VPS deploy)  
+**Date:** 2026-11-12  
+**Engineer:** Antigravity AI
+
+### Summary of Completed Deliverables:
+1. **Fail-Closed Production Config & First-Admin Bootstrap:**
+   - Enforced explicit `ENVIRONMENT` (`development`/`test`/`staging`/`production`) validation in `backend/app/config.py`; blocked default/short `JWT_SECRET_KEY`, missing `DATABASE_URL`, wildcard/empty `CORS_ORIGINS`, SQLite, and missing `XENDIT_WEBHOOK_VERIFICATION_TOKEN` in production, and gated demo seeders to `development` only (`backend/app/main.py`).
+   - Added [`create_admin.py`](../backend/scripts/create_admin.py) to provision the initial production `ADMIN` user interactively or via `ADMIN_*` env vars without demo seeding.
+2. **PostgreSQL & Async Proxy Hardening:**
+   - Added `asyncpg==0.32.0`, enabled `pool_pre_ping=True`, converted 7 naive `DateTime` columns + migration DDL to timezone-aware `DateTime(timezone=True)`, added row-level locking (`.with_for_update()`) in `class_sessions.py`, and parametrized SQL literal types cleanly (`test_phase9_qa_integration.py`, `test_security_and_scale_regressions.py`, `test_xendit_payments_integration.py` support `TEST_DATABASE_URL`).
+   - Added CIDR-aware `TRUSTED_PROXY_IPS` matching (`is_trusted_proxy`) and unified client IP resolution across `backend/app/core/rate_limit.py` and `backend/app/services/audit.py`.
+3. **Runtime Hardening, Rate Limiting, Healthcheck & Hermetic Tests:**
+   - Added per-IP rate limits on `POST /api/payments/create-checkout` (`10/m`), `POST /api/payments/webhook/xendit` (`60/m`), and `POST /api/notifications/sms/send-test` (`10/m`).
+   - Configured structured logging (`LOG_LEVEL`) and updated `GET /api/health` to run a 3s timeout `SELECT 1` database check (`200` healthy / `503` degraded).
+   - Refactored `backend/test_xendit_payments_integration.py` to run hermetic in-process tests without requiring live `api.xendit.co` calls or mutating `dgym.db`.
+4. **Public SEO, Social Metadata & Favicon Suite:**
+   - Generated complete brand icon & manifest set (`favicon.ico`, `16x16`, `32x32`, `apple-touch-icon.png`, `192x192`, `512x512`, `site.webmanifest`), `robots.txt`, and `sitemap.xml` (9 public routes under `https://thedgym.com` default).
+   - Updated `frontend/index.html`, `frontend/vite.config.ts` (`dgymSiteUrlPlugin`), `SEO.tsx` (env-driven `VITE_SITE_URL` + automatic `noindex, nofollow` on private portals/auth), `NotFoundPage.tsx`, and private `manage/` pages.
+5. **Docker Compose, Nginx/TLS, Backups, CI & Runbook:**
+   - Packaged `docker-compose.yml` (`postgres:16-alpine`, `backend/Dockerfile`, `deploy/nginx/Dockerfile`, optional `certbot` TLS profile), persistent `pgdata` & `dgym_uploads` volumes, Nginx `:443` TLS + SPA fallback + `/api/access/ws/` WebSocket proxy + CSP, and temporary self-signed bootstrap before Let's Encrypt issuance (`15-tls-bootstrap.sh`).
+   - Pinned runtime versions in `backend/requirements.txt`, added `deploy/scripts/backup.sh` & `restore.sh` (`pg_dump` custom format + `/app/uploads` + SHA-256 verification), `.gitattributes` LF rules, `.github/workflows/ci.yml` (frontend lint/tsc/build + backend PostgreSQL 16 test run), and root `README.md`.
+
+### Pre-Commit Verification:
+- Backend (hermetic isolated SQLite + offline PostgreSQL DDL check across all 20 models):
+  - `test_config_validation.py` (`14/14` passed), `test_xendit_payments_integration.py` (`13/13` passed), `test_security_and_scale_regressions.py` (`6/6` passed), `test_phase9_qa_integration.py` (`6/6` passed).
+- Frontend: `oxlint` (`0` errors), `tsc --noEmit` (`0`), `npm run build` (`vite build` passed cleanly).
+- Shell scripts (`15-tls-bootstrap.sh`, `backup.sh`, `restore.sh`): verified LF endings and `bash -n` clean.
+- Live Docker container build, live PostgreSQL runtime execution, Let's Encrypt issuance, and Xendit sandbox-to-live cutover remain for the first VPS deployment / CI run.

@@ -24,12 +24,12 @@ class RawTransaction(Base):
         index=True,
     )
     transaction_type = Column(String(50), nullable=False)  # visit, payment, class_booking, pt_session
-    transaction_date = Column(DateTime, nullable=False, index=True)
+    transaction_date = Column(DateTime(timezone=True), nullable=False, index=True)
     amount = Column(Numeric(10, 2), nullable=True, default=0.00)
     reference_code = Column(String(100), nullable=True)
     metadata_json = Column(Text, nullable=True)
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )

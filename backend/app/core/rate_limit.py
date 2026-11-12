@@ -1,15 +1,33 @@
 import logging
 import time
 from collections import OrderedDict, deque
-from typing import Callable, Deque
+from typing import Callable, Deque, Optional
 
 from fastapi import HTTPException, Request, status
 
-from app.config import settings
+from app.config import is_trusted_proxy
 
 logger = logging.getLogger("dgym.security")
 
 _MAX_TRACKED_BUCKETS = 10_000
+
+
+def resolve_client_ip(request: Optional[Request], default: str = "127.0.0.1") -> str:
+    """Resolve client IP, trusting X-Forwarded-For only from configured reverse proxies."""
+    if not request:
+        return default
+    peer_ip = (
+        request.client.host.strip()
+        if (request.client and request.client.host)
+        else default
+    )
+    if is_trusted_proxy(peer_ip):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            hops = [part.strip() for part in forwarded.split(",") if part.strip()]
+            if hops:
+                return hops[-1][:64]
+    return peer_ip[:64]
 
 
 class SlidingWindowRateLimiter:
@@ -24,18 +42,7 @@ class SlidingWindowRateLimiter:
         self._buckets: OrderedDict[str, Deque[float]] = OrderedDict()
 
     def _get_client_ip(self, request: Request) -> str:
-        peer_ip = (
-            request.client.host.strip()
-            if (request.client and request.client.host)
-            else "127.0.0.1"
-        )
-        if peer_ip in settings.TRUSTED_PROXY_IPS:
-            forwarded = request.headers.get("x-forwarded-for")
-            if forwarded:
-                hops = [part.strip() for part in forwarded.split(",") if part.strip()]
-                if hops:
-                    return hops[-1][:64]
-        return peer_ip[:64]
+        return resolve_client_ip(request, default="127.0.0.1")
 
     def _evict_if_full(self, cutoff: float) -> None:
         while self._buckets and len(self._buckets) >= self._max_buckets:

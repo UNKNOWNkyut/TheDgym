@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+backend
+backups
+docs
+node_modules
+frontend/node_modules
+frontend/dist
+*.db
+*.sqlite
+*.sqlite3
+*.log

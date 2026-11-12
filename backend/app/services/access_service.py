@@ -178,7 +178,7 @@ async def _infer_visit_type_and_notify_trainer(
             db.add(
                 Notification(
                     user_id=pt_session.trainer_id,
-                    title="🏋️ PT Client Tapped In",
+                    title="PT Client Tapped In",
                     message=(
                         f"{member.full_name} ({member.member_code}) just checked in via Smart Keycard "
                         f"for their scheduled PT session."

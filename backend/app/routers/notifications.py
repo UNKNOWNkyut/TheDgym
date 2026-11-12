@@ -6,6 +6,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_roles
+from app.core.rate_limit import require_rate_limit
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member
@@ -14,6 +15,7 @@ from app.schemas.retention import NotificationResponse
 from app.services.sms_service import get_sms_account_status, send_sms
 
 router = APIRouter(prefix="/api/notifications", tags=["In-App Notifications"])
+rate_limit_sms = require_rate_limit("sms_send", max_requests=10, window_seconds=60)
 
 _STAFF_ROLES = (UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER)
 
@@ -188,6 +190,7 @@ async def get_sms_status(
 @router.post(
     "/sms/send-test",
     summary="Send a test SMS message via TextBee Android Gateway",
+    dependencies=[Depends(rate_limit_sms)],
 )
 async def send_test_sms(
     payload: TestSmsRequest,

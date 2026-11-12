@@ -1,17 +1,25 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { GYM_INFO } from '@/constants/gymInfo'
+import { PUBLIC_PLANS } from '@/constants/plans'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const FAQS = [
+interface FAQEntry {
+  q: string
+  a: string
+}
+
+const DAY_PASS_PRICE = PUBLIC_PLANS.find((plan) => plan.slug === 'day-pass')?.priceFormatted ?? '₱400'
+
+const FAQS: readonly FAQEntry[] = [
   {
     q: 'Do I need a membership to use the gym?',
-    a: 'Walk-ins are welcome with a ₱400 Day Pass for full one-day equipment and locker access—no sign-up required.',
+    a: `Walk-ins are welcome with a ${DAY_PASS_PRICE} Day Pass for full one-day equipment and locker access—no sign-up required.`,
   },
   {
     q: 'Are group classes included with membership?',
@@ -19,7 +27,7 @@ const FAQS = [
   },
   {
     q: 'How do I book a personal training session?',
-    a: `Registered members can book directly from their portal, or contact us at ${GYM_INFO.phoneDisplay} / ${GYM_INFO.email} to arrange a 12-session coaching package.`,
+    a: `Members with an active plan can book directly from their portal, or contact us at ${GYM_INFO.phoneDisplay} / ${GYM_INFO.email} to arrange a 12-session coaching package.`,
   },
   {
     q: 'What equipment is available?',
@@ -43,38 +51,65 @@ const FAQS = [
   },
 ]
 
-function FAQItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false)
-  const bodyRef = useRef<HTMLDivElement>(null)
+function toggleFaqQuestion(openQuestions: string[], question: string): string[] {
+  return openQuestions.includes(question)
+    ? openQuestions.filter((item) => item !== question)
+    : [...openQuestions, question]
+}
 
-  const toggle = () => setOpen((prev) => !prev)
+function areAllFaqsOpen(openQuestions: readonly string[], entries: readonly FAQEntry[]): boolean {
+  return entries.length > 0 && entries.every((entry) => openQuestions.includes(entry.q))
+}
 
-  useGSAP(() => {
-    const el = bodyRef.current
-    if (!el) return
-    if (open) {
-      gsap.fromTo(el, { height: 0, opacity: 0 }, { height: 'auto', opacity: 1, duration: 0.3, ease: 'power3.out' })
-    } else {
-      gsap.to(el, { height: 0, opacity: 0, duration: 0.25, ease: 'power2.in' })
-    }
-  }, [open])
+function FAQItem({
+  q,
+  a,
+  open,
+  onToggle,
+}: {
+  q: string
+  a: string
+  open: boolean
+  onToggle: () => void
+}) {
+  const itemRef = useRef<HTMLDivElement>(null)
+  const answerRef = useRef<HTMLParagraphElement>(null)
+  const buttonId = useId()
+  const panelId = useId()
+
+  useGSAP(
+    () => {
+      if (!open || !answerRef.current) return
+      gsap.fromTo(
+        answerRef.current,
+        { opacity: 0, y: -6 },
+        { opacity: 1, y: 0, duration: 0.25, ease: 'power2.out' },
+      )
+    },
+    { scope: itemRef, dependencies: [open] },
+  )
 
   return (
-    <div className="border-b border-white/8 last:border-0">
+    <div ref={itemRef} className="border-b border-zinc-200 dark:border-white/8 last:border-0">
       <button
-        onClick={toggle}
+        id={buttonId}
+        type="button"
+        onClick={onToggle}
         aria-expanded={open}
+        aria-controls={panelId}
         className={[
-          'w-full flex items-center justify-between gap-4',
+          'w-full flex items-center justify-between gap-4 cursor-pointer',
           'py-5 text-left',
-          'focus-visible:outline-2 focus-visible:outline-white/50 focus-visible:outline-offset-2 rounded-sm',
+          'focus-visible:outline-2 focus-visible:outline-zinc-900/50 dark:focus-visible:outline-white/50 focus-visible:outline-offset-2 rounded-sm',
           'group transition-colors duration-150',
         ].join(' ')}
       >
         <span
           className={[
             'text-base font-medium transition-colors duration-150',
-            open ? 'text-white' : 'text-white/70 group-hover:text-white',
+            open
+              ? 'text-zinc-950 dark:text-white'
+              : 'text-zinc-800 dark:text-white/75 group-hover:text-zinc-950 dark:group-hover:text-white',
           ].join(' ')}
         >
           {q}
@@ -89,8 +124,10 @@ function FAQItem({ q, a }: { q: string; a: string }) {
           strokeLinecap="round"
           strokeLinejoin="round"
           className={[
-            'shrink-0 text-white/30 transition-transform duration-300',
-            open ? 'rotate-180 text-red' : '',
+            'shrink-0 transition-transform duration-300',
+            open
+              ? 'rotate-180 text-red'
+              : 'text-zinc-400 dark:text-white/40 group-hover:text-zinc-700 dark:group-hover:text-white/70',
           ].join(' ')}
           aria-hidden="true"
         >
@@ -99,13 +136,23 @@ function FAQItem({ q, a }: { q: string; a: string }) {
       </button>
 
       <div
-        ref={bodyRef}
-        className="overflow-hidden h-0 opacity-0"
+        id={panelId}
+        role="region"
+        aria-labelledby={buttonId}
         aria-hidden={!open}
+        className={[
+          'grid transition-[grid-template-rows] duration-250 ease-out',
+          open ? 'grid-rows-[1fr] visible' : 'grid-rows-[0fr] invisible',
+        ].join(' ')}
       >
-        <p className="text-sm text-white/55 leading-relaxed pb-5 max-w-2xl">
-          {a}
-        </p>
+        <div className="overflow-hidden">
+          <p
+            ref={answerRef}
+            className="text-sm text-zinc-600 dark:text-white/65 leading-relaxed pb-5 max-w-2xl"
+          >
+            {a}
+          </p>
+        </div>
       </div>
     </div>
   )
@@ -113,15 +160,20 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export function FAQPage() {
   const heroRef = useRef<HTMLDivElement>(null)
+  const [openQuestions, setOpenQuestions] = useState<string[]>([])
+  const allExpanded = areAllFaqsOpen(openQuestions, FAQS)
 
-  useGSAP(() => {
-    if (!heroRef.current) return
-    gsap.fromTo(
-      heroRef.current.querySelectorAll('.hero-item'),
-      { opacity: 0, y: 36 },
-      { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1 }
-    )
-  }, { scope: heroRef })
+  useGSAP(
+    () => {
+      if (!heroRef.current) return
+      gsap.fromTo(
+        heroRef.current.querySelectorAll('.hero-item'),
+        { opacity: 0, y: 36 },
+        { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1 },
+      )
+    },
+    { scope: heroRef },
+  )
 
   return (
     <>
@@ -132,15 +184,15 @@ export function FAQPage() {
       />
 
       {/* Hero */}
-      <div ref={heroRef} className="border-b border-white/8 section-padding">
+      <div ref={heroRef} className="border-b border-zinc-200 dark:border-white/8 section-padding">
         <div className="container-dgym">
-          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-white/30 mb-4">
+          <p className="hero-item text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-4">
             FAQ • Rosario, Batangas
           </p>
-          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-white mb-4 max-w-2xl">
+          <h1 className="hero-item font-display text-5xl md:text-7xl font-black uppercase tracking-tight text-zinc-950 dark:text-white mb-4 max-w-2xl">
             Common Questions
           </h1>
-          <p className="hero-item text-lg text-white/60 max-w-lg leading-relaxed">
+          <p className="hero-item text-lg text-zinc-600 dark:text-zinc-400 max-w-lg leading-relaxed">
             Quick answers to what most people ask before joining The DGym in Rosario, Batangas.
           </p>
         </div>
@@ -148,16 +200,38 @@ export function FAQPage() {
 
       {/* FAQ list */}
       <div className="container-dgym py-16 md:py-20">
+        <div className="max-w-3xl flex items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-white/8 mb-2">
+          <span className="text-xs font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+            {FAQS.length} Questions
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpenQuestions(allExpanded ? [] : FAQS.map((item) => item.q))}
+            className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-white/60 hover:text-red dark:hover:text-white transition-colors cursor-pointer"
+          >
+            {allExpanded ? 'Collapse All' : 'Expand All'}
+          </button>
+        </div>
+
         <div className="max-w-3xl">
           {FAQS.map((item) => (
-            <FAQItem key={item.q} q={item.q} a={item.a} />
+            <FAQItem
+              key={item.q}
+              q={item.q}
+              a={item.a}
+              open={openQuestions.includes(item.q)}
+              onToggle={() => setOpenQuestions((prev) => toggleFaqQuestion(prev, item.q))}
+            />
           ))}
         </div>
 
-        <div className="mt-14 p-6 rounded-xl border border-white/8 bg-surface max-w-3xl">
-          <p className="text-sm text-white/50">
+        <div className="mt-14 p-6 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-surface max-w-3xl shadow-sm dark:shadow-none">
+          <p className="text-sm text-zinc-600 dark:text-white/65">
             Don't see your question here? Call{' '}
-            <a href={GYM_INFO.phoneHref} className="text-white/80 hover:text-white underline underline-offset-2 transition-colors">
+            <a
+              href={GYM_INFO.phoneHref}
+              className="font-medium text-zinc-900 dark:text-white underline underline-offset-2 hover:text-red dark:hover:text-red transition-colors"
+            >
               {GYM_INFO.phoneDisplay}
             </a>
             ,{' '}
@@ -165,14 +239,18 @@ export function FAQPage() {
               href={GYM_INFO.facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-white/80 hover:text-white underline underline-offset-2 transition-colors"
+              className="font-medium text-zinc-900 dark:text-white underline underline-offset-2 hover:text-red dark:hover:text-red transition-colors"
             >
               message us on Facebook
             </a>
             , or use our{' '}
-            <Link to="/contact" className="text-white/80 hover:text-white underline underline-offset-2 transition-colors">
+            <Link
+              to="/contact"
+              className="font-medium text-zinc-900 dark:text-white underline underline-offset-2 hover:text-red dark:hover:text-red transition-colors"
+            >
               contact form
-            </Link>.
+            </Link>
+            .
           </p>
         </div>
       </div>

@@ -52,6 +52,14 @@ def get_textbee_device_id() -> str:
     return os.getenv("TEXTBEE_DEVICE_ID", "").strip()
 
 
+def is_auto_sms_enabled() -> bool:
+    """
+    Safety kill-switch for automated domain SMS triggers (default: disabled).
+    Prevents automated payment/PT/retention flows from draining TextBee SMS credits.
+    """
+    return os.getenv("AUTO_SMS_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Philippine Phone Number Normalization
 # ──────────────────────────────────────────────────────────────────────────────
@@ -239,6 +247,8 @@ async def notify_pt_booking_status_sms(
     to_phone: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Sends SMS when a Personal Training session is approved or declined."""
+    if not is_auto_sms_enabled():
+        return {"status": "disabled", "provider": "textbee", "reason": "auto_sms_disabled"}
     if not to_phone:
         return {"status": "skipped", "reason": "no_phone"}
 
@@ -269,6 +279,8 @@ async def notify_membership_activated_sms(
     to_phone: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Sends Welcome SMS upon new membership payment and activation."""
+    if not is_auto_sms_enabled():
+        return {"status": "disabled", "provider": "textbee", "reason": "auto_sms_disabled"}
     if not to_phone:
         return {"status": "skipped", "reason": "no_phone"}
 
@@ -286,8 +298,15 @@ async def notify_retention_offer_sms(
     offer_title: str,
     offer_message: str,
     to_phone: Optional[str] = None,
+    manual_trigger: bool = False,
 ) -> Dict[str, Any]:
-    """Sends SMS promo voucher to at-risk members for churn prevention."""
+    """
+    Sends SMS promo voucher to a member via TextBee.
+    Automated background callers remain blocked unless AUTO_SMS_ENABLED=true;
+    explicit manual dispatch from the admin Retention Modal passes manual_trigger=True.
+    """
+    if not manual_trigger and not is_auto_sms_enabled():
+        return {"status": "disabled", "provider": "textbee", "reason": "auto_sms_disabled"}
     if not to_phone:
         return {"status": "skipped", "reason": "no_phone"}
 

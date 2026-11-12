@@ -4,38 +4,70 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
-import { Button } from '@/components/ui/Button'
 import { GYM_INFO } from '@/constants/gymInfo'
 
 gsap.registerPlugin(ScrollTrigger)
+
+interface StandardItem {
+  label: string
+  body: string
+}
+
+const STANDARDS: readonly StandardItem[] = [
+  {
+    label: 'Equipment',
+    body: 'Technogym dumbbells, Rogue deadlift platforms, and precision plate-loaded machinery.',
+  },
+  {
+    label: 'Coaching',
+    body: 'Dedicated personal trainers who program around your specific goals, biomechanics, and progress.',
+  },
+  {
+    label: 'Community',
+    body: 'A welcoming training environment in Rosario, Batangas with lounge workspace, free Wi-Fi, and monthly fitness challenges.',
+  },
+]
 
 export function AboutPage() {
   const heroRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
-  useGSAP(() => {
-    if (!heroRef.current) return
-    gsap.fromTo(
-      heroRef.current.querySelectorAll('.about-hero-item'),
-      { opacity: 0, y: 40 },
-      { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1 }
-    )
-  }, { scope: heroRef })
+  useGSAP(
+    () => {
+      if (!heroRef.current) return
+      gsap.fromTo(
+        heroRef.current.querySelectorAll('.about-hero-item'),
+        { opacity: 0, y: 40 },
+        { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', stagger: 0.1 },
+      )
+    },
+    { scope: heroRef },
+  )
 
-  useGSAP(() => {
-    if (!contentRef.current) return
-    contentRef.current.querySelectorAll('.reveal').forEach((el) => {
-      gsap.fromTo(el, { opacity: 0, y: 28 }, {
-        opacity: 1, y: 0, duration: 0.6, ease: 'power3.out',
-        scrollTrigger: { trigger: el, start: 'top 88%', once: true },
+  useGSAP(
+    () => {
+      if (!contentRef.current) return
+      contentRef.current.querySelectorAll('.reveal').forEach((el) => {
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 28 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: el, start: 'top 88%', once: true },
+          },
+        )
       })
-    })
-  }, { scope: contentRef })
+    },
+    { scope: contentRef },
+  )
 
   return (
     <>
       <SEO
-        title="About The DGym Rosario Batangas"
+        title="About"
         description="Learn about The DGym Rosario Batangas — High End Premium Weightlifting, Powerlifting, and Fitness Gym in Rosario, Batangas."
         canonical="https://thedgym.com/about"
         ogImage="/assets/images/img15.jpg"
@@ -57,11 +89,12 @@ export function AboutPage() {
       </div>
 
       <div ref={contentRef} className="container-dgym py-16 md:py-24 space-y-20">
-
         {/* Mission */}
         <div className="reveal grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">What we're about</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">
+              What we&apos;re about
+            </p>
             <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white mb-5">
               Elevate Your Fitness Journey
             </h2>
@@ -95,59 +128,56 @@ export function AboutPage() {
 
         {/* Values */}
         <div className="reveal">
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">What drives us</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-3">
+            What drives us
+          </p>
           <h2 className="font-display text-3xl md:text-4xl font-bold uppercase tracking-tight text-zinc-950 dark:text-white mb-10">
             Our Standards
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[
-              {
-                label: 'Equipment',
-                body: 'Technogym dumbbells, Rogue deadlift platforms, and precision plate-loaded machinery.',
-              },
-              {
-                label: 'Coaching',
-                body: 'Dedicated personal trainers who program around your specific goals, biomechanics, and progress.',
-              },
-              {
-                label: 'Community',
-                body: 'Over 2,400+ members and fitness enthusiasts in Rosario, Batangas pushing each other forward.',
-              },
-            ].map((v) => (
-              <div key={v.label} className="p-6 rounded-xl border border-white/8 bg-surface hover:border-white/15 transition-colors duration-200">
+            {STANDARDS.map((v) => (
+              <div
+                key={v.label}
+                className="p-6 rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-surface hover:border-zinc-300 dark:hover:border-white/15 shadow-xs dark:shadow-none transition-colors duration-200"
+              >
                 <div className="w-1 h-8 bg-red rounded-full mb-4" aria-hidden="true" />
-                <h3 className="font-display text-xl font-bold uppercase tracking-wide text-white mb-2">{v.label}</h3>
-                <p className="text-sm text-white/50 leading-relaxed">{v.body}</p>
+                <h3 className="font-display text-xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-2">
+                  {v.label}
+                </h3>
+                <p className="text-sm text-zinc-600 dark:text-white/65 leading-relaxed">{v.body}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Location note */}
-        <div className="reveal p-8 rounded-2xl border border-white/8 bg-surface flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="reveal p-8 rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-surface shadow-xs dark:shadow-none flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/30 mb-2">Location & Hours</p>
-            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-white mb-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-white/45 mb-2">
+              Location &amp; Hours
+            </p>
+            <h2 className="font-display text-2xl font-bold uppercase tracking-wide text-zinc-950 dark:text-white mb-1">
               {GYM_INFO.streetAddress}
             </h2>
-            <p className="text-sm text-white/60 mb-2">
-              {GYM_INFO.landmark}
-            </p>
-            <p className="text-xs text-white/40">
+            <p className="text-sm text-zinc-600 dark:text-white/65 mb-2">{GYM_INFO.landmark}</p>
+            <p className="text-xs font-mono text-zinc-500 dark:text-white/55">
               {GYM_INFO.operatingHoursSummary}
             </p>
           </div>
-          <div className="flex gap-3 shrink-0">
+          <div className="flex flex-wrap gap-3 shrink-0">
             <a
               href={GYM_INFO.facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block"
+              className="inline-flex items-center justify-center gap-2 font-semibold rounded-lg text-sm px-6 py-3 min-h-[44px] border border-zinc-300 dark:border-white/15 text-zinc-900 dark:text-white bg-zinc-50 dark:bg-transparent hover:bg-zinc-100 dark:hover:bg-white/5 hover:border-zinc-400 dark:hover:border-white/25 active:scale-[0.97] transition-all duration-150 focus-visible:outline-2 focus-visible:outline-zinc-900/50 dark:focus-visible:outline-white/50 focus-visible:outline-offset-2"
             >
-              <Button variant="secondary">Facebook Page</Button>
+              Facebook Page
             </a>
-            <Link to="/contact">
-              <Button>Contact Us</Button>
+            <Link
+              to="/contact"
+              className="inline-flex items-center justify-center gap-2 font-semibold rounded-lg text-sm px-6 py-3 min-h-[44px] bg-red text-white hover:bg-red-hover hover:shadow-[0_0_24px_rgba(229,32,26,0.4)] active:scale-[0.97] transition-all duration-150 focus-visible:outline-2 focus-visible:outline-zinc-900/50 dark:focus-visible:outline-white/50 focus-visible:outline-offset-2"
+            >
+              Contact Us
             </Link>
           </div>
         </div>

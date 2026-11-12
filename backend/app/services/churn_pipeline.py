@@ -1,8 +1,7 @@
 import asyncio
-import json
 import random
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,17 +10,12 @@ from app.models.class_session import ClassEnrollment
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
 from app.models.membership_plan import MembershipPlan
-from app.models.notification import Notification
 from app.models.prediction import Prediction
 from app.models.processed_customer import ProcessedCustomer
 from app.models.pt_session import PTSession
 from app.models.raw_transaction import RawTransaction
-from app.models.retention_strategy import RetentionStrategy
-from app.models.user import User
 from app.models.visit import Visit, VisitType
 from app.services.churn_ml import predict_churn_batch, train_baseline_model
-from app.services.retention_ai import generate_heuristic_strategy
-from app.services.sms_service import notify_retention_offer_sms
 
 
 def _as_utc(dt: datetime | str) -> datetime:
@@ -207,122 +201,11 @@ async def refresh_member_churn_prediction(session: AsyncSession, member_id: int)
     return pred_obj
 
 
-async def auto_dispatch_high_risk_retention_sms(
-    session: AsyncSession,
-    member_id: int,
-) -> Dict[str, Any]:
-    """
-    100% Automatic SMS dispatch for HIGH RISK members.
-    Includes a 30-day anti-spam de-duplication guard so members are not repeatedly texted
-    and SMS gateway credits are preserved.
-    """
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=30)
-
-    # 1. Anti-spam / duplicate check: skip if already dispatched within 30 days
-    stmt_recent = select(RetentionStrategy).where(
-        RetentionStrategy.member_id == member_id,
-        RetentionStrategy.status == "dispatched",
-        RetentionStrategy.dispatched_at >= cutoff,
-    )
-    recent = (await session.execute(stmt_recent)).scalar_one_or_none()
-    if recent:
-        return {
-            "status": "skipped",
-            "member_id": member_id,
-            "reason": "already_dispatched_recently",
-            "dispatched_at": recent.dispatched_at.isoformat() if recent.dispatched_at else None,
-        }
-
-    # 2. Fetch member and their prediction & features
-    member = await session.get(Member, member_id)
-    if not member:
-        return {"status": "error", "member_id": member_id, "reason": "member_not_found"}
-
-    stmt_pred = select(Prediction).where(Prediction.customer_id == member_id)
-    pred = (await session.execute(stmt_pred)).scalar_one_or_none()
-    if not pred or pred.risk_tier != "HIGH":
-        return {"status": "skipped", "member_id": member_id, "reason": "not_high_risk"}
-
-    stmt_proc = select(ProcessedCustomer).where(ProcessedCustomer.customer_id == member_id)
-    proc = (await session.execute(stmt_proc)).scalar_one_or_none()
-
-    # 3. Generate tailored retention playbook
-    strat_data = generate_heuristic_strategy(member, pred, proc)
-
-    # 4. Upsert RetentionStrategy record
-    stmt_strat = select(RetentionStrategy).where(RetentionStrategy.member_id == member_id)
-    strat_record = (await session.execute(stmt_strat)).scalar_one_or_none()
-    if not strat_record:
-        strat_record = RetentionStrategy(member_id=member_id)
-        session.add(strat_record)
-
-    strat_record.risk_tier = pred.risk_tier
-    strat_record.churn_probability = pred.churn_probability or 0.0
-    strat_record.urgency = strat_data.get("urgency", "CRITICAL")
-    strat_record.strategy_title = strat_data.get("strategy_title", "Retention Intervention")
-    strat_record.diagnosis_summary = strat_data.get("diagnosis_summary", "")
-    strat_record.offer_title = strat_data.get("offer_title", "Special Retention Offer")
-    strat_record.offer_message = strat_data.get("offer_message", "")
-    strat_record.offer_action_text = strat_data.get("offer_action_text", "Claim Offer")
-    strat_record.offer_action_url = strat_data.get("offer_action_url", "/membership")
-    strat_record.tactical_action_steps = json.dumps(strat_data.get("tactical_action_steps", []))
-    strat_record.status = "dispatched"
-    strat_record.dispatched_at = now
-
-    # 5. Create in-app Notification
-    user_id = None
-    if member.email:
-        stmt_u = select(User.id).where(User.email == member.email.lower().strip())
-        user_id = (await session.execute(stmt_u)).scalar_one_or_none()
-
-    notif = Notification(
-        user_id=user_id,
-        member_id=member.id,
-        title=strat_record.offer_title,
-        message=strat_record.offer_message,
-        type="retention",
-        action_text=strat_record.offer_action_text,
-        action_url=strat_record.offer_action_url,
-        is_read=False,
-    )
-    session.add(notif)
-    await session.commit()
-
-    # 6. Send automatic SMS via TextBee Android Gateway
-    sms_result: Dict[str, Any] = {"status": "skipped", "reason": "no_phone"}
-    if member.phone:
-        sms_result = await notify_retention_offer_sms(
-            member_name=member.first_name,
-            offer_title=strat_record.offer_title,
-            offer_message=strat_record.offer_message,
-            to_phone=member.phone,
-        )
-
-    return {
-        "status": "dispatched",
-        "member_id": member.id,
-        "member_name": member.full_name,
-        "phone": member.phone,
-        "offer_title": strat_record.offer_title,
-        "sms_result": sms_result,
-    }
-
-
-async def refresh_all_predictions(
-    session: AsyncSession,
-    auto_dispatch_high_risk_sms: bool = False,
-) -> int:
+async def refresh_all_predictions(session: AsyncSession) -> int:
     """
     Refreshes churn predictions for all existing gym members.
-    If auto_dispatch_high_risk_sms is True, automatically dispatches retention SMS
-    to members entering HIGH risk tier.
     """
     updated_preds = await _refresh_predictions(session)
-    if auto_dispatch_high_risk_sms:
-        for mid, pred in updated_preds.items():
-            if pred.risk_tier == "HIGH":
-                await auto_dispatch_high_risk_retention_sms(session, mid)
     return len(updated_preds)
 
 

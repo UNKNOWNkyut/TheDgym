@@ -98,7 +98,7 @@ async def notify_admins_on_checkin(
             Notification(
                 user_id=admin_user.id,
                 member_id=member.id,
-                title=f"✅ Member Check-In: {member.full_name}",
+                title=f"Member Check-In: {member.full_name}",
                 message=(
                     f"{member.full_name} ({member.member_code}) checked in via "
                     f"{method_label} at {time_ph_str}{plan_suffix}."
