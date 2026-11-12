@@ -1,12 +1,14 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
 import logging
+import mimetypes
 import os
 from pathlib import Path
+import re
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +68,78 @@ _DOCS_CSP = (
     "img-src 'self' https://fastapi.tiangolo.com data:; "
     "frame-ancestors 'none'"
 )
+_HASHED_ASSET_RE = re.compile(r"^/assets/.+-[A-Za-z0-9_-]{8}\.(?:js|css)$")
+_STATIC_METADATA_PATHS = frozenset({"/robots.txt", "/sitemap.xml", "/site.webmanifest"})
+_STATIC_ASSET_EXTENSIONS = frozenset(
+    {
+        ".js",
+        ".mjs",
+        ".css",
+        ".map",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".webp",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".mp3",
+        ".wav",
+        ".json",
+        ".txt",
+        ".xml",
+        ".webmanifest",
+    }
+)
+
+for _ext, _mime in (
+    (".js", "text/javascript"),
+    (".mjs", "text/javascript"),
+    (".css", "text/css"),
+    (".svg", "image/svg+xml"),
+    (".webp", "image/webp"),
+    (".woff2", "font/woff2"),
+    (".webmanifest", "application/manifest+json"),
+):
+    mimetypes.add_type(_mime, _ext)
+
+
+def _resolve_frontend_dist_dir() -> Path | None:
+    raw_dir = os.getenv("FRONTEND_DIST_DIR", "").strip()
+    candidates = (
+        [Path(raw_dir)]
+        if raw_dir
+        else [Path(__file__).resolve().parent.parent / "frontend_dist"]
+    )
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if (resolved / "index.html").is_file():
+            return resolved
+    return None
+
+
+_FRONTEND_DIST_DIR = _resolve_frontend_dist_dir()
+
+
+def _resolve_spa_file(dist_dir: Path, request_path: str) -> Path | None:
+    rel = request_path.lstrip("/")
+    if not rel:
+        index_file = dist_dir / "index.html"
+        return index_file if index_file.is_file() else None
+
+    candidate = (dist_dir / rel).resolve()
+    if not candidate.is_relative_to(dist_dir):
+        return None
+    if candidate.is_file():
+        return candidate
+    if rel.startswith("assets/") or Path(rel).suffix.lower() in _STATIC_ASSET_EXTENSIONS:
+        return None
+    index_file = dist_dir / "index.html"
+    return index_file if index_file.is_file() else None
 
 
 # =========================================================
@@ -123,6 +197,18 @@ async def lifespan(app: FastAPI):
 # =========================================================
 
 _is_prod = settings.ENVIRONMENT == "production"
+_SPA_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://accounts.google.com/gsi/client; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com; "
+    f"connect-src 'self' https://accounts.google.com {'wss:' if _is_prod else 'ws: wss:'}; "
+    "frame-src https://accounts.google.com/gsi/; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -183,8 +269,27 @@ async def security_hardening_middleware(request: Request, call_next):
                 content={"detail": "CSRF validation failed: missing X-Requested-With header."},
             )
 
-    response = await call_next(request)
     path = request.url.path
+    is_api_or_docs = (
+        path == "/api"
+        or path.startswith("/api/")
+        or path in ("/docs", "/redoc", "/openapi.json")
+        or path.startswith("/docs/")
+    )
+
+    response = await call_next(request)
+
+    served_spa = False
+    if (
+        response.status_code == status.HTTP_404_NOT_FOUND
+        and _FRONTEND_DIST_DIR is not None
+        and not is_api_or_docs
+        and request.method in ("GET", "HEAD")
+    ):
+        spa_file = _resolve_spa_file(_FRONTEND_DIST_DIR, path)
+        if spa_file is not None:
+            response = FileResponse(spa_file)
+            served_spa = True
 
     # Check 46 & ANTIGRAV-10: Standard HTTP Security Headers
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -197,11 +302,21 @@ async def security_hardening_middleware(request: Request, call_next):
     if _is_prod:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-    # Check 21/22 & ANTIGRAV-10: Content-Security-Policy & Auth Cache-Control
+    # Check 21/22 & ANTIGRAV-10: Content-Security-Policy & Cache-Control
     if path.startswith("/api/uploads"):
         response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
     elif path in ("/docs", "/redoc") or path.startswith("/docs/"):
         response.headers["Content-Security-Policy"] = _DOCS_CSP
+    elif served_spa:
+        response.headers["Content-Security-Policy"] = _SPA_CSP
+        if _HASHED_ASSET_RE.match(path):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "public, max-age=604800"
+        elif path in _STATIC_METADATA_PATHS:
+            response.headers["Cache-Control"] = "public, max-age=3600"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
     else:
         response.headers["Content-Security-Policy"] = _API_CSP
 

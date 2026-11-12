@@ -1,7 +1,16 @@
 .git
 .env
 .env.*
-backend
+backend/.env
+backend/.env.*
+backend/venv
+backend/.venv
+backend/uploads
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+backend/__pycache__
+**/__pycache__
 backups
 docs
 node_modules

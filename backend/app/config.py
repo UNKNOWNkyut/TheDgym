@@ -97,11 +97,26 @@ class Settings:
             "XENDIT_WEBHOOK_VERIFICATION_TOKEN", ""
         ).strip()
 
-        # CORS (Check 27): fallback to localhost only in development/testing
-        env_origins = _split_csv(os.getenv("CORS_ORIGINS", ""))
-        self.CORS_ORIGINS: List[str] = env_origins or (
-            list(_DEV_CORS_ORIGINS) if self.ENVIRONMENT in ("development", "test") else []
+        # CORS (Check 27): fallback to RENDER_EXTERNAL_URL on Render or localhost in dev/testing
+        render_external_url = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+        render_origins = (
+            [render_external_url]
+            if (
+                render_external_url
+                and "*" not in render_external_url
+                and render_external_url.lower().startswith(("http://", "https://"))
+            )
+            else []
         )
+        env_origins = _split_csv(os.getenv("CORS_ORIGINS", ""))
+        if env_origins:
+            self.CORS_ORIGINS: List[str] = env_origins
+        elif render_origins:
+            self.CORS_ORIGINS = render_origins
+        elif self.ENVIRONMENT in ("development", "test"):
+            self.CORS_ORIGINS = list(_DEV_CORS_ORIGINS)
+        else:
+            self.CORS_ORIGINS = []
 
 
 def validate_settings(cfg: Settings) -> None:

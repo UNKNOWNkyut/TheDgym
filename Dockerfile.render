@@ -1,0 +1,54 @@
+# Multi-stage single-container build for Render Free Tier (Vite React SPA + FastAPI + XGBoost)
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+
+ARG VITE_SITE_URL=https://thedgym.com
+ARG VITE_GOOGLE_CLIENT_ID=
+ENV VITE_SITE_URL=$VITE_SITE_URL \
+    VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
+    VITE_API_BASE_URL=
+
+RUN npm run build
+
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    FRONTEND_DIST_DIR=/app/frontend_dist
+
+# libgomp1 is required by xgboost; ca-certificates ensures TLS verification to Neon & Xendit
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/app ./app
+COPY backend/scripts ./scripts
+COPY --from=frontend-builder /frontend/dist ./frontend_dist
+
+RUN adduser --disabled-password --gecos "" dgym \
+    && mkdir -p /app/uploads \
+    && chown -R dgym:dgym /app
+
+USER dgym
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; port = os.getenv('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{port}/api/health', timeout=3)"]
+
+# Idempotent admin bootstrap (when ADMIN_EMAIL & ADMIN_PASSWORD are provided) + single-worker Uvicorn
+CMD ["sh", "-c", "set -e; if [ -n \"$ADMIN_EMAIL\" ] && [ -n \"$ADMIN_PASSWORD\" ]; then python scripts/create_admin.py; fi; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
