@@ -40,22 +40,11 @@ import {
   resolveUserStorageKey,
   toRoutineExercise,
   type ExerciseItem,
-  type ExperienceType,
   type FocusArea,
-  type GoalType,
   type PlanDraft,
   type RoutineExercise,
   type UserPlanData,
 } from '@/components/plan/planUtils';
-
-export type {
-  ExerciseItem,
-  ExperienceType,
-  FocusArea,
-  GoalType,
-  RoutineExercise,
-  UserPlanData,
-};
 
 type PlanTabId = 'workout' | 'nutrition' | 'library';
 
@@ -880,5 +869,3 @@ function YourPlanWorkspace({
     </>
   );
 }
-
-export default YourPlanPage;

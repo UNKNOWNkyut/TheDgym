@@ -11,7 +11,7 @@ interface SEOProps {
 
 const DEFAULT_SITE_URL = 'https://thedgym.com'
 const RAW_SITE_URL = ((import.meta.env.VITE_SITE_URL as string | undefined) || '').trim().replace(/\/+$/, '')
-export const SITE_URL = /^https?:\/\/[^/\s]+/i.test(RAW_SITE_URL) ? RAW_SITE_URL : DEFAULT_SITE_URL
+const SITE_URL = /^https?:\/\/[^/\s]+/i.test(RAW_SITE_URL) ? RAW_SITE_URL : DEFAULT_SITE_URL
 
 const SITE_NAME = GYM_INFO.name
 const DEFAULT_DESCRIPTION = GYM_INFO.seoDescription

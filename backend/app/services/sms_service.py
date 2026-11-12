@@ -85,11 +85,6 @@ def _extract_ph_digits(raw_phone: Optional[str]) -> Optional[str]:
     return None
 
 
-def normalize_ph_phone(raw_phone: Optional[str]) -> Optional[str]:
-    """Returns standard 11-digit national format: '09XXXXXXXXX'."""
-    return _extract_ph_digits(raw_phone)
-
-
 def normalize_ph_e164(raw_phone: Optional[str]) -> Optional[str]:
     """Returns standard E.164 international format required by TextBee: '+639XXXXXXXXX'."""
     digits = _extract_ph_digits(raw_phone)
@@ -236,61 +231,6 @@ async def get_sms_account_status(force_refresh: bool = False) -> Dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 # Domain Event SMS Helpers (Fail-Safe)
 # ──────────────────────────────────────────────────────────────────────────────
-
-async def notify_pt_booking_status_sms(
-    *,
-    member_name: str,
-    coach_name: str,
-    session_date_str: str,
-    status: str,
-    reason: Optional[str] = None,
-    to_phone: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Sends SMS when a Personal Training session is approved or declined."""
-    if not is_auto_sms_enabled():
-        return {"status": "disabled", "provider": "textbee", "reason": "auto_sms_disabled"}
-    if not to_phone:
-        return {"status": "skipped", "reason": "no_phone"}
-
-    if status.lower() == "confirmed":
-        msg = (
-            f"The DGym Alert: Hello {member_name}! Your 1-on-1 PT session with "
-            f"Coach {coach_name} on {session_date_str} has been APPROVED. "
-            f"See you at The DGym Rosario Batangas!"
-        )
-    elif status.lower() == "rejected":
-        reason_txt = f" Reason: {reason}" if reason else ""
-        msg = (
-            f"The DGym Alert: Hello {member_name}, your PT booking with "
-            f"Coach {coach_name} on {session_date_str} was not approved.{reason_txt} "
-            f"Please rebook via the DGym member portal."
-        )
-    else:
-        return {"status": "skipped", "reason": "unhandled_status"}
-
-    return await send_sms(to_phone, msg)
-
-
-async def notify_membership_activated_sms(
-    *,
-    member_name: str,
-    plan_name: str,
-    member_code: str,
-    to_phone: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Sends Welcome SMS upon new membership payment and activation."""
-    if not is_auto_sms_enabled():
-        return {"status": "disabled", "provider": "textbee", "reason": "auto_sms_disabled"}
-    if not to_phone:
-        return {"status": "skipped", "reason": "no_phone"}
-
-    msg = (
-        f"Welcome to The DGym Rosario Batangas, {member_name}! "
-        f"Your {plan_name} membership is now ACTIVE. "
-        f"Member Code: {member_code}. Use your smart keycard to tap in at the front desk!"
-    )
-    return await send_sms(to_phone, msg)
-
 
 async def notify_retention_offer_sms(
     *,

@@ -1039,4 +1039,3 @@ export function ManageAnalyticsPage() {
     </div>
   )
 }
-export default ManageAnalyticsPage

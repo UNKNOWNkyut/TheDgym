@@ -1,6 +1,6 @@
 type FaceApiModule = typeof import('@vladmandic/face-api')
 
-export interface Point2D {
+interface Point2D {
   x: number
   y: number
 }

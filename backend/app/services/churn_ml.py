@@ -249,11 +249,3 @@ def predict_churn_batch(features_list: List[Dict[str, float]]) -> List[Dict]:
     # Predict probability of churn (class 1)
     probs = model.predict_proba(scaled_matrix)[:, 1]
     return [_build_prediction_result(features, float(prob)) for features, prob in zip(features_list, probs)]
-
-
-def predict_churn(features: Dict[str, float]) -> Dict:
-    """
-    Inference helper for a single member's feature vector.
-    Calculates probability, assigns Risk Tier, and extracts top 3 contributing factors.
-    """
-    return predict_churn_batch([features])[0]

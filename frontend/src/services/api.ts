@@ -10,6 +10,7 @@ import type {
   AppNotification,
   AssignMembershipCreate,
   AtRiskMemberItem,
+  BiometricProvidersStatus,
   CheckoutSessionResponse,
   ChurnOverview,
   ClassEnrollment,
@@ -36,6 +37,7 @@ import type {
   MembershipPlanCreate,
   MembershipSummary,
   MemberStats,
+  OcrScanResponse,
   PairingSessionStatus,
   PaymentVerifyResponse,
   PTSession,
@@ -55,7 +57,7 @@ const LEGACY_TOKEN_STORAGE_KEY = 'dgym_access_token'
 const SESSION_HINT_KEY = 'dgym_session_active'
 const DEFAULT_TIMEOUT_MS = 15_000
 const LONG_TASK_TIMEOUT_MS = 60_000
-export const AUTH_EXPIRED_EVENT = 'dgym:auth-expired'
+const AUTH_EXPIRED_EVENT = 'dgym:auth-expired'
 
 const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
 
@@ -68,7 +70,7 @@ const CREDENTIAL_AUTH_ENDPOINTS = new Set([
   '/api/auth/face/enroll',
 ])
 
-export type RequestOptions = RequestInit & {
+type RequestOptions = RequestInit & {
   timeoutMs?: number
 }
 
@@ -82,7 +84,7 @@ export function hasSessionHint(): boolean {
   return localStorage.getItem(SESSION_HINT_KEY) === '1'
 }
 
-export function setSessionHint(): void {
+function setSessionHint(): void {
   localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
   localStorage.setItem(SESSION_HINT_KEY, '1')
 }
@@ -248,12 +250,12 @@ export const api = {
     })
   },
 
-  async getBiometricProviders(): Promise<import('@/types/auth').BiometricProvidersStatus> {
-    return request<import('@/types/auth').BiometricProvidersStatus>('/api/auth/biometrics/providers')
+  async getBiometricProviders(): Promise<BiometricProvidersStatus> {
+    return request<BiometricProvidersStatus>('/api/auth/biometrics/providers')
   },
 
-  async ocrScanId(imageBase64: string): Promise<import('@/types/auth').OcrScanResponse> {
-    return request<import('@/types/auth').OcrScanResponse>('/api/auth/biometrics/ocr', {
+  async ocrScanId(imageBase64: string): Promise<OcrScanResponse> {
+    return request<OcrScanResponse>('/api/auth/biometrics/ocr', {
       method: 'POST',
       body: JSON.stringify({ image_base64: imageBase64 }),
     })

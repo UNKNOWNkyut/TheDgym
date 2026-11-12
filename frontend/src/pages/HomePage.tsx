@@ -113,9 +113,6 @@ export function HomePage() {
   const [openFaqIndex, setOpenFaqIndex] = useState<number>(1)
   const { theme } = useDotTheme()
   const isLight = theme === 'light'
-  const dotFillClass = isLight
-    ? 'fill-zinc-400/60 md:fill-zinc-500/55'
-    : 'fill-slate-500/25 md:fill-slate-500/35'
   const headingColor = isLight ? 'text-zinc-900' : 'text-white'
   const subTextColor = isLight ? 'text-zinc-600' : 'text-white/65'
 
@@ -246,8 +243,6 @@ export function HomePage() {
             2. INTRO STATEMENT & SPLIT BENTO SHOWCASE (Image 2)
             ============================================================ */}
         <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="intro-heading">
-          <DotPattern className={dotFillClass} />
-
           <div className="container-dgym space-y-16">
             {/* Centered Statement */}
             <div className="reveal-block max-w-3xl mx-auto text-center space-y-6">
@@ -401,8 +396,6 @@ export function HomePage() {
             4. STRUCTURED PROGRAMS & MEMBERSHIP TIERS (Image 4)
             ============================================================ */}
         <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="programs-heading">
-          <DotPattern className={dotFillClass} />
-
           <div className="container-dgym space-y-12">
             {/* Header + Red Circular Nav Arrows */}
             <div className="reveal-block flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -598,8 +591,6 @@ export function HomePage() {
             6. SPLIT FAQ ACCORDION + MONOCHROME PHOTO (Image 6)
             ============================================================ */}
         <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="faq-heading">
-          <DotPattern className={dotFillClass} />
-
           <div className="container-dgym space-y-14">
             {/* Top Split Header */}
             <div className="reveal-block grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">

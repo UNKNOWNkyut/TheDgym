@@ -54,7 +54,7 @@ export interface TokenResponse {
   user: User
 }
 
-export interface LoginUserPreview {
+interface LoginUserPreview {
   id: number
   email: string
   full_name: string
@@ -148,7 +148,7 @@ export type Gender =
   | 'other'
   | 'prefer_not_to_say'
 
-export type MembershipStatus =
+type MembershipStatus =
   | 'active'
   | 'expired'
   | 'cancelled'
@@ -218,12 +218,6 @@ export interface MemberCreate {
 }
 
 
-export interface MemberUpdate extends Partial<MemberCreate> {
-  status?: MemberStatus
-  is_active?: boolean
-}
-
-
 export interface MemberStats {
   total: number
   active: number
@@ -282,8 +276,8 @@ export interface AssignMembershipCreate {
 // ─── Visits, Classes & PT Types (Phase 5) ────────────────────────────────────
 
 export type VisitType = 'walk_in' | 'class' | 'pt_session' | 'open_gym'
-export type ClassType = 'tabata' | 'hiit' | 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'other'
-export type ClassStatus = 'scheduled' | 'ongoing' | 'completed' | 'cancelled'
+type ClassType = 'tabata' | 'hiit' | 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'other'
+type ClassStatus = 'scheduled' | 'ongoing' | 'completed' | 'cancelled'
 export type PTSessionStatus = 'pending' | 'confirmed' | 'scheduled' | 'rejected' | 'completed' | 'cancelled' | 'no_show'
 
 export interface Visit {
@@ -404,11 +398,6 @@ export interface ExpenseCategoryCreate {
   description?: string
 }
 
-export interface ExpenseCategoryUpdate {
-  name?: string
-  description?: string
-  is_active?: boolean
-}
 
 export interface Expense {
   id: number
@@ -441,7 +430,7 @@ export interface ExpenseUpdate {
   receipt_path?: string
 }
 
-export interface ExpenseCategoryTotal {
+interface ExpenseCategoryTotal {
   category_id: number
   category_name: string
   total: string
@@ -460,13 +449,13 @@ export interface FinanceSummary {
 
 // ─── Analytics & Churn Types (Phase 6) ──────────────────────────────────────
 
-export interface HourlyCheckinStat {
+interface HourlyCheckinStat {
   hour: number
   hour_label: string
   count: number
 }
 
-export interface ClassPopularityStat {
+interface ClassPopularityStat {
   name: string
   class_type: string
   total_enrollments: number
@@ -564,7 +553,7 @@ export interface AppNotification {
 
 export type KeycardStatus = 'active' | 'inactive' | 'lost' | 'stolen' | 'revoked'
 
-export type TapDecision =
+type TapDecision =
   | 'granted_check_in'
   | 'granted_check_out'
   | 'already_checked_in'

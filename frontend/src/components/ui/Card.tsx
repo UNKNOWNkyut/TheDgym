@@ -33,25 +33,3 @@ export function Card({
     </div>
   )
 }
-
-interface CardHeaderProps {
-  title: string
-  subtitle?: string
-  action?: ReactNode
-}
-
-export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
-  return (
-    <div className="flex items-start justify-between gap-4 mb-4">
-      <div>
-        <h3 className="font-display text-lg font-semibold uppercase tracking-wide text-white">
-          {title}
-        </h3>
-        {subtitle && (
-          <p className="text-sm text-white/40 mt-0.5">{subtitle}</p>
-        )}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  )
-}

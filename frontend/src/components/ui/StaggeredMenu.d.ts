@@ -34,4 +34,3 @@ export interface StaggeredMenuProps {
 }
 
 export const StaggeredMenu: FC<StaggeredMenuProps>;
-export default StaggeredMenu;

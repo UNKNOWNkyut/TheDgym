@@ -201,7 +201,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <AppErrorBoundary resetKey={pathname}>{children}</AppErrorBoundary>
 }
 
-export function App() {
+function App() {
   return (
     <BrowserRouter>
       <RoutedErrorBoundary>

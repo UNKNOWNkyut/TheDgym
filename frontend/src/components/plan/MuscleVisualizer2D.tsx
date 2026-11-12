@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type FocusArea = 'back' | 'shoulder' | 'arm' | 'chest' | 'abs' | 'butt' | 'leg' | 'full body';
+type FocusArea = 'back' | 'shoulder' | 'arm' | 'chest' | 'abs' | 'butt' | 'leg' | 'full body';
 
 interface MuscleVisualizer2DProps {
   selectedFocus: FocusArea[];
@@ -352,5 +352,3 @@ export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisua
     </div>
   );
 }
-
-export default MuscleVisualizer2D;

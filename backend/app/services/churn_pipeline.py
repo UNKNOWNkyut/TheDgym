@@ -180,15 +180,6 @@ async def _refresh_predictions(
     return updated_preds
 
 
-async def compute_member_features(session: AsyncSession, member_id: int) -> Dict[str, float]:
-    """
-    Computes real-time behavioral features for a specific member by aggregating
-    their visits, subscriptions, and class attendance.
-    """
-    features_by_member = await _compute_features_for_members(session, [member_id])
-    return features_by_member.get(member_id, {})
-
-
 async def refresh_member_churn_prediction(session: AsyncSession, member_id: int) -> Optional[Prediction]:
     """
     Computes features, updates processed_customers, runs XGBoost model,
