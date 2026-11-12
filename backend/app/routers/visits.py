@@ -12,7 +12,7 @@ from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.visit import Visit
-from app.schemas.phase5 import VisitCreate, VisitCheckOut, VisitResponse
+from app.schemas.training_and_visits import VisitCreate, VisitCheckOut, VisitResponse
 from app.services.visit_sweeper import notify_admins_on_checkin, sweep_overdue_open_visits, to_ph_time
 
 router = APIRouter(prefix="/api/visits", tags=["Visits"])

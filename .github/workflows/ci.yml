@@ -64,10 +64,10 @@ jobs:
 
       - run: pip install -r requirements.txt
       - run: python -c "import xgboost, sklearn, asyncpg; print('Runtime imports OK')"
-      - run: python test_config_validation.py
-      - run: python test_xendit_payments_integration.py
-      - run: python test_security_and_scale_regressions.py
-      - run: python test_phase9_qa_integration.py
+      - run: python verify_config.py
+      - run: python verify_xendit_payments.py
+      - run: python verify_security_and_scale.py
+      - run: python verify_gym_workflows.py
       - name: Smoke-test first-admin bootstrap on PostgreSQL
         env:
           ADMIN_EMAIL: ci-admin@thedgym.com

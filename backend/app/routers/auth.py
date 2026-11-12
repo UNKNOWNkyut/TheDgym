@@ -40,7 +40,7 @@ from app.schemas.auth import (
     UserRegister,
     UserResponse,
 )
-from app.seed_members import generate_member_code
+from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
 from app.services.biometrics import (
     FACE_LOGIN_MATCH_THRESHOLD,

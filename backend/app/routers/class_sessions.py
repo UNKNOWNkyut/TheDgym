@@ -12,7 +12,7 @@ from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.class_session import ClassSession, ClassEnrollment, ClassStatus
-from app.schemas.phase5 import (
+from app.schemas.training_and_visits import (
     ClassSessionCreate, ClassSessionUpdate, ClassSessionResponse,
     EnrollMemberCreate, EnrollmentResponse,
 )

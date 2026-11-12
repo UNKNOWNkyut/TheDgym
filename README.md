@@ -42,10 +42,10 @@ cd frontend && npm run lint && npx tsc --noEmit && npm run build
 
 # Backend (hermetic; uses isolated temp DB or TEST_DATABASE_URL)
 cd backend
-python test_config_validation.py
-python test_xendit_payments_integration.py
-python test_security_and_scale_regressions.py
-python test_phase9_qa_integration.py
+python verify_config.py
+python verify_xendit_payments.py
+python verify_security_and_scale.py
+python verify_gym_workflows.py
 ```
 
 ---

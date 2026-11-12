@@ -35,10 +35,10 @@ from app.models.member_membership import MemberMembership, MembershipStatus, Pay
 from app.models.membership_plan import MembershipPlan
 from app.models.user import User, UserRole
 from app.models.visit import Visit
-from app.seed import seed_users
-from app.seed_keycards import seed_keycards
-from app.seed_phase5 import seed_phase5
-from app.seed_plans import seed_plans
+from app.init_users import seed_users
+from app.init_keycards import seed_keycards
+from app.init_training import seed_phase5
+from app.init_plans import seed_plans
 from app.services.access_service import live_feed_manager, runtime_state
 from app.services.overview_kpis import get_manila_now
 

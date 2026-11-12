@@ -29,7 +29,7 @@ from app.models.processed_customer import ProcessedCustomer
 from app.models.raw_transaction import RawTransaction
 from app.models.user import User, UserRole
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
-from app.seed_members import generate_member_code
+from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
 from app.services.overview_kpis import compute_overview_kpis
 

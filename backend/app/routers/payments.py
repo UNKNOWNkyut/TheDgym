@@ -26,7 +26,7 @@ from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
 from app.models.membership_plan import MembershipPlan
 from app.models.user import User, UserRole
-from app.seed_members import generate_member_code
+from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
 from app.services.membership_activation import (
     activate_member_and_notify_on_payment,

@@ -32,11 +32,11 @@ from app.routers import (
     users_router,
     visits_router,
 )
-from app.seed import seed_users
-from app.seed_keycards import seed_keycards
-from app.seed_members import seed_members
-from app.seed_phase5 import seed_phase5
-from app.seed_plans import seed_plans
+from app.init_users import seed_users
+from app.init_keycards import seed_keycards
+from app.init_members import seed_members
+from app.init_training import seed_phase5
+from app.init_plans import seed_plans
 from app.services.audit import redact_sensitive_text
 from app.services.churn_pipeline import seed_simulated_gym_analytics
 from app.services.visit_sweeper import sweep_overdue_open_visits

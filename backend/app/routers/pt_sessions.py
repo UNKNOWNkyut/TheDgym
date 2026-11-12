@@ -5,14 +5,14 @@ from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.seed_members import generate_member_code
+from app.init_members import generate_member_code
 
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
 from app.models.pt_session import PTSession, PTSessionStatus
-from app.schemas.phase5 import (
+from app.schemas.training_and_visits import (
     PTSessionCreate,
     PTSessionBookCreate,
     PTSessionApprove,
