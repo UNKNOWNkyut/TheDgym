@@ -137,6 +137,15 @@ def run_all() -> None:
     assert neon_url == "postgresql+asyncpg://user:pass@ep-demo.ap-southeast-1.aws.neon.tech/neondb"
     assert neon_args == {"ssl": "require"}
 
+    pooler_url, pooler_args = prepare_async_database_config(
+        "postgresql://user:pass@ep-demo-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    )
+    assert pooler_url == "postgresql+asyncpg://user:pass@ep-demo-pooler.ap-southeast-1.aws.neon.tech/neondb"
+    assert pooler_args["ssl"] == "require"
+    assert pooler_args["statement_cache_size"] == 0
+    assert pooler_args["prepared_statement_cache_size"] == 0
+    assert pooler_args["prepared_statement_name_func"]().startswith("__asyncpg_")
+
     render_db_url, render_db_args = prepare_async_database_config(
         "postgres://u:p@dpg-demo:5432/thedgym?sslmode=disable&application_name=dgym"
     )

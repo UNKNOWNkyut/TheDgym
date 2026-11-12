@@ -1,6 +1,7 @@
 import ssl
 from typing import Any, AsyncGenerator, Tuple
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -44,6 +45,12 @@ def prepare_async_database_config(raw_url: str) -> Tuple[str, dict[str, Any]]:
             else:
                 kept_params.append((key, value))
         url = urlunsplit(parts._replace(query=urlencode(kept_params)))
+
+    if parts.scheme.lower() == "postgresql+asyncpg" and "-pooler." in (parts.hostname or "").lower():
+        # Neon PgBouncer transaction poolers cannot reuse numeric asyncpg prepared statement names across hops
+        connect_args["statement_cache_size"] = 0
+        connect_args["prepared_statement_cache_size"] = 0
+        connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid4()}__"
 
     return url, connect_args
 
