@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
-import { AlertCircle, CheckCircle2, Eye, RefreshCw, ScanFace } from 'lucide-react'
+import { AlertCircle, Camera, CheckCircle2, Eye, RefreshCw, ScanFace } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 import {
@@ -273,7 +273,18 @@ export function FaceLivenessStep({
           />
         )}
 
-        {(!cameraReady || !modelsReady || submitting) && (
+        {!submitting && localError && (!cameraReady || !modelsReady) && (
+          <div className="absolute inset-0 bg-surface-2/95 flex flex-col items-center justify-center gap-3 p-5 text-center">
+            <Camera className="w-8 h-8 text-white/35" />
+            <p className="text-xs text-white/65 max-w-xs leading-relaxed">{localError}</p>
+            <Button type="button" variant="secondary" size="sm" onClick={handleRetry}>
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry Camera
+            </Button>
+          </div>
+        )}
+
+        {(submitting || (!localError && (!cameraReady || !modelsReady))) && (
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center">
             <QuarterRing className="w-10 h-10 text-red" />
             <p className="text-xs font-mono uppercase tracking-widest text-white/80">

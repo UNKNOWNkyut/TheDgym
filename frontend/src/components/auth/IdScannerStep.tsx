@@ -322,9 +322,19 @@ export function IdScannerStep({
               </div>
             )}
             {cameraError && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-5 text-center bg-surface-2/95">
-                <Camera className="w-8 h-8 text-white/35 mb-2" />
-                <p className="text-xs text-white/65 max-w-xs">{cameraError}</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center bg-surface-2/95">
+                <Camera className="w-8 h-8 text-white/35" />
+                <p className="text-xs text-white/65 max-w-xs leading-relaxed">{cameraError}</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={scanning}
+                  onClick={() => void connectCamera(facingMode)}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Retry Camera
+                </Button>
               </div>
             )}
           </>
