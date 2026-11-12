@@ -62,7 +62,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - run: pip install --no-cache-dir -r requirements.txt
+      - run: pip install -r requirements.txt
       - run: python -c "import xgboost, sklearn, asyncpg; print('Runtime imports OK')"
       - run: python test_config_validation.py
       - run: python test_xendit_payments_integration.py
