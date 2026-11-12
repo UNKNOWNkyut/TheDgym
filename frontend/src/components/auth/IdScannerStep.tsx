@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 import { api } from '@/services/api'
 import type { SupportedIdType } from '@/types/auth'
-import { extractIdFaceDescriptor, toCompressedJpegDataUrl } from '@/utils/faceBiometrics'
+import { describeCameraError, extractIdFaceDescriptor, toCompressedJpegDataUrl } from '@/utils/faceBiometrics'
 import { ID_TYPE_OPTIONS, parsePhilippineIdText, scanPhilippineId } from '@/utils/phIdOcr'
 
 gsap.registerPlugin()
@@ -107,9 +107,9 @@ export function IdScannerStep({
       }
       setCameraError(null)
       setCameraReady(true)
-    } catch {
+    } catch (err) {
       setCameraReady(false)
-      setCameraError('Could not access camera. Allow camera permissions or upload an ID photo below.')
+      setCameraError(describeCameraError(err, 'id'))
     }
   }, [])
 

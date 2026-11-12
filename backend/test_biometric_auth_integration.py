@@ -265,6 +265,7 @@ async def run_suite() -> None:
 
             r_prov_off = await ac.get("/api/auth/biometrics/providers")
             assert r_prov_off.status_code == 200
+            assert "camera=(self)" in r_prov_off.headers.get("permissions-policy", "")
             assert r_prov_off.json()["ocr_api_configured"] is False
             assert r_prov_off.json()["face_api_configured"] is False
 

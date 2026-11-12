@@ -41,6 +41,24 @@ export function toCompressedJpegDataUrl(
 
 export const ID_SELFIE_MATCH_LIMIT = 0.62
 
+/** Convert getUserMedia DOMException codes into actionable camera instructions. */
+export function describeCameraError(err: unknown, context: 'id' | 'face'): string {
+  const errName = err instanceof DOMException || err instanceof Error ? err.name : ''
+  const suffix =
+    context === 'id' ? 'You can also use "Upload Photo" below.' : 'Please connect/allow a webcam and click Retry.'
+
+  if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+    return `No webcam detected on this device. ${suffix}`
+  }
+  if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+    return `Camera is currently in use by another app. Close the other app and retry. ${suffix}`
+  }
+  if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+    return `Camera access was blocked by browser or OS settings. ${suffix}`
+  }
+  return `Could not access camera${errName ? ` (${errName})` : ''}. ${suffix}`
+}
+
 let faceApiPromise: Promise<FaceApiModule> | null = null
 let modelsLoadPromise: Promise<FaceApiModule> | null = null
 

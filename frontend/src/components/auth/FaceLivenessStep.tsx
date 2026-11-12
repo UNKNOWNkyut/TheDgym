@@ -8,6 +8,7 @@ import {
   ID_SELFIE_MATCH_LIMIT,
   analyzeFaceFrame,
   captureLiveFaceDescriptor,
+  describeCameraError,
   euclideanDistance,
   loadFaceModels,
 } from '@/utils/faceBiometrics'
@@ -111,9 +112,9 @@ export function FaceLivenessStep({
       setLocalError(null)
       setCameraReady(true)
       setStatusHint('Center your face inside the ring, then blink once or turn your head slightly.')
-    } catch {
+    } catch (err) {
       setCameraReady(false)
-      setLocalError('Camera permission denied or no webcam found. Please allow camera access and retry.')
+      setLocalError(describeCameraError(err, 'face'))
     }
   }, [])
 
