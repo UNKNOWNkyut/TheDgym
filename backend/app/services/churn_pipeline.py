@@ -216,27 +216,27 @@ async def seed_simulated_gym_analytics(session: AsyncSession):
 
     # List of realistic member profiles representing different churn personas
     sample_members_data = [
-        # --- LOW RISK (Consistent Lifters: High frequency, low recency) ---
+        # LOW RISK (Consistent Lifters: High frequency, low recency)
         {"code": "DGM-1001", "first": "Carlos", "last": "Dimaandal", "email": "carlos.d@gmail.com", "tier": "LOW", "days_rec": 1, "freq": 4.5, "tenure": 180, "visits_30": 18},
         {"code": "DGM-1002", "first": "Bea", "last": "Villanueva", "email": "bea.v@gmail.com", "tier": "LOW", "days_rec": 2, "freq": 3.8, "tenure": 120, "visits_30": 15},
         {"code": "DGM-1003", "first": "Jayson", "last": "Macalalad", "email": "jayson.m@gmail.com", "tier": "LOW", "days_rec": 1, "freq": 5.0, "tenure": 240, "visits_30": 20},
         {"code": "DGM-1004", "first": "Patricia", "last": "Ilagan", "email": "patricia.i@gmail.com", "tier": "LOW", "days_rec": 3, "freq": 3.2, "tenure": 90, "visits_30": 13},
         {"code": "DGM-1005", "first": "Renz", "last": "Catapang", "email": "renz.c@gmail.com", "tier": "LOW", "days_rec": 2, "freq": 4.0, "tenure": 150, "visits_30": 16},
 
-        # --- MEDIUM RISK (Casual / Inconsistent Lifters) ---
+        # MEDIUM RISK (Casual / Inconsistent Lifters)
         {"code": "DGM-1006", "first": "Jerome", "last": "Cueto", "email": "jerome.c@gmail.com", "tier": "MEDIUM", "days_rec": 8, "freq": 1.8, "tenure": 65, "visits_30": 6},
         {"code": "DGM-1007", "first": "Maricar", "last": "Marasigan", "email": "maricar.m@gmail.com", "tier": "MEDIUM", "days_rec": 9, "freq": 1.5, "tenure": 80, "visits_30": 5},
         {"code": "DGM-1008", "first": "Aldrin", "last": "De Chavez", "email": "aldrin.dc@gmail.com", "tier": "MEDIUM", "days_rec": 10, "freq": 2.0, "tenure": 45, "visits_30": 7},
         {"code": "DGM-1009", "first": "Kristine", "last": "Perez", "email": "kristine.p@gmail.com", "tier": "MEDIUM", "days_rec": 7, "freq": 1.4, "tenure": 110, "visits_30": 5},
 
-        # --- LOW / MEDIUM RISK (Active attendance) ---
+        # LOW / MEDIUM RISK (Active attendance)
         {"code": "DGM-1010", "first": "Eduardo", "last": "Batumbakal", "email": "eduardo.b@gmail.com", "tier": "LOW", "days_rec": 2, "freq": 3.8, "tenure": 120, "visits_30": 16},
         {"code": "DGM-1011", "first": "Camille", "last": "Bautista", "email": "camille.b@gmail.com", "tier": "MEDIUM", "days_rec": 6, "freq": 2.0, "tenure": 80, "visits_30": 8},
         {"code": "DGM-1012", "first": "Francis", "last": "Castillo", "email": "francis.c@gmail.com", "tier": "LOW", "days_rec": 3, "freq": 3.5, "tenure": 100, "visits_30": 15},
         {"code": "DGM-1013", "first": "Stephanie", "last": "Mercado", "email": "stephanie.m@gmail.com", "tier": "MEDIUM", "days_rec": 5, "freq": 2.2, "tenure": 90, "visits_30": 9},
         {"code": "DGM-1014", "first": "Danilo", "last": "Gutierrez", "email": "danilo.g@gmail.com", "tier": "LOW", "days_rec": 1, "freq": 4.1, "tenure": 110, "visits_30": 17},
 
-        # --- THE ONLY HIGH RISK MEMBER (Dennis Verano for testing) ---
+        # THE ONLY HIGH RISK MEMBER (Dennis Verano for testing)
         {"code": "DGM-1015", "first": "Dennis", "last": "Verano", "email": "dennisverano258@gmail.com", "phone": "09628532768", "tier": "HIGH", "days_rec": 25, "freq": 0.2, "tenure": 85, "visits_30": 1},
     ]
 

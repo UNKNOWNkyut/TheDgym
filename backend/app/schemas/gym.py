@@ -8,9 +8,7 @@ from app.models.member_membership import MembershipStatus, PaymentMethod
 from app.schemas.common_types import UtcDatetime
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Member Schemas (Checks 16 & 51)
-# ──────────────────────────────────────────────────────────────────────────────
 
 class MemberCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -80,9 +78,7 @@ class MemberResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Membership Plan Schemas
-# ──────────────────────────────────────────────────────────────────────────────
 
 class MembershipPlanCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -121,9 +117,7 @@ class MembershipPlanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Member Membership (Assign Plan) Schemas
-# ──────────────────────────────────────────────────────────────────────────────
 
 class AssignMembershipCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")

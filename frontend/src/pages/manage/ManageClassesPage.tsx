@@ -8,7 +8,7 @@ import { CLASS_TYPE_LABELS } from '@/constants/coaches'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import type { ClassSession, Member, TrainerProfile } from '@/types/auth'
 
-// ─── Types & Helpers ──────────────────────────────────────────────────────────
+// Types & Helpers
 
 const CLASS_STATUS_COLORS: Record<string, string> = {
   scheduled: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
@@ -17,7 +17,7 @@ const CLASS_STATUS_COLORS: Record<string, string> = {
   cancelled: 'text-red-400 bg-red-400/10 border-red-400/20',
 }
 
-// ─── Session Card ─────────────────────────────────────────────────────────────
+// Session Card
 
 function SessionCard({
   session,
@@ -217,7 +217,7 @@ function SessionCard({
   )
 }
 
-// ─── Create Session Modal ─────────────────────────────────────────────────────
+// Create Session Modal
 
 function CreateSessionModal({
   trainerOptions,
@@ -410,7 +410,7 @@ function CreateSessionModal({
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// Main Page
 
 export function ManageClassesPage() {
   const [sessions, setSessions] = useState<ClassSession[]>([])

@@ -38,9 +38,7 @@ _cached_textbee_time: float = 0.0
 _ACCOUNT_CACHE_TTL_SECONDS: float = 60.0
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Configuration Getters
-# ──────────────────────────────────────────────────────────────────────────────
 
 def get_textbee_api_key() -> str:
     """Returns the TextBee REST API key from environment."""
@@ -60,9 +58,7 @@ def is_auto_sms_enabled() -> bool:
     return os.getenv("AUTO_SMS_ENABLED", "false").strip().lower() in {"1", "true", "yes"}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Philippine Phone Number Normalization
-# ──────────────────────────────────────────────────────────────────────────────
 
 def _extract_ph_digits(raw_phone: Optional[str]) -> Optional[str]:
     """Helper to extract clean 11 digits starting with 09."""
@@ -93,9 +89,7 @@ def normalize_ph_e164(raw_phone: Optional[str]) -> Optional[str]:
     return None
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # TextBee SMS Dispatcher
-# ──────────────────────────────────────────────────────────────────────────────
 
 async def send_sms(
     to_phone: str,
@@ -154,9 +148,7 @@ async def send_sms(
         return {"status": "error", "provider": "textbee", "message": str(exc)}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Gateway Health Check & Status
-# ──────────────────────────────────────────────────────────────────────────────
 
 async def get_sms_account_status(force_refresh: bool = False) -> Dict[str, Any]:
     """
@@ -228,9 +220,7 @@ async def get_sms_account_status(force_refresh: bool = False) -> Dict[str, Any]:
         }
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Domain Event SMS Helpers (Fail-Safe)
-# ──────────────────────────────────────────────────────────────────────────────
 
 async def notify_retention_offer_sms(
     *,

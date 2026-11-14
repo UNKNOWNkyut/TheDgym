@@ -36,9 +36,7 @@ export function MemberAccountMenu({ user, onLogout }: MemberAccountMenuProps) {
   const [open, setOpen] = useState(false)
   const [profile, setProfile] = useState<AccountProfile | null>(null)
 
-  // ======================================================
   // LOAD MEMBER PROFILE
-  // ======================================================
   useEffect(() => {
     let active = true
 
@@ -57,9 +55,7 @@ export function MemberAccountMenu({ user, onLogout }: MemberAccountMenuProps) {
     }
   }, [location.pathname])
 
-  // ======================================================
   // REFRESH SIDEBAR PROFILE
-  // ======================================================
   useEffect(() => {
     const refreshProfile = () => {
       api
@@ -76,9 +72,7 @@ export function MemberAccountMenu({ user, onLogout }: MemberAccountMenuProps) {
     }
   }, [])
 
-  // ======================================================
   // CLOSE MENU WHEN CLICKING OUTSIDE
-  // ======================================================
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -97,9 +91,7 @@ export function MemberAccountMenu({ user, onLogout }: MemberAccountMenuProps) {
 
   return (
     <div ref={menuRef} className="relative p-4 border-t border-white/8 bg-surface-2/40">
-      {/* ==================================================
-          SETTINGS DROPDOWN
-      ================================================== */}
+      {/* SETTINGS DROPDOWN */}
       {open && (
         <div className="absolute bottom-[calc(100%-8px)] left-4 right-4 z-20 overflow-hidden rounded-xl border border-white/10 bg-surface shadow-2xl shadow-black/50">
           <div className="border-b border-white/8 px-3 py-2.5">
@@ -141,9 +133,7 @@ export function MemberAccountMenu({ user, onLogout }: MemberAccountMenuProps) {
         </div>
       )}
 
-      {/* ==================================================
-          MEMBER DISPLAY
-      ================================================== */}
+      {/* MEMBER DISPLAY */}
       <div className="flex items-center gap-3">
         {/* AVATAR */}
         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-red text-white shadow-sm">

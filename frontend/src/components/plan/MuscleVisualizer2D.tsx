@@ -98,7 +98,7 @@ export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisua
           className="w-full h-auto max-h-[330px] sm:max-h-[355px] max-w-[420px] overflow-visible"
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* ==================== FRONT VIEW (LEFT) ==================== */}
+          {/* FRONT VIEW (LEFT) */}
           <g id="front-figure">
             {/* 1. BASE SILHOUETTE (Light Grey #b5b5b5 for head, joints, fascia) */}
             <g id="front-silhouette">
@@ -230,7 +230,7 @@ export function MuscleVisualizer2D({ selectedFocus, onToggleFocus }: MuscleVisua
             </g>
           </g>
 
-          {/* ==================== BACK VIEW (RIGHT) ==================== */}
+          {/* BACK VIEW (RIGHT) */}
           <g id="back-figure">
             {/* 1. BASE SILHOUETTE (Light Grey #b5b5b5) */}
             <g id="back-silhouette">

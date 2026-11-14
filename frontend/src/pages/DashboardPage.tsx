@@ -494,9 +494,7 @@ function MemberPortalDashboard({ user }: MemberPortalProps) {
           )}
         </div>
 
-        {/* =========================================================================
-            CONDITIONAL VIEW: ACTIVE MEMBER
-        ========================================================================= */}
+        {/* CONDITIONAL VIEW: ACTIVE MEMBER */}
         {viewMode === 'ACTIVE' && (
           <div className="space-y-8 animate-fade-in">
             {/* Top Summary Cards backed by verified auth & API data */}
@@ -837,9 +835,7 @@ function MemberPortalDashboard({ user }: MemberPortalProps) {
           </div>
         )}
 
-        {/* =========================================================================
-            CONDITIONAL VIEW: REGISTERED / INACTIVE USER
-        ========================================================================= */}
+        {/* CONDITIONAL VIEW: REGISTERED / INACTIVE USER */}
         {viewMode === 'INACTIVE' && (
           <div className="space-y-8 animate-fade-in">
             {/* Membership Activation Steps & Status Notice */}

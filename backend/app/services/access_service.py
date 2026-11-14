@@ -47,9 +47,7 @@ EXPIRING_SOON_DAYS = 5
 PAIRING_MODE_TTL_SECS = 90
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Smart Pairing Session State
-# ──────────────────────────────────────────────────────────────────────────────
 
 class AccessRuntimeState:
     def __init__(self) -> None:
@@ -90,9 +88,7 @@ class AccessRuntimeState:
 runtime_state = AccessRuntimeState()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Real-Time WebSocket Connection Manager
-# ──────────────────────────────────────────────────────────────────────────────
 
 class AccessFeedConnectionManager:
     def __init__(self) -> None:
@@ -273,9 +269,7 @@ async def bind_card_to_member(
     return new_card
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 1. Core Automatic Tap Verification & Log Pipeline
-# ──────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class _TapContext:
@@ -501,7 +495,7 @@ async def _check_card_and_member_status(
     """Steps 2–3: reject lost/stolen/revoked cards and inactive or suspended member profiles."""
     uid_masked = ctx.uid_masked
 
-    # ── Step 2: Keycard Status Check (Lost / Stolen / Revoked) ───────────────
+    # Step 2: Keycard Status Check (Lost / Stolen / Revoked)
     if keycard.status in (KeycardStatus.LOST, KeycardStatus.STOLEN):
         await record_audit_log(
             ctx.db,
@@ -535,7 +529,7 @@ async def _check_card_and_member_status(
             member_obj=member,
         )
 
-    # ── Step 3: Member Profile Status Check ──────────────────────────────────
+    # Step 3: Member Profile Status Check
     if not member.is_active or member.status == MemberStatus.INACTIVE:
         return await _finalize_tap(
             ctx,
@@ -890,12 +884,12 @@ async def process_card_tap(
         started_at=started_at,
     )
 
-    # ── Edge Case #4: Intercept Tap if Smart Pairing Mode is Active! ─────────
+    # Edge Case #4: Intercept Tap if Smart Pairing Mode is Active!
     paired = await _handle_pairing_tap(ctx)
     if paired is not None:
         return paired
 
-    # ── Normal Check-In / Check-Out Lookup ───────────────────────────────────
+    # Normal Check-In / Check-Out Lookup
     stmt = (
         select(MemberKeycard)
         .where(MemberKeycard.card_uid_hash == hash_card_uid(raw_uid))
@@ -908,7 +902,7 @@ async def process_card_tap(
     keycard = (await db.execute(stmt)).scalar_one_or_none()
     ctx.keycard = keycard
 
-    # ── Step 1: Unregistered Card Check ──────────────────────────────────────
+    # Step 1: Unregistered Card Check
     if not keycard or not keycard.member:
         return await _finalize_tap(
             ctx,
@@ -920,22 +914,22 @@ async def process_card_tap(
 
     member = keycard.member
 
-    # ── Steps 2–3: Keycard & Member Profile Status ───────────────────────────
+    # Steps 2–3: Keycard & Member Profile Status
     denied = await _check_card_and_member_status(ctx, keycard, member)
     if denied is not None:
         return denied
 
-    # ── Step 4: Active Membership Verification (PH End-of-Day Aware) ─────────
+    # Step 4: Active Membership Verification (PH End-of-Day Aware)
     valid_active, pending, expired = _classify_memberships(member, now)
     if not valid_active:
         return await _deny_without_active_membership(ctx, member, pending, expired)
 
     plan = _summarize_active_plan(valid_active, now)
 
-    # ── Step 5: 10-Min Check-In Cooldown & 5-Min Post-Checkout Cooldown ──────
+    # Step 5: 10-Min Check-In Cooldown & 5-Min Post-Checkout Cooldown
     early_response = await _apply_cooldown_or_checkout(ctx, member, plan)
     if early_response is not None:
         return early_response
 
-    # ── Step 6: Create Automatic Check-In Visit + Notify Admin ───────────────
+    # Step 6: Create Automatic Check-In Visit + Notify Admin
     return await _create_check_in(ctx, member, plan)

@@ -5,9 +5,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# =========================================================
 # EXPENSE CATEGORIES
-# =========================================================
 
 class ExpenseCategoryCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -54,9 +52,7 @@ class ExpenseCategoryResponse(BaseModel):
         from_attributes = True
 
 
-# =========================================================
 # EXPENSES
-# =========================================================
 
 class ExpenseCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -139,9 +135,7 @@ class ExpenseResponse(BaseModel):
     updated_at: datetime
 
 
-# =========================================================
 # FINANCIAL SUMMARY
-# =========================================================
 
 class ExpenseCategoryTotal(BaseModel):
     category_id: int

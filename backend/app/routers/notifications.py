@@ -168,9 +168,7 @@ async def mark_all_notifications_read(
     return {"status": "success", "updated_count": result.rowcount or 0}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # SMS Notification Endpoints (Admin & Staff via TextBee Android Gateway)
-# ──────────────────────────────────────────────────────────────────────────────
 
 class TestSmsRequest(BaseModel):
     phone: str = Field(..., description="Philippine mobile number (e.g. 09171234567, +639171234567)")

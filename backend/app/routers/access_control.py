@@ -58,9 +58,7 @@ router = APIRouter(prefix="/api", tags=["Smart Keycard Access Control"])
 rate_limit_tap = require_rate_limit("rfid_tap", max_requests=120, window_seconds=60)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Helper: Dual Auth (Staff JWT OR Hardware X-Scanner-API-Key)
-# ──────────────────────────────────────────────────────────────────────────────
 
 async def authenticate_tap_caller(
     request: Request,
@@ -101,9 +99,7 @@ async def authenticate_tap_caller(
     return user, None
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 0. Smart Pairing Mode Endpoints
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/access/pairing-session", response_model=PairingSessionStatus)
 async def get_pairing_session_status(
@@ -215,9 +211,7 @@ async def webhook_card_tap(
     )
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 2. Real-Time WebSocket Live Feed for Reception & Mobile Scanner Screens
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.websocket("/access/ws/live-feed")
 async def websocket_access_live_feed(
@@ -282,9 +276,7 @@ async def websocket_access_live_feed(
         await live_feed_manager.disconnect(websocket)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 3. Tap Audit Log History
-# ──────────────────────────────────────────────────────────────────────────────
 
 GRANTED_DECISIONS = {
     TapDecision.GRANTED_CHECK_IN,
@@ -348,9 +340,7 @@ async def list_keycard_tap_logs(
     return results
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 4. Member Keycard Pairing, Listing & Revocation
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get(
     "/members/{member_id}/keycards",
@@ -472,9 +462,7 @@ async def update_keycard_status(
     return keycard
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 5. Hardware Scanner Provisioning
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get(
     "/access/scanners",

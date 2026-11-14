@@ -2,10 +2,8 @@
 
 @custom-variant dark (&:where([data-dot-theme="dark"], [data-dot-theme="dark"] *, .dark, .dark *));
 
-/* ============================================================
-   THE DGYM — Global CSS
-   Design tokens from DESIGN.md
-   ============================================================ */
+/* THE DGYM — Global CSS
+   Design tokens from DESIGN.md */
 
 @theme {
   /* --- Colors --- */
@@ -53,9 +51,7 @@
   --transition-slow: 500ms ease;
 }
 
-/* ============================================================
-   Base Resets & Defaults
-   ============================================================ */
+/* Base Resets & Defaults */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -77,9 +73,7 @@ body {
   overflow-x: hidden;
 }
 
-/* ============================================================
-   Typography
-   ============================================================ */
+/* Typography */
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
@@ -93,9 +87,7 @@ p {
   max-width: 65ch;
 }
 
-/* ============================================================
-   Focus Styles — Accessible and Visible
-   ============================================================ */
+/* Focus Styles — Accessible and Visible */
 
 :focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.5);
@@ -103,9 +95,7 @@ p {
   border-radius: 4px;
 }
 
-/* ============================================================
-   Skip to Content — Accessibility
-   ============================================================ */
+/* Skip to Content — Accessibility */
 
 .skip-to-content {
   position: absolute;
@@ -126,9 +116,7 @@ p {
   top: 0;
 }
 
-/* ============================================================
-   Scrollbar Styling
-   ============================================================ */
+/* Scrollbar Styling */
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -148,18 +136,14 @@ p {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* ============================================================
-   Selection
-   ============================================================ */
+/* Selection */
 
 ::selection {
   background: rgba(229, 32, 26, 0.35);
   color: #ffffff;
 }
 
-/* ============================================================
-   Utility Classes
-   ============================================================ */
+/* Utility Classes */
 
 /* Container */
 .container-dgym {
@@ -212,9 +196,7 @@ p {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
-/* ============================================================
-   Skeleton Shimmer Animation
-   ============================================================ */
+/* Skeleton Shimmer Animation */
 
 @keyframes shimmer {
   0% { background-position: -468px 0; }
@@ -232,9 +214,7 @@ p {
   animation: shimmer 1.8s ease infinite;
 }
 
-/* ============================================================
-   Print Stylesheet (Phase 2 will expand this)
-   ============================================================ */
+/* Print Stylesheet (Phase 2 will expand this) */
 
 @media print {
   body {

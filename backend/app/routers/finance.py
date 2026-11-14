@@ -48,9 +48,7 @@ ANNUAL_MONTH_NAMES = [
 ]
 
 
-# =========================================================
 # HELPER FUNCTIONS
-# =========================================================
 
 def _expense_to_response(expense: Expense) -> ExpenseResponse:
     return ExpenseResponse(
@@ -104,9 +102,7 @@ async def _load_expense_or_404(db: AsyncSession, expense_id: int) -> Expense:
     return expense
 
 
-# =========================================================
 # EXPENSE CATEGORIES
-# =========================================================
 
 @router.get("/categories", response_model=List[ExpenseCategoryResponse])
 async def list_expense_categories(
@@ -200,9 +196,7 @@ async def deactivate_expense_category(
     await db.commit()
 
 
-# =========================================================
 # EXPENSES
-# =========================================================
 
 @router.get("/expenses", response_model=List[ExpenseResponse])
 async def list_expenses(
@@ -336,9 +330,7 @@ async def archive_expense(
     await db.commit()
 
 
-# =========================================================
 # FINANCIAL SUMMARY
-# =========================================================
 
 @router.get("/summary", response_model=FinanceSummaryResponse)
 async def get_finance_summary(

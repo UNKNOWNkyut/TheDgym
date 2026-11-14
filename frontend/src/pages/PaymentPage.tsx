@@ -196,9 +196,7 @@ export function PaymentPage() {
             <span>{backLabel}</span>
           </Link>
 
-          {/* ─────────────────────────────────────────────────────────────
-              CASE 1: RETURN FROM XENDIT CHECKOUT
-          ───────────────────────────────────────────────────────────── */}
+          {/* CASE 1: RETURN FROM XENDIT CHECKOUT */}
           {statusParam === 'success' ? (
             (() => {
               const isConfirmed = Boolean(verifyResult?.membership_activated)
@@ -358,9 +356,7 @@ export function PaymentPage() {
               )
             })()
           ) : statusParam === 'failed' ? (
-            /* ─────────────────────────────────────────────────────────────
-                CASE 2: FAILED OR CANCELLED CHECKOUT
-            ───────────────────────────────────────────────────────────── */
+            /* CASE 2: FAILED OR CANCELLED CHECKOUT */
             <div className="rounded-2xl border border-white/10 bg-surface p-8 md:p-10 space-y-8 shadow-[0_0_50px_rgba(239,68,68,0.06)]">
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 rounded-2xl border border-red-500/20 bg-red-500/10 flex items-center justify-center mx-auto text-red-400">
@@ -397,9 +393,7 @@ export function PaymentPage() {
               </div>
             </div>
           ) : (
-            /* ─────────────────────────────────────────────────────────────
-                CASE 3: ACTIVE CHECKOUT INTERFACE
-            ───────────────────────────────────────────────────────────── */
+            /* CASE 3: ACTIVE CHECKOUT INTERFACE */
             <div className="rounded-2xl border border-white/10 bg-surface p-8 md:p-10 space-y-8">
               {/* Header Title */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-white/10">

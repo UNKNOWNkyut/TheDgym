@@ -1,4 +1,4 @@
-// ─── Auth Types ──────────────────────────────────────────────────────────────
+// Auth Types
 
 export type UserRole = 'admin' | 'staff' | 'trainer' | 'member'
 
@@ -133,7 +133,7 @@ export interface AuthContextType {
 }
 
 
-// ─── Gym Management Types ────────────────────────────────────────────────────
+// Gym Management Types
 
 export type MemberStatus =
   | 'active'
@@ -272,7 +272,7 @@ export interface AssignMembershipCreate {
 }
 
 
-// ─── Visits, Classes & PT Types (Phase 5) ────────────────────────────────────
+// Visits, Classes & PT Types (Phase 5)
 
 export type VisitType = 'walk_in' | 'class' | 'pt_session' | 'open_gym'
 type ClassType = 'tabata' | 'hiit' | 'barbell_club' | 'conditioning' | 'open_gym' | 'powerlifting' | 'strength' | 'other'
@@ -380,7 +380,7 @@ export interface TrainerProfile {
 }
 
 
-// ─── Finance Types ────────────────────────────────────────────────────────────
+// Finance Types
 
 export interface ExpenseCategory {
   id: number
@@ -446,7 +446,7 @@ export interface FinanceSummary {
 }
 
 
-// ─── Analytics & Churn Types (Phase 6) ──────────────────────────────────────
+// Analytics & Churn Types (Phase 6)
 
 interface HourlyCheckinStat {
   hour: number
@@ -548,7 +548,7 @@ export interface AppNotification {
 }
 
 
-// ─── Smart Keycard Access Control Types ──────────────────────────────────────
+// Smart Keycard Access Control Types
 
 export type KeycardStatus = 'active' | 'inactive' | 'lost' | 'stolen' | 'revoked'
 

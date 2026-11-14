@@ -32,9 +32,7 @@ from app.services.membership_activation import (
 router = APIRouter(tags=["Membership Plans & Assignments"])
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # MEMBERSHIP PLANS
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/api/plans", response_model=List[MembershipPlanResponse])
 async def list_plans(
@@ -120,9 +118,7 @@ async def deactivate_plan(
     await db.commit()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # MEMBERSHIP ASSIGNMENTS
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _build_membership_response(ms: MemberMembership) -> MembershipResponse:
     plan_name = ms.plan.name if ms.plan else "Unknown"

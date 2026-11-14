@@ -9,9 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.member import Member, MemberStatus, Gender
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # PLACEHOLDER MEMBERS — For development/testing only
-# ─────────────────────────────────────────────────────────────────────────────
 PLACEHOLDER_MEMBERS = [
     {
         "first_name": "Juan",

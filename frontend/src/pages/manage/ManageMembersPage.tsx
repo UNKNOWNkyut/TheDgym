@@ -388,9 +388,7 @@ export function ManageMembersPage() {
           </div>
         </div>
 
-        {/* ===================================================================
-            DEACTIVATE CONFIRMATION MODAL (Rendered to document.body via Portal)
-        =================================================================== */}
+        {/* DEACTIVATE CONFIRMATION MODAL (Rendered to document.body via Portal) */}
         {deactivateTarget &&
           createPortal(
             <div
@@ -467,9 +465,7 @@ export function ManageMembersPage() {
             document.body,
           )}
 
-        {/* ===================================================================
-            REACTIVATE CONFIRMATION MODAL (Rendered to document.body via Portal)
-        =================================================================== */}
+        {/* REACTIVATE CONFIRMATION MODAL (Rendered to document.body via Portal) */}
         {reactivateTarget &&
           createPortal(
             <div
@@ -546,9 +542,7 @@ export function ManageMembersPage() {
             document.body,
           )}
 
-        {/* ===================================================================
-            DELETE MEMBER CONFIRMATION MODAL (Rendered to document.body via Portal)
-        =================================================================== */}
+        {/* DELETE MEMBER CONFIRMATION MODAL (Rendered to document.body via Portal) */}
         {deleteTarget &&
           createPortal(
             <div

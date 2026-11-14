@@ -54,9 +54,7 @@ def _resolve_active_plan_name(memberships: Optional[List[MemberMembership]]) -> 
     return chosen.plan.name if chosen else None
 
 
-# ============================================================================
 # 1. GYM ATTENDANCE & OPERATIONS ANALYTICS
-# ============================================================================
 
 @router.get(
     "/api/analytics/overview",
@@ -183,9 +181,7 @@ async def get_analytics_overview(
     )
 
 
-# ============================================================================
 # 2. CHURN PREDICTION & RETENTION OVERVIEW
-# ============================================================================
 
 @router.get(
     "/api/churn/overview",
@@ -219,9 +215,7 @@ async def get_churn_overview(
     )
 
 
-# ============================================================================
 # 3. AT-RISK MEMBERS ROSTER TABLE
-# ============================================================================
 
 @router.get(
     "/api/churn/members",
@@ -298,9 +292,7 @@ async def list_churn_members(
     return results
 
 
-# ============================================================================
 # 4. SINGLE MEMBER CHURN DIAGNOSIS
-# ============================================================================
 
 @router.get(
     "/api/churn/member/{member_id}",
@@ -358,9 +350,7 @@ async def get_member_churn_detail(
     )
 
 
-# ============================================================================
 # 5. RETRAIN & REFRESH PIPELINE
-# ============================================================================
 
 @router.post(
     "/api/churn/retrain",

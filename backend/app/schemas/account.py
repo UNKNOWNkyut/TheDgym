@@ -13,9 +13,7 @@ from pydantic import (
 from app.models.user import UserRole
 
 
-# =========================================================
 # PROFILE
-# =========================================================
 
 class AccountProfileResponse(BaseModel):
     id: int
@@ -95,9 +93,7 @@ class AccountProfileUpdate(BaseModel):
         return cleaned or None
 
 
-# =========================================================
 # CHANGE PASSWORD
-# =========================================================
 
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -131,9 +127,7 @@ class ChangePasswordRequest(BaseModel):
         return self
 
 
-# =========================================================
 # OTHER RESPONSES
-# =========================================================
 
 class ProfilePictureResponse(BaseModel):
     profile_picture_url: Optional[str] = None

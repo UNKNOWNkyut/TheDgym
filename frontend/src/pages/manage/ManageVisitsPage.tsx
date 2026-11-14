@@ -11,7 +11,7 @@ import type { Visit, VisitType, Member, KeycardTapLog } from '@/types/auth'
 
 gsap.registerPlugin()
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 const VISIT_TYPE_LABELS: Record<string, string> = {
   walk_in: 'Walk-In',
@@ -27,7 +27,7 @@ const VISIT_TYPE_COLORS: Record<string, string> = {
   open_gym: 'text-green-400 bg-green-400/10 border-green-400/20',
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// Sub-components
 
 function CheckInPanel({
   memberOptions,
@@ -194,7 +194,7 @@ function VisitRow({ visit, onCheckOut }: { visit: Visit; onCheckOut: (id: number
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// Main Page
 
 export function ManageVisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([])

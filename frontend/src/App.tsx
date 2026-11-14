@@ -11,7 +11,7 @@ import { QuarterRing } from '@/components/ui/quarter-ring'
 import { HomePage } from '@/pages/HomePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
-// ─── Public Pages ─────────────────────────────────────────────────────────────
+// Public Pages
 const AboutPage = lazy(() => import('@/pages/AboutPage').then((m) => ({ default: m.AboutPage })))
 const MembershipPage = lazy(() => import('@/pages/MembershipPage').then((m) => ({ default: m.MembershipPage })))
 const ClassesPage = lazy(() => import('@/pages/ClassesPage').then((m) => ({ default: m.ClassesPage })))
@@ -24,7 +24,7 @@ const LoginPage = lazy(() => import('@/pages/LoginPage').then((m) => ({ default:
 const RegisterPage = lazy(() => import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
 const PaymentPage = lazy(() => import('@/pages/PaymentPage').then((m) => ({ default: m.PaymentPage })))
 
-// ─── Portal & Management Pages ────────────────────────────────────────────────
+// Portal & Management Pages
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then((m) => ({ default: m.MemberSettingsPage })))
 const YourPlanPage = lazy(() => import('@/pages/YourPlanPage').then((m) => ({ default: m.YourPlanPage })))
@@ -208,10 +208,8 @@ function App() {
         <AuthProvider>
           <Suspense fallback={<PageFallback />}>
           <Routes>
-            {/* ============================================================
-                STANDALONE MEMBER SETTINGS
-                No ManagementLayout = no left sidebar
-            ============================================================ */}
+            {/* STANDALONE MEMBER SETTINGS
+                No ManagementLayout = no left sidebar */}
             <Route
               path="/settings"
               element={
@@ -221,9 +219,7 @@ function App() {
               }
             />
 
-            {/* ============================================================
-                PUBLIC WEBSITE
-            ============================================================ */}
+            {/* PUBLIC WEBSITE */}
             <Route element={<RootLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/about" element={<AboutPage />} />
@@ -240,9 +236,7 @@ function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Route>
 
-            {/* ============================================================
-                AUTHENTICATED DASHBOARD / MANAGEMENT PORTAL
-            ============================================================ */}
+            {/* AUTHENTICATED DASHBOARD / MANAGEMENT PORTAL */}
             <Route
               element={
                 <ProtectedRoute>

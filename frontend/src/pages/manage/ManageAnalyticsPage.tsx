@@ -192,7 +192,7 @@ export function ManageAnalyticsPage() {
   return (
     <div ref={containerRef} className="space-y-8 py-4">
       <SEO title="Analytics & Churn" description="The DGym operational analytics and churn insights." noIndex />
-      {/* ─── Header & Model Action ────────────────────────────────────────── */}
+      {/* Header & Model Action */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/10 pb-6">
         <div>
           <span className="text-xs uppercase tracking-widest text-red-500 font-mono font-semibold">
@@ -261,7 +261,7 @@ export function ManageAnalyticsPage() {
         </div>
       )}
 
-      {/* ─── Top Executive KPIs ────────────────────────────────────────────── */}
+      {/* Top Executive KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Retention Health Rate */}
         <div className="analytics-card p-5 rounded-xl border border-white/10 bg-[#0c0c0e] hover:border-white/20 transition-all">
@@ -334,7 +334,7 @@ export function ManageAnalyticsPage() {
         </div>
       </div>
 
-      {/* ─── Visual Graphs: Peak Density & Risk Breakdown ──────────────────── */}
+      {/* Visual Graphs: Peak Density & Risk Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Hourly Check-In Density Bar Chart */}
         <div className="analytics-card lg:col-span-2 p-6 rounded-xl border border-white/10 bg-[#0c0c0e] flex flex-col justify-between">
@@ -491,7 +491,7 @@ export function ManageAnalyticsPage() {
         </div>
       </div>
 
-      {/* ─── At-Risk Member Roster Section ─────────────────────────────────── */}
+      {/* At-Risk Member Roster Section */}
       <div className="analytics-card space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -707,7 +707,7 @@ export function ManageAnalyticsPage() {
         </div>
       </div>
 
-      {/* ─── Member Diagnosis & AI Retention Modal ────────────────────────────── */}
+      {/* Member Diagnosis & AI Retention Modal */}
       {selectedMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="relative w-full max-w-2xl rounded-2xl border border-white/15 bg-[#121215] p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
@@ -777,7 +777,7 @@ export function ManageAnalyticsPage() {
               </div>
             )}
 
-            {/* ─── TAB 1: AI RETENTION STRATEGY & OFFER ──────────────────────────── */}
+            {/* TAB 1: AI RETENTION STRATEGY & OFFER */}
             {activeModalTab === 'RETENTION' && (
               <div className="space-y-4">
                 {isGeneratingStrategy ? (
@@ -920,7 +920,7 @@ export function ManageAnalyticsPage() {
               </div>
             )}
 
-            {/* ─── TAB 2: DIAGNOSTIC SIGNALS & ML VECTOR ────────────────────────── */}
+            {/* TAB 2: DIAGNOSTIC SIGNALS & ML VECTOR */}
             {activeModalTab === 'DIAGNOSIS' && (
               <div className="space-y-4">
                 {/* Risk Tier & Score */}

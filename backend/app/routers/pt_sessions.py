@@ -25,9 +25,7 @@ from app.schemas.training_and_visits import (
 router = APIRouter(prefix="/api/pt-sessions", tags=["PT Sessions"])
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Helper Functions
-# ──────────────────────────────────────────────────────────────────────────────
 
 def _format_pt_session(s: PTSession) -> dict:
     trainer_name = None
@@ -101,9 +99,7 @@ async def _get_or_create_member_for_user(user: User, db: AsyncSession) -> Member
     return member
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Public / Member Accessible Endpoints
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/trainers", response_model=List[TrainerPublicResponse])
 async def list_available_trainers(
@@ -269,9 +265,7 @@ async def cancel_my_booking(
     return _format_pt_session(loaded)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Coach & Staff Approval / Management Endpoints
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.patch("/{session_id}/approve", response_model=PTSessionResponse)
 async def approve_pt_booking(
@@ -338,9 +332,7 @@ async def reject_pt_booking(
     return _format_pt_session(loaded)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # General Staff PT Session Management
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=PTSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_pt_session(

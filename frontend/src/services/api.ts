@@ -234,7 +234,7 @@ async function request<T>(
 }
 
 export const api = {
-  // ─── Authentication ───────────────────────────────────────────────────────
+  // Authentication
 
   async login(credentials: LoginCredentials): Promise<LoginChallengeResponse> {
     return request<LoginChallengeResponse>('/api/auth/login', {
@@ -324,7 +324,7 @@ export const api = {
     })
   },
 
-  // ─── Account Profile & Security ──────────────────────────────────────────
+  // Account Profile & Security
 
   async getProfile(): Promise<AccountProfile> {
     return request<AccountProfile>('/api/account/profile')
@@ -359,7 +359,7 @@ export const api = {
     })
   },
 
-  // ─── Members ─────────────────────────────────────────────────────────────
+  // Members
 
   async getMembers(params?: {
     search?: string
@@ -397,7 +397,7 @@ export const api = {
     return request<Member>(`/api/members/${id}/reactivate`, { method: 'POST' })
   },
 
-  // ─── Membership Plans ────────────────────────────────────────────────────
+  // Membership Plans
 
   async getPlans(): Promise<MembershipPlan[]> {
     return request<MembershipPlan[]>('/api/plans')
@@ -421,7 +421,7 @@ export const api = {
     return request<void>(`/api/plans/${id}`, { method: 'DELETE' })
   },
 
-  // ─── Membership Assignments ──────────────────────────────────────────────
+  // Membership Assignments
 
   async assignMembership(data: AssignMembershipCreate): Promise<MembershipSummary> {
     return request<MembershipSummary>('/api/memberships', {
@@ -430,7 +430,7 @@ export const api = {
     })
   },
 
-  // ─── Visits ────────────────────────────────────────────────────────────────
+  // Visits
 
   async checkInMember(data: VisitCreate): Promise<Visit> {
     return request<Visit>('/api/visits', {
@@ -456,7 +456,7 @@ export const api = {
     return request<Visit[]>(`/api/visits${buildQuery(params)}`)
   },
 
-  // ─── Class Sessions ─────────────────────────────────────────────────────────
+  // Class Sessions
 
   async getClassSessions(params?: {
     status?: string
@@ -510,7 +510,7 @@ export const api = {
     })
   },
 
-  // ─── PT Sessions ─────────────────────────────────────────────────────────────
+  // PT Sessions
 
   async getPTSessions(params?: {
     trainer_id?: number
@@ -575,7 +575,7 @@ export const api = {
     })
   },
 
-  // ─── Finance: Categories ─────────────────────────────────────────────────
+  // Finance: Categories
 
   async getExpenseCategories(includeInactive = false): Promise<ExpenseCategory[]> {
     return request<ExpenseCategory[]>(
@@ -594,7 +594,7 @@ export const api = {
     return request<void>(`/api/finance/categories/${id}`, { method: 'DELETE' })
   },
 
-  // ─── Finance: Expenses ───────────────────────────────────────────────────
+  // Finance: Expenses
 
   async getExpenses(params?: {
     search?: string
@@ -626,7 +626,7 @@ export const api = {
     return request<void>(`/api/finance/expenses/${id}`, { method: 'DELETE' })
   },
 
-  // ─── Finance Summary ─────────────────────────────────────────────────────
+  // Finance Summary
 
   async getFinanceSummary(year: number, month?: number): Promise<FinanceSummary> {
     return request<FinanceSummary>(`/api/finance/summary${buildQuery({ year, month })}`)
@@ -642,7 +642,7 @@ export const api = {
     return request(`/api/finance/annual${buildQuery({ year })}`)
   },
 
-  // ─── Analytics & Churn Prediction (Phase 6) ──────────────────────────────
+  // Analytics & Churn Prediction (Phase 6)
 
   async getAnalyticsOverview(): Promise<AnalyticsOverview> {
     return request<AnalyticsOverview>('/api/analytics/overview')
@@ -677,7 +677,7 @@ export const api = {
     })
   },
 
-  // ─── AI Retention Strategies & Notifications (Phase 7) ───────────────────
+  // AI Retention Strategies & Notifications (Phase 7)
 
   async generateRetentionStrategy(memberId: number): Promise<RetentionStrategy> {
     return request<RetentionStrategy>(`/api/retention/generate/${memberId}`, {
@@ -733,7 +733,7 @@ export const api = {
     return request('/api/notifications/clear-all', { method: 'DELETE' })
   },
 
-  // ─── SMS Integration (TextBee Gateway) ─────────────────────────────────
+  // SMS Integration (TextBee Gateway)
 
   async getSmsStatus(): Promise<{
     configured: boolean
@@ -759,7 +759,7 @@ export const api = {
     })
   },
 
-  // ─── Smart Keycard Access Control ────────────────────────────────────────
+  // Smart Keycard Access Control
 
   async verifyKeycardTap(cardUid: string, scannerId?: number): Promise<TapVerificationResult> {
     return request<TapVerificationResult>('/api/access/tap', {

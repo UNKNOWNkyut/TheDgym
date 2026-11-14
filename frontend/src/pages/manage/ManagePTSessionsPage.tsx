@@ -7,7 +7,7 @@ import { SEO } from '@/components/ui/SEO'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
 import type { PTSession, Member, TrainerProfile } from '@/types/auth'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
@@ -19,7 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
   no_show: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
 }
 
-// ─── PT Session Row ───────────────────────────────────────────────────────────
+// PT Session Row
 
 function PTRow({ session, onUpdate }: { session: PTSession; onUpdate: () => void }) {
   const [updating, setUpdating] = useState(false)
@@ -143,7 +143,7 @@ function PTRow({ session, onUpdate }: { session: PTSession; onUpdate: () => void
   )
 }
 
-// ─── Create PT Session Modal (Direct Staff Schedule) ──────────────────────────
+// Create PT Session Modal (Direct Staff Schedule)
 
 function CreatePTModal({
   memberOptions,
@@ -307,7 +307,7 @@ function CreatePTModal({
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// Main Page
 
 export function ManagePTSessionsPage() {
   const { user } = useAuth()

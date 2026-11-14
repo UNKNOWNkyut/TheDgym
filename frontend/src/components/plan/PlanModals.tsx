@@ -24,9 +24,7 @@ export function ExerciseDetailModal({
   if (!exercise) return null;
 
   return (
-    /* =========================================================================
-       EXERCISE DETAIL MODAL WITH 3D GIF & ENGLISH INSTRUCTIONS
-    ========================================================================= */
+    /* EXERCISE DETAIL MODAL WITH 3D GIF & ENGLISH INSTRUCTIONS */
     <div
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in"
       onClick={onClose}
@@ -141,9 +139,7 @@ export function MembershipRequiredModal({
   if (!open) return null;
 
   return (
-    /* =========================================================================
-       MEMBERSHIP PLAN REQUIRED MODAL (FOR REGISTERED USERS ON "START NOW")
-    ========================================================================= */
+    /* MEMBERSHIP PLAN REQUIRED MODAL (FOR REGISTERED USERS ON "START NOW") */
     <div
       className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in"
       onClick={onClose}
@@ -228,9 +224,7 @@ export function AddExerciseToRoutineModal({
   if (!exercise) return null;
 
   return (
-    /* =========================================================================
-       ADD EXERCISE TO ROUTINE MODAL (Clean, page-level overlay without clipping)
-    ========================================================================= */
+    /* ADD EXERCISE TO ROUTINE MODAL (Clean, page-level overlay without clipping) */
     <div
       className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
       onClick={onClose}

@@ -17,9 +17,7 @@ import { Input } from '@/components/ui/Input'
 import { SEO } from '@/components/ui/SEO'
 import type { AccountProfile } from '@/types/account'
 
-// ======================================================
 // HELPERS
-// ======================================================
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-PH', {
@@ -38,32 +36,24 @@ function getInitials(name: string) {
     .join('')
 }
 
-// ======================================================
 // PAGE
-// ======================================================
 
 export function MemberSettingsPage() {
   const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  // ======================================================
   // PROFILE
-  // ======================================================
 
   const [profile, setProfile] = useState<AccountProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [pageError, setPageError] = useState('')
 
-  // ======================================================
   // EDIT MODE
-  // ======================================================
 
   const [isEditing, setIsEditing] = useState(false)
 
-  // ======================================================
   // PROFILE FIELDS
-  // ======================================================
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -73,17 +63,13 @@ export function MemberSettingsPage() {
   const [profileMessage, setProfileMessage] = useState('')
   const [profileError, setProfileError] = useState('')
 
-  // ======================================================
   // PROFILE PICTURE
-  // ======================================================
 
   const [pictureUploading, setPictureUploading] = useState(false)
   const [pictureMessage, setPictureMessage] = useState('')
   const [pictureError, setPictureError] = useState('')
 
-  // ======================================================
   // CHANGE PASSWORD MODAL
-  // ======================================================
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -96,9 +82,7 @@ export function MemberSettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState('')
   const [passwordError, setPasswordError] = useState('')
 
-  // ======================================================
   // LOAD PROFILE
-  // ======================================================
 
   useEffect(() => {
     let active = true
@@ -131,9 +115,7 @@ export function MemberSettingsPage() {
     }
   }, [])
 
-  // ======================================================
   // PASSWORD MODAL
-  // ======================================================
 
   const openPasswordModal = () => {
     setCurrentPassword('')
@@ -161,9 +143,7 @@ export function MemberSettingsPage() {
     setShowConfirmPassword(false)
   }, [passwordSaving])
 
-  // ======================================================
   // ESC CLOSE PASSWORD MODAL
-  // ======================================================
 
   useEffect(() => {
     if (!passwordModalOpen) return
@@ -180,18 +160,14 @@ export function MemberSettingsPage() {
     }
   }, [passwordModalOpen, closePasswordModal])
 
-  // ======================================================
   // EMAIL CHANGED?
-  // ======================================================
 
   const emailChanged = useMemo(() => {
     if (!profile) return false
     return email.trim().toLowerCase() !== profile.email.toLowerCase()
   }, [email, profile])
 
-  // ======================================================
   // START EDITING
-  // ======================================================
 
   const startEditing = () => {
     if (!profile) return
@@ -207,9 +183,7 @@ export function MemberSettingsPage() {
     setIsEditing(true)
   }
 
-  // ======================================================
   // CANCEL EDITING
-  // ======================================================
 
   const cancelEditing = () => {
     if (profile) {
@@ -227,9 +201,7 @@ export function MemberSettingsPage() {
     setIsEditing(false)
   }
 
-  // ======================================================
   // SAVE PROFILE
-  // ======================================================
 
   const handleProfileSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -279,18 +251,14 @@ export function MemberSettingsPage() {
     }
   }
 
-  // ======================================================
   // AVATAR CLICK
-  // ======================================================
 
   const handleAvatarClick = () => {
     if (!isEditing || pictureUploading) return
     fileInputRef.current?.click()
   }
 
-  // ======================================================
   // PROFILE PICTURE UPLOAD
-  // ======================================================
 
   const handlePictureSelect = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -329,9 +297,7 @@ export function MemberSettingsPage() {
     }
   }
 
-  // ======================================================
   // CHANGE PASSWORD
-  // ======================================================
 
   const handlePasswordChange = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -373,9 +339,7 @@ export function MemberSettingsPage() {
     }
   }
 
-  // ======================================================
   // AUTH
-  // ======================================================
 
   if (!user) {
     return null
@@ -386,9 +350,7 @@ export function MemberSettingsPage() {
       <SEO title="Account Settings" description="Manage your DGYM member profile." />
 
       <div className="min-h-screen bg-black text-white">
-        {/* ==================================================
-            TOP HEADER
-        ================================================== */}
+        {/* TOP HEADER */}
         <header className="border-b border-white/8 bg-surface/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 md:px-8">
             <div className="flex items-center gap-3">
@@ -430,9 +392,7 @@ export function MemberSettingsPage() {
           </div>
         </header>
 
-        {/* ==================================================
-            PAGE CONTENT
-        ================================================== */}
+        {/* PAGE CONTENT */}
         <main className="mx-auto max-w-5xl px-4 py-8 md:px-8 md:py-12">
           {/* TITLE */}
           <div className="mb-8">
@@ -454,15 +414,11 @@ export function MemberSettingsPage() {
             </div>
           )}
 
-          {/* ==================================================
-              LOADING
-          ================================================== */}
+          {/* LOADING */}
           {loading ? (
             <div className="h-[430px] animate-pulse rounded-xl border border-white/8 bg-surface" />
           ) : profile ? (
-            /* ==================================================
-                PROFILE CARD
-            ================================================== */
+            /* PROFILE CARD */
             <Card className="relative p-6 md:p-8">
               {/* CARD HEADER */}
               <div className="mb-7 flex items-start justify-between gap-4">
@@ -502,13 +458,9 @@ export function MemberSettingsPage() {
                 )}
               </div>
 
-              {/* ==================================================
-                  PROFILE GRID
-              ================================================== */}
+              {/* PROFILE GRID */}
               <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
-                {/* ==================================================
-                    AVATAR
-                ================================================== */}
+                {/* AVATAR */}
                 <div>
                   <input
                     ref={fileInputRef}
@@ -573,9 +525,7 @@ export function MemberSettingsPage() {
                   </div>
                 </div>
 
-                {/* ==================================================
-                    PROFILE DETAILS
-                ================================================== */}
+                {/* PROFILE DETAILS */}
                 <div className="min-w-0">
                   {profileMessage && (
                     <div className="mb-5 rounded-lg border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
@@ -589,9 +539,7 @@ export function MemberSettingsPage() {
                     </div>
                   )}
 
-                  {/* ==================================================
-                      EDIT MODE
-                  ================================================== */}
+                  {/* EDIT MODE */}
                   {isEditing ? (
                     <form onSubmit={handleProfileSave} className="space-y-5">
                       <div className="grid gap-5 md:grid-cols-2">
@@ -629,9 +577,7 @@ export function MemberSettingsPage() {
                         />
                       )}
 
-                      {/* ==================================================
-                          CHANGE PASSWORD INSIDE EDIT MODE
-                      ================================================== */}
+                      {/* CHANGE PASSWORD INSIDE EDIT MODE */}
                       <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
                         <div className="flex items-center justify-between gap-4">
                           <div>
@@ -667,9 +613,7 @@ export function MemberSettingsPage() {
                       </div>
                     </form>
                   ) : (
-                    /* ==================================================
-                        READ ONLY MODE
-                    ================================================== */
+                    /* READ ONLY MODE */
                     <div className="space-y-1">
                       {/* FULL NAME */}
                       <div className="grid gap-3 border-b border-white/8 py-4 sm:grid-cols-[170px_minmax(0,1fr)] sm:items-center">
@@ -730,9 +674,7 @@ export function MemberSettingsPage() {
           ) : null}
         </main>
 
-        {/* ==================================================
-            FLOATING CHANGE PASSWORD MODAL
-        ================================================== */}
+        {/* FLOATING CHANGE PASSWORD MODAL */}
         {passwordModalOpen && (
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-sm"
@@ -840,9 +782,7 @@ export function MemberSettingsPage() {
   )
 }
 
-// ======================================================
 // PASSWORD INPUT WITH EYE ICON
-// ======================================================
 
 interface PasswordFieldProps {
   label: string

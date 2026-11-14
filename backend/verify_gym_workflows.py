@@ -135,7 +135,7 @@ async def run_phase9_suite() -> None:
                 await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
-        # ── Suite 1: Double-run Seeder Idempotency ────────────────────────────
+        # Suite 1: Double-run Seeder Idempotency
         for _ in range(2):
             async with SessionLocal() as db:
                 await seed_users(db)
@@ -200,7 +200,7 @@ async def run_phase9_suite() -> None:
         today_manila = manila_now.date()
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            # ── Suite 2: All 7 Plans & All 6 Official Payment Methods ─────────
+            # Suite 2: All 7 Plans & All 6 Official Payment Methods
             r_plans = await ac.get("/api/plans")
             assert r_plans.status_code == 200
             api_plans = r_plans.json()
@@ -239,7 +239,7 @@ async def run_phase9_suite() -> None:
 
             print("[PASS] 2. All 7 official membership rates & 6 payment methods verified E2E")
 
-            # ── Suite 3: Coaches, 90m Boxing PT Package & 6PM Class Enrollment ─
+            # Suite 3: Coaches, 90m Boxing PT Package & 6PM Class Enrollment
             r_tr = await ac.get("/api/pt-sessions/trainers", headers=member_hdrs)
             assert r_tr.status_code == 200
             tr_list = r_tr.json()
@@ -274,7 +274,7 @@ async def run_phase9_suite() -> None:
 
             print("[PASS] 3. Coaches, 90-min Boxing PT booking/approval, and 6PM TABATA enrollment verified")
 
-            # ── Suite 4: The 9 Core Business KPIs & Finance Summary Parity ────
+            # Suite 4: The 9 Core Business KPIs & Finance Summary Parity
             # Add a renewal (2nd paid plan for created_member_ids[0] expiring in 4 days -> upcoming_expirations_7d)
             monthly_plan = next(p for p in api_plans if p["slug"] == "monthly")
             async with SessionLocal() as db:
@@ -352,7 +352,7 @@ async def run_phase9_suite() -> None:
 
             print("[PASS] 4. All 9 core business KPIs, profit/loss finance parity, and RBAC redaction verified")
 
-            # ── Suite 5: All 6 NFC Smart Keycard Tap Flows + WebSocket Feed ───
+            # Suite 5: All 6 NFC Smart Keycard Tap Flows + WebSocket Feed
             target_member_id = created_member_ids[1]
             async with SessionLocal() as db:
                 m_pend = Member(member_code="DGM-9901", first_name="Pend", last_name="Gate", status=MemberStatus.ACTIVE, is_active=True)
@@ -436,7 +436,7 @@ async def run_phase9_suite() -> None:
             assert {"pairing_mode_changed", "keycard_paired", "pairing_conflict", "keycard_tap"}.issubset(seen_events)
             print("[PASS] 5. All 6 NFC Smart Keycard tap flows, WebSocket broadcasts, and webhook auth verified")
 
-        # ── Suite 6: Frontend Constants & Zero-Placeholder Integrity ──────────
+        # Suite 6: Frontend Constants & Zero-Placeholder Integrity
         verify_frontend_constants_and_placeholders()
         print("[PASS] 6. Frontend constants & zero-[PLACEHOLDER] integrity verified")
 

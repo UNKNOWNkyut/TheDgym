@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 
 gsap.registerPlugin(ScrollTrigger)
 
-// --- Structured Program Cards (Image 4 Essence) ---
+// Structured Program Cards (Image 4 Essence)
 const PROGRAM_CARDS = [
   {
     title: 'Strength & Barbell Program',
@@ -47,7 +47,7 @@ const PROGRAM_CARDS = [
   },
 ] as const
 
-// --- Pillars Bento Data (Image 3 Essence) ---
+// Pillars Bento Data (Image 3 Essence)
 const PILLAR_CARDS = [
   {
     tag: 'STRENGTH & POWERLIFTING',
@@ -66,7 +66,7 @@ const PILLAR_CARDS = [
   },
 ] as const
 
-// --- Home FAQ Data (Image 6 Essence) ---
+// Home FAQ Data (Image 6 Essence)
 const DAY_PASS_PRICE =
   PUBLIC_PLANS.find((plan) => plan.slug === 'day-pass')?.priceFormatted ?? '₱400'
 
@@ -169,9 +169,7 @@ export function HomePage() {
         ogImage="/assets/images/dgym_bg.jpg"
       />
 
-      {/* ============================================================
-          1. HERO — Framed Rounded-3xl Monochrome & Red Showcase (Image 1)
-          ============================================================ */}
+      {/* 1. HERO — Framed Rounded-3xl Monochrome & Red Showcase (Image 1) */}
       <section
         ref={heroRef}
         className="px-3 sm:px-6 pb-8"
@@ -239,9 +237,7 @@ export function HomePage() {
       </section>
 
       <div ref={sectionsRef} className="space-y-8">
-        {/* ============================================================
-            2. INTRO STATEMENT & SPLIT BENTO SHOWCASE (Image 2)
-            ============================================================ */}
+        {/* 2. INTRO STATEMENT & SPLIT BENTO SHOWCASE (Image 2) */}
         <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="intro-heading">
           <div className="container-dgym space-y-16">
             {/* Centered Statement */}
@@ -328,9 +324,7 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ============================================================
-            3. DARK BENTO PILLARS — Move Better / Recover Better (Image 3)
-            ============================================================ */}
+        {/* 3. DARK BENTO PILLARS — Move Better / Recover Better (Image 3) */}
         <section className="px-3 sm:px-6" aria-labelledby="pillars-heading">
           <div className="reveal-block relative rounded-3xl overflow-hidden border border-white/10 bg-[#09090b] py-16 md:py-24 px-6 sm:px-12">
             {/* Subtle blurred monochrome backdrop */}
@@ -392,9 +386,7 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ============================================================
-            4. STRUCTURED PROGRAMS & MEMBERSHIP TIERS (Image 4)
-            ============================================================ */}
+        {/* 4. STRUCTURED PROGRAMS & MEMBERSHIP TIERS (Image 4) */}
         <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="programs-heading">
           <div className="container-dgym space-y-12">
             {/* Header + Red Circular Nav Arrows */}
@@ -544,9 +536,7 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ============================================================
-            5. DOT PATTERN CTA — "Not sure where to start?" (Image 5)
-            ============================================================ */}
+        {/* 5. DOT PATTERN CTA — "Not sure where to start?" (Image 5) */}
         <section className="px-3 sm:px-6" aria-labelledby="start-cta-heading">
           <div className="reveal-block relative rounded-3xl overflow-hidden border border-white/10 bg-[#09090b] py-28 md:py-40 px-6">
             <DotPattern
@@ -587,9 +577,7 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ============================================================
-            6. SPLIT FAQ ACCORDION + MONOCHROME PHOTO (Image 6)
-            ============================================================ */}
+        {/* 6. SPLIT FAQ ACCORDION + MONOCHROME PHOTO (Image 6) */}
         <section className="relative py-20 md:py-28 overflow-hidden" aria-labelledby="faq-heading">
           <div className="container-dgym space-y-14">
             {/* Top Split Header */}
