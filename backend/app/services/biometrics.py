@@ -85,7 +85,7 @@ def mask_and_hash_id_number(
     visible = normalized[-4:] if len(normalized) > 4 else normalized[-2:]
     masked = f"{'*' * max(2, len(normalized) - len(visible))}{visible}"
     digest = hmac.new(
-        settings.JWT_SECRET_KEY.encode("utf-8"),
+        settings.BIOMETRIC_HMAC_SECRET.encode("utf-8"),
         normalized.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()

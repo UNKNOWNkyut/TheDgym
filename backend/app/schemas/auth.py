@@ -9,7 +9,7 @@ class UserRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=128, description="Password must be 6 to 128 characters")
+    password: str = Field(..., min_length=8, max_length=128, description="Password must be 8 to 128 characters")
     full_name: str = Field(..., min_length=2, max_length=150, description="Full name of the user")
     phone: Optional[str] = Field(None, max_length=32)
     plan_slug: Optional[str] = Field(None, max_length=100)
@@ -40,7 +40,7 @@ class UserCreateAdmin(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=128)
+    password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., min_length=2, max_length=150)
     phone: Optional[str] = Field(None, max_length=32)
     role: UserRole = UserRole.MEMBER
@@ -73,8 +73,7 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    token_type: str = "cookie"
     user: UserResponse
 
 
@@ -118,7 +117,7 @@ class FaceEnrollRequest(BaseModel):
 class OcrScanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    image_base64: str = Field(..., min_length=64, max_length=2_200_000)
+    image_base64: str = Field(..., min_length=64, max_length=1_100_000)
 
 
 class OcrScanResponse(BaseModel):

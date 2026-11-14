@@ -55,13 +55,14 @@ async def run_suite() -> None:
     csrf_headers = {"X-Requested-With": "XMLHttpRequest"}
 
     from app.config import settings
-    from app.core.rate_limit import rate_limiter
+    from app.core.rate_limit import reset_rate_limit_state
 
     orig_keys = (settings.OCR_SPACE_API_KEY, settings.FACEPP_API_KEY, settings.FACEPP_API_SECRET)
     settings.OCR_SPACE_API_KEY = ""
     settings.FACEPP_API_KEY = ""
     settings.FACEPP_API_SECRET = ""
-    rate_limiter._buckets.clear()
+    async with SessionLocal() as rl_reset_sess:
+        await reset_rate_limit_state(rl_reset_sess)
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -69,7 +70,22 @@ async def run_suite() -> None:
             vec_alice_near = [v + 0.01 for v in vec_alice]
             vec_impostor = _make_unit_descriptor(9.5, dim_shift=17)
 
-            # 1. Registration fails closed without liveness or mismatched ID selfie
+            # 1. Registration fails closed on <8 char passwords, missing liveness, or mismatched ID selfie
+            r_short_pw = await ac.post(
+                "/api/auth/register",
+                headers=csrf_headers,
+                json={
+                    "email": "shortpw@example.com",
+                    "password": "Pass123",
+                    "full_name": "Short Pass",
+                    "face_descriptor": vec_alice,
+                    "liveness_passed": True,
+                    "id_type": "philsys",
+                    "id_face_match_score": 0.25,
+                },
+            )
+            assert r_short_pw.status_code == 422
+
             r_no_live = await ac.post(
                 "/api/auth/register",
                 headers=csrf_headers,
@@ -120,6 +136,7 @@ async def run_suite() -> None:
             )
             assert r_reg.status_code == 201, r_reg.text
             reg_body = r_reg.json()
+            assert "access_token" not in reg_body
             assert reg_body["user"]["face_enrolled"] is True
             assert "access_token" in r_reg.cookies
 
@@ -132,6 +149,17 @@ async def run_suite() -> None:
                 assert bio.id_type == "philsys"
                 assert bio.id_number_masked == "************3456"
                 assert bio.id_number_hash and "1234567890123456" not in bio.id_number_hash
+                assert bio.reference_selfie_b64 is None
+                from app.services.biometrics import mask_and_hash_id_number
+                orig_jwt, orig_bio = settings.JWT_SECRET_KEY, settings.BIOMETRIC_HMAC_SECRET
+                try:
+                    settings.BIOMETRIC_HMAC_SECRET = "dedicated-biometric-hmac-secret-32chars!!"
+                    _, h1 = mask_and_hash_id_number("1234-5678-9012-3456")
+                    settings.JWT_SECRET_KEY = "rotated-jwt-secret-different-value-32ch!!"
+                    _, h2 = mask_and_hash_id_number("1234-5678-9012-3456")
+                    assert h1 == h2
+                finally:
+                    settings.JWT_SECRET_KEY, settings.BIOMETRIC_HMAC_SECRET = orig_jwt, orig_bio
             await ac.post("/api/auth/logout", headers=csrf_headers)
             ac.cookies.clear()
             print("[PASS] 2. Registration creates masked/hashed biometric profile & issues session")
@@ -191,6 +219,7 @@ async def run_suite() -> None:
                 },
             )
             assert r_verify.status_code == 200, r_verify.text
+            assert "access_token" not in r_verify.json()
             assert r_verify.json()["user"]["email"] == "alice@example.com"
             assert "access_token" in r_verify.cookies
 
@@ -236,6 +265,7 @@ async def run_suite() -> None:
                 },
             )
             assert r_enroll.status_code == 200, r_enroll.text
+            assert "access_token" not in r_enroll.json()
             assert r_enroll.json()["user"]["face_enrolled"] is True
             assert "access_token" in r_enroll.cookies
             await ac.post("/api/auth/logout", headers=csrf_headers)
@@ -255,13 +285,22 @@ async def run_suite() -> None:
             import httpx
             from unittest.mock import patch
             from app.config import settings
-            from app.core.rate_limit import rate_limiter
+            from app.core.rate_limit import reset_rate_limit_state
             from app.services.external_vision import compare_faces_facepp, extract_id_text_ocr_space
 
-            rate_limiter._buckets.clear()
+            async with SessionLocal() as rl_reset_sess:
+                await reset_rate_limit_state(rl_reset_sess)
 
             fake_jpeg_b64 = base64.b64encode(b"\xff\xd8\xff\xe0" + b"0" * 256).decode("ascii")
             fake_data_url = f"data:image/jpeg;base64,{fake_jpeg_b64}"
+            fake_live_enroll_url = (
+                "data:image/jpeg;base64,"
+                + base64.b64encode(b"\xff\xd8\xff\xe0" + b"1" * 256).decode("ascii")
+            )
+            fake_live_verify_url = (
+                "data:image/jpeg;base64,"
+                + base64.b64encode(b"\xff\xd8\xff\xe0" + b"2" * 256).decode("ascii")
+            )
 
             r_prov_off = await ac.get("/api/auth/biometrics/providers")
             assert r_prov_off.status_code == 200
@@ -346,8 +385,78 @@ async def run_suite() -> None:
                     assert r_ocr_ep.json()["used_external_api"] is True
                     assert "DELA CRUZ, JUAN" in r_ocr_ep.json()["raw_text"]
 
+                    # Invalid image header must fail with 400 before external OCR
+                    r_ocr_bad = await ac.post(
+                        "/api/auth/biometrics/ocr",
+                        headers=csrf_headers,
+                        json={"image_base64": "data:text/plain;base64," + "A" * 80},
+                    )
+                    assert r_ocr_bad.status_code == 400
+
+                    # Dedicated burst limit (4 req/min) protects OCR.space quota
+                    for _ in range(2):
+                        r_ocr_ok = await ac.post(
+                            "/api/auth/biometrics/ocr",
+                            headers=csrf_headers,
+                            json={"image_base64": fake_data_url},
+                        )
+                        assert r_ocr_ok.status_code == 200
+                    r_ocr_429 = await ac.post(
+                        "/api/auth/biometrics/ocr",
+                        headers=csrf_headers,
+                        json={"image_base64": fake_data_url},
+                    )
+                    assert r_ocr_429.status_code == 429
+
                 cloud_vec = _make_unit_descriptor(3.5)
                 cloud_close = _make_unit_descriptor(3.52)
+
+                # Identical ID + live selfie capture must be rejected before Face++
+                with patch("app.routers.auth.compare_faces_facepp", return_value=fc_ok):
+                    r_reg_dup_img = await ac.post(
+                        "/api/auth/register",
+                        headers=csrf_headers,
+                        json={
+                            "email": "cloud-dup-img@example.com",
+                            "password": "Password123!",
+                            "full_name": "Cloud Dup",
+                            "face_descriptor": cloud_vec,
+                            "liveness_passed": True,
+                            "id_type": "philsys",
+                            "id_face_match_score": 0.25,
+                            "id_image_base64": fake_data_url,
+                            "live_image_base64": fake_data_url,
+                        },
+                    )
+                    assert r_reg_dup_img.status_code == 400
+
+                # Face++ 429 / 5xx service error must fail closed (503) on registration
+                from app.services.external_vision import ExternalFaceCompareResult
+
+                fc_unavailable = ExternalFaceCompareResult(
+                    ok=False,
+                    matched=False,
+                    provider="facepp",
+                    error="429 Too Many Requests",
+                    is_service_error=True,
+                )
+                with patch("app.routers.auth.compare_faces_facepp", return_value=fc_unavailable):
+                    r_reg_fpp_down = await ac.post(
+                        "/api/auth/register",
+                        headers=csrf_headers,
+                        json={
+                            "email": "cloud-failclosed@example.com",
+                            "password": "Password123!",
+                            "full_name": "Cloud FailClosed",
+                            "face_descriptor": cloud_vec,
+                            "liveness_passed": True,
+                            "id_type": "philsys",
+                            "id_face_match_score": 0.25,
+                            "id_image_base64": fake_data_url,
+                            "live_image_base64": fake_live_enroll_url,
+                        },
+                    )
+                    assert r_reg_fpp_down.status_code == 503
 
                 with patch("app.routers.auth.compare_faces_facepp", return_value=fc_low):
                     r_reg_fpp_reject = await ac.post(
@@ -362,11 +471,12 @@ async def run_suite() -> None:
                             "id_type": "philsys",
                             "id_face_match_score": 0.30,
                             "id_image_base64": fake_data_url,
-                            "live_image_base64": fake_data_url,
+                            "live_image_base64": fake_live_enroll_url,
                         },
                     )
                     assert r_reg_fpp_reject.status_code == 400
                     assert "Face++" in r_reg_fpp_reject.json()["detail"]
+                    assert "FACE_BLUR" not in r_reg_fpp_reject.json()["detail"]
 
                 with patch("app.routers.auth.compare_faces_facepp", return_value=fc_ok):
                     r_reg_fpp_ok = await ac.post(
@@ -381,7 +491,7 @@ async def run_suite() -> None:
                             "id_type": "philsys",
                             "id_face_match_score": 0.25,
                             "id_image_base64": fake_data_url,
-                            "live_image_base64": fake_data_url,
+                            "live_image_base64": fake_live_enroll_url,
                         },
                     )
                     assert r_reg_fpp_ok.status_code == 201
@@ -396,6 +506,35 @@ async def run_suite() -> None:
                 assert r_fpp_step1.status_code == 200
                 fpp_token = r_fpp_step1.json()["challenge_token"]
 
+                # Replaying stored enrollment reference selfie on /face/verify must be rejected
+                with patch("app.routers.auth.compare_faces_facepp", return_value=fc_ok):
+                    r_fpp_replay = await ac.post(
+                        "/api/auth/face/verify",
+                        headers=csrf_headers,
+                        json={
+                            "challenge_token": fpp_token,
+                            "face_descriptor": cloud_close,
+                            "liveness_passed": True,
+                            "live_image_base64": fake_live_enroll_url,
+                        },
+                    )
+                    assert r_fpp_replay.status_code == 400
+
+                # Face++ 429 / 5xx service error must fail closed (503) on Step 2 /face/verify
+                with patch("app.routers.auth.compare_faces_facepp", return_value=fc_unavailable):
+                    r_fpp_down = await ac.post(
+                        "/api/auth/face/verify",
+                        headers=csrf_headers,
+                        json={
+                            "challenge_token": fpp_token,
+                            "face_descriptor": cloud_close,
+                            "liveness_passed": True,
+                            "live_image_base64": fake_live_verify_url,
+                        },
+                    )
+                    assert r_fpp_down.status_code == 503
+                    assert "access_token" not in r_fpp_down.cookies
+
                 with patch("app.routers.auth.compare_faces_facepp", return_value=fc_ok):
                     r_fpp_verify = await ac.post(
                         "/api/auth/face/verify",
@@ -404,7 +543,7 @@ async def run_suite() -> None:
                             "challenge_token": fpp_token,
                             "face_descriptor": cloud_close,
                             "liveness_passed": True,
-                            "live_image_base64": fake_data_url,
+                            "live_image_base64": fake_live_verify_url,
                         },
                     )
                     assert r_fpp_verify.status_code == 200

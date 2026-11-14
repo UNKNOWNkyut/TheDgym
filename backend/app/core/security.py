@@ -6,6 +6,8 @@ from uuid import uuid4
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from sqlalchemy import delete, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
@@ -15,12 +17,15 @@ ph = PasswordHasher()
 # Pre-computed dummy hash for constant-time login checks when email does not exist (Check 56)
 _DUMMY_ARGON2_HASH = ph.hash("dgym-constant-time-dummy-password-guard")
 
-# Server-side token revocation store (Check 25: Session invalidation on logout / password change)
-# shortcut: in-memory revocation resets on process restart, move to shared DB/Redis if running >1 worker
+# Server-side token revocation L1 cache backed by DB persistence (`revoked_tokens` + `users.tokens_valid_after`)
 _MAX_REVOKED_JTIS = 10_000
 _MAX_USER_REVOCATIONS = 10_000
 _REVOKED_JTIS: OrderedDict[str, float] = OrderedDict()
 _USER_MIN_IAT: OrderedDict[str, float] = OrderedDict()
+
+
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def hash_password(password: str) -> str:
@@ -192,3 +197,78 @@ def decode_face_challenge_token(
         return payload
     except (jwt.PyJWTError, TypeError, ValueError):
         return None
+
+
+async def persist_revoked_token(db: AsyncSession, token: Optional[str]) -> None:
+    """Persist explicit JTI revocation in DB so logouts and single-use challenges survive restarts."""
+    if not token:
+        return
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            issuer=settings.JWT_ISSUER,
+            audience=settings.JWT_AUDIENCE,
+        )
+    except jwt.PyJWTError:
+        return
+
+    jti = str(payload.get("jti", "")).strip()
+    if not jti:
+        return
+
+    revoke_token(token)
+    now = datetime.now(timezone.utc)
+    exp_ts = float(payload.get("exp", now.timestamp()))
+    expires_at = datetime.fromtimestamp(exp_ts, tz=timezone.utc)
+
+    from app.models.revoked_token import RevokedToken
+
+    await db.execute(delete(RevokedToken).where(RevokedToken.expires_at <= now))
+    existing = await db.get(RevokedToken, jti)
+    if existing is None:
+        db.add(RevokedToken(jti=jti, expires_at=expires_at, revoked_at=now))
+    await db.flush()
+
+
+async def persist_user_session_revocation(db: AsyncSession, user_id: int) -> None:
+    """Persist user-wide cutoff timestamp in DB so password/role/status revocations survive restarts."""
+    revoke_user_sessions(user_id)
+    now = datetime.now(timezone.utc)
+    from app.models.user import User
+
+    await db.execute(
+        update(User).where(User.id == user_id).values(tokens_valid_after=now)
+    )
+    await db.flush()
+
+
+async def is_session_revoked_in_db(
+    db: AsyncSession,
+    payload: Dict[str, Any],
+    user: Optional[Any] = None,
+) -> bool:
+    """Verify JWT has not been revoked in persistent storage after container/process restart."""
+    from app.models.revoked_token import RevokedToken
+
+    jti = str(payload.get("jti", "")).strip()
+    if not jti:
+        return True
+
+    revoked_row = (
+        await db.execute(select(RevokedToken.jti).where(RevokedToken.jti == jti).limit(1))
+    ).scalar_one_or_none()
+    if revoked_row is not None:
+        return True
+
+    valid_after = getattr(user, "tokens_valid_after", None) if user is not None else None
+    if valid_after is not None:
+        try:
+            iat = float(payload.get("iat", 0))
+            if iat < _as_utc(valid_after).timestamp():
+                return True
+        except (TypeError, ValueError):
+            return True
+
+    return False

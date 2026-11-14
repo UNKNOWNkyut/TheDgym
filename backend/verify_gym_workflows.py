@@ -427,6 +427,7 @@ async def run_phase9_suite() -> None:
 
             r_wh = await ac.post("/api/access/webhook-tap", headers={"X-Scanner-API-Key": raw_key}, json={"serialNumber": "04:HW:TE:RM:99:05"})
             assert r_wh.status_code == 200 and r_wh.json()["decision"] == "granted_check_in"
+            assert (await ac.post(f"/api/access/webhook-tap?api_key={raw_key}", json={"uid": "04HWTERM9905"})).status_code == 401
             assert (await ac.post("/api/access/webhook-tap", headers={"X-Scanner-API-Key": "dgym_scan_bad_key"}, json={"uid": "04HWTERM9905"})).status_code == 401
             assert (await ac.post("/api/access/webhook-tap", json={"uid": "04HWTERM9905"})).status_code == 401
             assert (await ac.get("/api/access/webhook-tap?uid=04HWTERM9905")).status_code == 405

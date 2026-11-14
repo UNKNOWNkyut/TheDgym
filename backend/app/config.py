@@ -1,8 +1,10 @@
 import ipaddress
 import logging
 import os
+import re
 from pathlib import Path
 from typing import List, Optional, Set, Tuple, Union
+from urllib.parse import urlparse
 
 ProxyNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 
@@ -32,6 +34,10 @@ _DEV_CORS_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
 ]
+DEV_CORS_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$"
+)
+_DEV_CORS_ORIGIN_RE = re.compile(DEV_CORS_ORIGIN_REGEX, re.IGNORECASE)
 
 
 def _split_csv(raw: str) -> List[str]:
@@ -68,12 +74,14 @@ class Settings:
         self.JWT_SECRET_KEY: str = raw_jwt or (
             _DEFAULT_DEV_SECRET if self.ENVIRONMENT == "development" else ""
         )
+        raw_bio_hmac = os.getenv("BIOMETRIC_HMAC_SECRET", "").strip()
+        self.BIOMETRIC_HMAC_SECRET: str = raw_bio_hmac or self.JWT_SECRET_KEY
         self.JWT_ALGORITHM: str = "HS256"
         self.JWT_ISSUER: str = os.getenv("JWT_ISSUER", "thedgym-api")
         self.JWT_AUDIENCE: str = os.getenv("JWT_AUDIENCE", "thedgym-client")
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
-            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
-        )  # 24 hours
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480")
+        )  # 8 hours
 
         # Request Resource Ceiling (Check 64)
         self.MAX_REQUEST_BODY_BYTES: int = int(
@@ -148,6 +156,21 @@ def validate_settings(cfg: Settings) -> None:
             "Using fallback development JWT_SECRET_KEY; set JWT_SECRET_KEY in backend/.env."
         )
 
+    is_bio_weak = (
+        cfg.BIOMETRIC_HMAC_SECRET in _UNSAFE_JWT_SECRETS
+        or len(cfg.BIOMETRIC_HMAC_SECRET) < 32
+    )
+    if cfg.ENVIRONMENT != "development" and is_bio_weak:
+        raise RuntimeError(
+            f"[ANTIGRAV-01] Refusing to start in ENVIRONMENT='{cfg.ENVIRONMENT}' with a default, "
+            "placeholder, or <32-character BIOMETRIC_HMAC_SECRET."
+        )
+
+    if cfg.ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+        raise RuntimeError(
+            "[ANTIGRAV-01] ACCESS_TOKEN_EXPIRE_MINUTES must be a positive integer."
+        )
+
     if cfg.ENVIRONMENT == "staging" and not cfg.DATABASE_URL:
         raise RuntimeError(
             "[ANTIGRAV-01] Refusing to start in ENVIRONMENT='staging' without DATABASE_URL."
@@ -161,6 +184,8 @@ def validate_settings(cfg: Settings) -> None:
             errors.append("CORS_ORIGINS must specify explicit allowed origins without '*'")
         if not cfg.XENDIT_WEBHOOK_VERIFICATION_TOKEN:
             errors.append("XENDIT_WEBHOOK_VERIFICATION_TOKEN must be configured")
+        if cfg.ACCESS_TOKEN_EXPIRE_MINUTES >= 1440:
+            errors.append("ACCESS_TOKEN_EXPIRE_MINUTES must be under 1440 minutes (24 hours)")
         if errors:
             raise RuntimeError(
                 "[ANTIGRAV-01] Refusing to start in ENVIRONMENT='production': "
@@ -179,6 +204,27 @@ def is_trusted_proxy(ip_str: str, cfg: Optional[Settings] = None) -> bool:
     except ValueError:
         return False
     return any(addr in network for network in resolved_cfg.TRUSTED_PROXY_NETWORKS)
+
+
+def is_allowed_origin(origin: Optional[str], cfg: Optional[Settings] = None) -> bool:
+    """Validate an HTTP/WebSocket Origin header against explicit CORS origins (plus dev LAN regex)."""
+    if not origin:
+        return False
+    cleaned = origin.strip().rstrip("/")
+    parsed = urlparse(cleaned)
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc or parsed.path or parsed.query:
+        return False
+
+    resolved_cfg = cfg or settings
+    target_pair = (parsed.scheme.lower(), parsed.netloc.lower())
+    for allowed in resolved_cfg.CORS_ORIGINS:
+        allowed_parsed = urlparse(allowed.strip().rstrip("/"))
+        if (allowed_parsed.scheme.lower(), allowed_parsed.netloc.lower()) == target_pair:
+            return True
+
+    if resolved_cfg.ENVIRONMENT != "production" and _DEV_CORS_ORIGIN_RE.fullmatch(cleaned):
+        return True
+    return False
 
 
 settings = Settings()

@@ -295,9 +295,81 @@ async def run_regression_suite() -> None:
             assert r_logout_ok.headers.get("cross-origin-opener-policy") == "same-origin-allow-popups"
             ac.cookies.clear()
 
+            from app.core.rate_limit import rate_limiter
+            from app.core.security import _REVOKED_JTIS, _USER_MIN_IAT
+
+            # Simulate process restart: wipe in-memory JTI cache and verify DB RevokedToken still blocks
+            _REVOKED_JTIS.clear()
             r_revoked = await ac.get("/api/auth/me", headers=user_hdrs)
             assert r_revoked.status_code == 401
-            print("[PASS] 4. ANTIGRAV-07/09/10 CSRF 403, GET webhook 405, headers, and JTI logout revocation verified")
+
+            # Simulate process restart after user-wide revocation (users.tokens_valid_after)
+            pre_role_change_tok = create_access_token({"sub": str(signup_user_id), "role": "member"})
+            await asyncio.sleep(0.02)
+            r_role_patch = await ac.patch(
+                f"/api/users/{signup_user_id}",
+                headers=admin_hdrs,
+                json={"role": "staff"},
+            )
+            assert r_role_patch.status_code == 200, r_role_patch.text
+            await asyncio.sleep(0.02)
+            post_role_change_tok = create_access_token({"sub": str(signup_user_id), "role": "staff"})
+            _USER_MIN_IAT.clear()
+            assert (
+                await ac.get("/api/auth/me", headers={"Authorization": f"Bearer {pre_role_change_tok}"})
+            ).status_code == 401
+            assert (
+                await ac.get("/api/auth/me", headers={"Authorization": f"Bearer {post_role_change_tok}"})
+            ).status_code == 200
+
+            # Verify persistent rate limit survives in-memory bucket clear on /biometrics/ocr
+            for _ in range(4):
+                assert (
+                    await ac.post(
+                        "/api/auth/biometrics/ocr",
+                        headers={"X-Requested-With": "XMLHttpRequest"},
+                        json={"image_base64": "data:image/jpeg;base64,/9j/4AAQ" + "A" * 80},
+                    )
+                ).status_code in (200, 400)
+            rate_limiter._buckets.clear()
+            assert (
+                await ac.post(
+                    "/api/auth/biometrics/ocr",
+                    headers={"X-Requested-With": "XMLHttpRequest"},
+                    json={"image_base64": "data:image/jpeg;base64,/9j/4AAQ" + "A" * 80},
+                )
+            ).status_code == 429
+            # Authenticated /api/uploads/profile_pictures guard (no unauthenticated static exposure)
+            r_restore_member = await ac.patch(
+                f"/api/users/{signup_user_id}",
+                headers=admin_hdrs,
+                json={"role": "member"},
+            )
+            assert r_restore_member.status_code == 200
+            await asyncio.sleep(0.02)
+            member_pic_tok = create_access_token({"sub": str(signup_user_id), "role": "member"})
+            member_pic_hdrs = {"Authorization": f"Bearer {member_pic_tok}"}
+            tiny_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+            r_pic_up = await ac.post(
+                "/api/account/profile-picture",
+                headers=member_pic_hdrs,
+                files={"file": ("avatar.png", tiny_png, "image/png")},
+            )
+            assert r_pic_up.status_code == 200, r_pic_up.text
+            pic_url = r_pic_up.json()["profile_picture_url"]
+            assert pic_url and pic_url.startswith("/api/uploads/profile_pictures/")
+            assert (await ac.get(pic_url)).status_code == 401
+            assert (
+                await ac.get(f"/api/uploads/profile_pictures/user_{admin_id}_{'a' * 32}.png", headers=member_pic_hdrs)
+            ).status_code == 403
+            assert (await ac.get("/api/uploads/profile_pictures/evil.svg", headers=member_pic_hdrs)).status_code == 404
+            r_pic_owner = await ac.get(pic_url, headers=member_pic_hdrs)
+            assert r_pic_owner.status_code == 200
+            assert r_pic_owner.headers.get("cache-control") == "private, no-store"
+            assert "sandbox" in (r_pic_owner.headers.get("content-security-policy") or "")
+            assert (await ac.get(pic_url, headers=admin_hdrs)).status_code == 200
+            assert (await ac.delete("/api/account/profile-picture", headers=member_pic_hdrs)).status_code == 200
+            print("[PASS] 4. ANTIGRAV-07/09/10 CSRF 403, GET webhook 405, headers, persistent JTI/rate-limit revocation, and auth uploads verified")
 
             # 5. Step 6: Single-pass annual finance parity vs 12 monthly summaries
             r_annual = await ac.get("/api/finance/annual?year=2025", headers=admin_hdrs)

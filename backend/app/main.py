@@ -9,11 +9,10 @@ import re
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.config import DEV_CORS_ORIGIN_REGEX, settings
 from app.database import AsyncSessionLocal, Base, engine, get_db
 from app.database_migrations import run_startup_column_migrations
 from app.routers import (
@@ -29,6 +28,7 @@ from app.routers import (
     payments_router,
     pt_sessions_router,
     retention_router,
+    uploads_router,
     users_router,
     visits_router,
 )
@@ -146,14 +146,6 @@ def _resolve_spa_file(dist_dir: Path, request_path: str) -> Path | None:
         return None
     index_file = dist_dir / "index.html"
     return index_file if index_file.is_file() else None
-
-
-# =========================================================
-# UPLOAD DIRECTORY
-# =========================================================
-
-UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =========================================================
@@ -353,24 +345,13 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 # =========================================================
-# PROFILE PICTURE FILES
-# =========================================================
-
-app.mount("/api/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
-
-
-# =========================================================
 # CORS (Check 19: Explicit Origin, Method & Header Whitelist)
 # =========================================================
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=(
-        None
-        if _is_prod
-        else r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$"
-    ),
+    allow_origin_regex=None if _is_prod else DEV_CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
@@ -390,6 +371,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(account_router)
+app.include_router(uploads_router)
 app.include_router(users_router)
 app.include_router(members_router)
 app.include_router(membership_plans_router)

@@ -64,6 +64,21 @@ def run_all() -> None:
             "XENDIT_WEBHOOK_VERIFICATION_TOKEN",
             "prod missing webhook token",
         ),
+        (
+            {**_VALID_PROD_ENV, "ACCESS_TOKEN_EXPIRE_MINUTES": "1440"},
+            "ACCESS_TOKEN_EXPIRE_MINUTES",
+            "prod 24h JWT lifetime",
+        ),
+        (
+            {**_VALID_PROD_ENV, "ACCESS_TOKEN_EXPIRE_MINUTES": "0"},
+            "ACCESS_TOKEN_EXPIRE_MINUTES",
+            "non-positive JWT lifetime",
+        ),
+        (
+            {**_VALID_PROD_ENV, "BIOMETRIC_HMAC_SECRET": "short-secret"},
+            "BIOMETRIC_HMAC_SECRET",
+            "prod short BIOMETRIC_HMAC_SECRET",
+        ),
     ]
     for env, expected, label in invalid_cases:
         _assert_fails(env, expected, label)
@@ -79,6 +94,7 @@ def run_all() -> None:
         prod_cfg = Settings()
         validate_settings(prod_cfg)
         assert prod_cfg.CORS_ORIGINS == ["https://thedgym.com", "https://www.thedgym.com"]
+        assert prod_cfg.ACCESS_TOKEN_EXPIRE_MINUTES == 480
 
     with patch.dict(
         os.environ,
@@ -207,7 +223,47 @@ def run_all() -> None:
 
     asyncio.run(_verify_spa_serving())
 
-    print(f"[PASS] All {len(invalid_cases) + 12} config, database URL, proxy, and SPA checks passed")
+    # 5. WebSocket Origin allowlist & CSWSH / query-token guard checks
+    from app.config import is_allowed_origin
+    from app.core.security import create_access_token
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    assert is_allowed_origin("http://localhost:5173", cfg=dev_cfg) is True
+    assert is_allowed_origin("https://evil.attacker.com", cfg=dev_cfg) is False
+    assert is_allowed_origin(None, cfg=dev_cfg) is False
+    assert is_allowed_origin("http://localhost:5173/path", cfg=dev_cfg) is False
+
+    ws_client = TestClient(main_mod.app)
+    dummy_tok = create_access_token({"sub": "1", "role": "admin"})
+    try:
+        with ws_client.websocket_connect(
+            "/api/access/ws/live-feed",
+            headers={"origin": "https://evil.attacker.com"},
+            cookies={"access_token": dummy_tok},
+        ):
+            raise AssertionError("Cross-origin WebSocket connection should be closed")
+    except WebSocketDisconnect as exc:
+        assert exc.code == 1008
+
+    try:
+        with ws_client.websocket_connect(
+            f"/api/access/ws/live-feed?token={dummy_tok}",
+            headers={"origin": "http://localhost:5173"},
+        ):
+            raise AssertionError("Query-string JWT WebSocket connection should be closed")
+    except WebSocketDisconnect as exc:
+        assert exc.code == 1008
+
+    # 6. Nginx template security header alignment & dotfile denial
+    nginx_tpl = (Path(__file__).resolve().parent.parent / "deploy" / "nginx" / "default.conf.template").read_text(encoding="utf-8")
+    assert 'Permissions-Policy "camera=(self), microphone=(), geolocation=()"' in nginx_tpl
+    assert "location ~ /\\.(?!well-known)" in nginx_tpl
+    assert "'wasm-unsafe-eval'" in nginx_tpl
+    assert "worker-src 'self' blob:" in nginx_tpl
+    assert "connect-src 'self' blob:" in nginx_tpl
+
+    print(f"[PASS] All {len(invalid_cases) + 15} config, database URL, proxy, WS origin, Nginx, and SPA checks passed")
 
 
 if __name__ == "__main__":

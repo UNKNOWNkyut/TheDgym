@@ -61,6 +61,14 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
             )
             logger.info("[MIGRATION] Added column members.admin_viewed_at")
 
+        users_cols = await conn.run_sync(_get_existing_columns, "users")
+        if users_cols and "tokens_valid_after" not in users_cols:
+            ts_type = "TIMESTAMP WITH TIME ZONE" if conn.dialect.name == "postgresql" else "TIMESTAMP"
+            await conn.execute(
+                text(f"ALTER TABLE users ADD COLUMN tokens_valid_after {ts_type} NULL")
+            )
+            logger.info("[MIGRATION] Added column users.tokens_valid_after")
+
         mm_cols = await conn.run_sync(_get_existing_columns, "member_memberships")
         if mm_cols:
             mm_indexes = await conn.run_sync(_get_existing_indexes, "member_memberships")

@@ -104,8 +104,8 @@ function validateCreateUserForm(form: CreateUserFormState): {
     errors.email = 'Please enter a valid email address.'
   }
 
-  if (form.password.length < 6) {
-    errors.password = 'Password must be at least 6 characters.'
+  if (form.password.length < 8) {
+    errors.password = 'Password must be at least 8 characters.'
   } else if (form.password.length > 128) {
     errors.password = 'Password must be 128 characters or fewer.'
   }
@@ -641,7 +641,7 @@ export function ManageUsersPage() {
                 type="password"
                 maxLength={128}
                 autoComplete="new-password"
-                placeholder="Minimum 6 characters"
+                placeholder="Minimum 8 characters"
                 error={fieldErrors.password}
                 value={form.password}
                 onChange={(e) => handleFieldChange('password', e.target.value)}

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_roles
 from app.core.rate_limit import rate_limit_sensitive
-from app.core.security import revoke_user_sessions
+from app.core.security import persist_user_session_revocation
 from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_keycard import MemberKeycard
@@ -366,9 +366,9 @@ async def deactivate_member(
         request=request,
         details=f"Deactivated member {member.member_code} ({member.full_name}).",
     )
-    await db.commit()
     if linked_user_id is not None:
-        revoke_user_sessions(linked_user_id)
+        await persist_user_session_revocation(db, linked_user_id)
+    await db.commit()
 
 
 @router.delete(
@@ -435,9 +435,9 @@ async def delete_member_permanent(
         request=request,
         details=f"Permanently deleted member {member_code} ({member_name}).",
     )
-    await db.commit()
     if linked_user_id is not None:
-        revoke_user_sessions(linked_user_id)
+        await persist_user_session_revocation(db, linked_user_id)
+    await db.commit()
 
 
 @router.post(

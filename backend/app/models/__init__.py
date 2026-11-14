@@ -47,6 +47,7 @@ from app.models.prediction import Prediction
 from app.models.retention_strategy import RetentionStrategy
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
+from app.models.revoked_token import RateLimitHit, RevokedToken
 
 __all__ = [
     "User",
@@ -83,4 +84,6 @@ __all__ = [
     "RetentionStrategy",
     "Notification",
     "AuditLog",
+    "RevokedToken",
+    "RateLimitHit",
 ]

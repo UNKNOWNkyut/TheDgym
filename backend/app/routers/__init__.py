@@ -1,5 +1,5 @@
 from app.routers.auth import router as auth_router
-from app.routers.account import router as account_router
+from app.routers.account import router as account_router, uploads_router
 from app.routers.users import router as users_router
 from app.routers.members import router as members_router
 from app.routers.membership_plans import router as membership_plans_router
@@ -16,6 +16,7 @@ from app.routers.payments import router as payments_router
 __all__ = [
     "auth_router",
     "account_router",
+    "uploads_router",
     "users_router",
     "members_router",
     "membership_plans_router",

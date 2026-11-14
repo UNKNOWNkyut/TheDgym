@@ -1,3 +1,5 @@
+import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -10,13 +12,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.deps import extract_token_from_request, get_current_user
-from app.core.rate_limit import rate_limit_auth, rate_limit_sensitive
+from app.core.rate_limit import (
+    rate_limit_auth,
+    rate_limit_ocr_burst,
+    rate_limit_ocr_global_daily,
+    rate_limit_ocr_hourly,
+    rate_limit_sensitive,
+)
 from app.core.security import (
     create_access_token,
     create_face_challenge_token,
     decode_face_challenge_token,
     hash_password,
-    revoke_token,
+    is_session_revoked_in_db,
+    persist_revoked_token,
     verify_password,
 )
 from app.database import get_db
@@ -51,11 +60,13 @@ from app.services.biometrics import (
     validate_descriptor,
 )
 from app.services.external_vision import (
+    ExternalFaceCompareResult,
     compare_faces_facepp,
     extract_id_text_ocr_space,
     sanitize_base64_image,
 )
 
+logger = logging.getLogger("dgym.auth")
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
@@ -209,6 +220,11 @@ async def _load_challenge_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Account not found.",
         )
+    if await is_session_revoked_in_db(db, payload, user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Face verification session expired or invalid. Please sign in again.",
+        )
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -240,26 +256,66 @@ def _validate_enrollment_biometrics(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
+def _raise_on_facepp_failure(
+    face_res: ExternalFaceCompareResult,
+    *,
+    is_enrollment: bool,
+) -> None:
+    """Fail closed when Face++ is configured; never downgrade 429/5xx/timeouts to local biometrics."""
+    if face_res.is_service_error:
+        logger.warning(
+            "Face++ verification failed closed during %s (service error): %s",
+            "enrollment" if is_enrollment else "login",
+            face_res.error,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Biometric verification service is temporarily unavailable. Please try again shortly.",
+        )
+
+    logger.warning(
+        "Face++ verification rejected during %s: %s",
+        "enrollment" if is_enrollment else "login",
+        face_res.error,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Face++ verification could not confirm a match. Ensure clear lighting and a single unobstructed face, then try again.",
+    )
+
+
+def _images_share_digest(raw_b64_a: str, raw_b64_b: str) -> bool:
+    """Constant-time check whether two base64 image payloads are identical."""
+    digest_a = hashlib.sha256(raw_b64_a.encode("ascii", errors="ignore")).digest()
+    digest_b = hashlib.sha256(raw_b64_b.encode("ascii", errors="ignore")).digest()
+    return secrets.compare_digest(digest_a, digest_b)
+
+
 async def _verify_enrollment_images_facepp(
     *,
     id_image_base64: str | None,
     live_image_base64: str | None,
 ) -> tuple[str | None, str]:
-    """Sanitize reference selfie image and verify ID-vs-selfie via Face++ when configured."""
-    safe_live_data_url: str | None = None
-    if live_image_base64:
-        try:
-            safe_live_data_url, _ = sanitize_base64_image(live_image_base64)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
+    """Verify ID-vs-selfie via Face++ when configured; omit raw selfie persistence in local-only mode."""
     if not (settings.FACEPP_API_KEY and settings.FACEPP_API_SECRET):
-        return safe_live_data_url, "faceapi_local"
+        return None, "faceapi_local"
 
     if not (id_image_base64 and live_image_base64):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Both ID image and live selfie capture are required when cloud Face++ verification is enabled.",
+        )
+
+    try:
+        safe_live_data_url, live_raw_b64 = sanitize_base64_image(live_image_base64)
+        _, id_raw_b64 = sanitize_base64_image(id_image_base64)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    if _images_share_digest(id_raw_b64, live_raw_b64):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Live selfie and valid ID capture must be distinct images.",
         )
 
     face_res = await compare_faces_facepp(
@@ -270,21 +326,15 @@ async def _verify_enrollment_images_facepp(
         base_url=settings.FACEPP_API_BASE_URL,
         threshold_key="1e-3",
     )
-    if face_res.ok:
-        if not face_res.matched:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Face++ ID-to-selfie verification did not match. Ensure both faces are clear.",
-            )
-        return safe_live_data_url, "facepp"
+    if not face_res.ok:
+        _raise_on_facepp_failure(face_res, is_enrollment=True)
 
-    if not face_res.is_service_error:
+    if not face_res.matched:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Face++ could not verify faces: {face_res.error}",
+            detail="Face++ ID-to-selfie verification did not match. Ensure both faces are clear.",
         )
-
-    return safe_live_data_url, "faceapi_local"
+    return safe_live_data_url, "facepp"
 
 
 async def _issue_auth_response(user: User, response: Response, db: AsyncSession) -> TokenResponse:
@@ -304,7 +354,7 @@ async def _issue_auth_response(user: User, response: Response, db: AsyncSession)
     )
 
     user_resp = await _build_user_response(user, db)
-    return TokenResponse(access_token=access_token, token_type="bearer", user=user_resp)
+    return TokenResponse(token_type="cookie", user=user_resp)
 
 
 @router.post(
@@ -639,10 +689,19 @@ async def get_biometric_providers():
 @router.post(
     "/biometrics/ocr",
     response_model=OcrScanResponse,
-    dependencies=[Depends(rate_limit_auth)],
+    dependencies=[
+        Depends(rate_limit_ocr_burst),
+        Depends(rate_limit_ocr_hourly),
+        Depends(rate_limit_ocr_global_daily),
+    ],
 )
 async def scan_id_ocr_cloud(payload: OcrScanRequest):
     """Run ID text extraction via OCR.space REST API when configured."""
+    try:
+        sanitize_base64_image(payload.image_base64)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     if not settings.OCR_SPACE_API_KEY:
         return OcrScanResponse(
             provider="tesseract_local",
@@ -723,12 +782,30 @@ async def verify_face_login(
 
     verify_provider = "faceapi_local"
     verify_detail = f"Verified face login (distance={distance:.4f})."
-    if settings.FACEPP_API_KEY and settings.FACEPP_API_SECRET and biometric.reference_selfie_b64:
+    facepp_enabled = bool(settings.FACEPP_API_KEY and settings.FACEPP_API_SECRET)
+    if facepp_enabled and (biometric.reference_selfie_b64 or biometric.verification_provider == "facepp"):
+        if not biometric.reference_selfie_b64:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Reference selfie is missing for cloud biometric verification. Contact gym administration.",
+            )
         if not payload.live_image_base64:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Live face snapshot is required when cloud Face++ verification is enabled.",
             )
+        try:
+            _, probe_raw_b64 = sanitize_base64_image(payload.live_image_base64)
+            _, ref_raw_b64 = sanitize_base64_image(biometric.reference_selfie_b64)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+        if _images_share_digest(probe_raw_b64, ref_raw_b64):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Live face capture cannot reuse the stored enrollment reference image.",
+            )
+
         face_res = await compare_faces_facepp(
             biometric.reference_selfie_b64,
             payload.live_image_base64,
@@ -737,34 +814,43 @@ async def verify_face_login(
             base_url=settings.FACEPP_API_BASE_URL,
             threshold_key="1e-4",
         )
-        if face_res.ok:
-            if not face_res.matched:
+        if not face_res.ok:
+            if face_res.is_service_error:
                 await record_audit_log(
                     db,
-                    action="AUTH_FACE_VERIFY_FAILED",
+                    action="AUTH_FACE_VERIFY_UNAVAILABLE",
                     outcome="FAILURE",
                     actor=user,
                     target_type="user",
                     target_id=user.id,
                     request=request,
-                    details=f"Face++ mismatch (confidence={face_res.confidence:.2f}, threshold={face_res.threshold:.2f}).",
+                    details="Face++ verification failed closed due to upstream service error.",
                 )
                 await db.commit()
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Face++ verification failed: live face did not match your enrolled profile.",
-                )
-            verify_provider = "facepp"
-            verify_detail = f"Verified face login via Face++ (confidence={face_res.confidence:.2f}, distance={distance:.4f})."
-        elif not face_res.is_service_error:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Face++ could not verify face image: {face_res.error}",
+            _raise_on_facepp_failure(face_res, is_enrollment=False)
+
+        if not face_res.matched:
+            await record_audit_log(
+                db,
+                action="AUTH_FACE_VERIFY_FAILED",
+                outcome="FAILURE",
+                actor=user,
+                target_type="user",
+                target_id=user.id,
+                request=request,
+                details=f"Face++ mismatch (confidence={face_res.confidence:.2f}, threshold={face_res.threshold:.2f}).",
             )
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Face++ verification failed: live face did not match your enrolled profile.",
+            )
+        verify_provider = "facepp"
+        verify_detail = f"Verified face login via Face++ (confidence={face_res.confidence:.2f}, distance={distance:.4f})."
 
     biometric.verification_provider = verify_provider
     biometric.last_verified_at = datetime.now(timezone.utc)
-    revoke_token(payload.challenge_token)
+    await persist_revoked_token(db, payload.challenge_token)
     await record_audit_log(
         db,
         action="AUTH_FACE_VERIFY_SUCCESS",
@@ -839,7 +925,7 @@ async def enroll_face_first_login(
         new_bio.last_verified_at = datetime.now(timezone.utc)
         db.add(new_bio)
 
-    revoke_token(payload.challenge_token)
+    await persist_revoked_token(db, payload.challenge_token)
     await record_audit_log(
         db,
         action="AUTH_FACE_ENROLLED",
@@ -953,11 +1039,16 @@ async def avail_plan(
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     """Revoke active JWT token and clear session cookie (Check 25)."""
     token = extract_token_from_request(request)
     if token:
-        revoke_token(token)
+        await persist_revoked_token(db, token)
+        await db.commit()
     response.delete_cookie(
         key="access_token",
         httponly=True,

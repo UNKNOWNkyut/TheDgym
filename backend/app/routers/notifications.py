@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,10 +12,11 @@ from app.models.user import User, UserRole
 from app.models.member import Member
 from app.models.notification import Notification
 from app.schemas.retention import NotificationResponse
+from app.services.audit import record_audit_log
 from app.services.sms_service import get_sms_account_status, send_sms
 
 router = APIRouter(prefix="/api/notifications", tags=["In-App Notifications"])
-rate_limit_sms = require_rate_limit("sms_send", max_requests=10, window_seconds=60)
+rate_limit_sms = require_rate_limit("sms_send", max_requests=10, window_seconds=60, persistent=True)
 
 _STAFF_ROLES = (UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER)
 
@@ -194,7 +195,22 @@ async def get_sms_status(
 )
 async def send_test_sms(
     payload: TestSmsRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """Sends a transactional SMS to a single recipient."""
-    return await send_sms(payload.phone, payload.message)
+    result = await send_sms(payload.phone, payload.message)
+    digits = "".join(ch for ch in payload.phone if ch.isdigit())
+    masked_phone = f"****{digits[-4:]}" if len(digits) >= 4 else "****"
+    await record_audit_log(
+        db,
+        action="SMS_TEST_SENT",
+        outcome="SUCCESS" if result.get("status") == "sent" else "FAILURE",
+        actor=current_user,
+        target_type="sms",
+        request=request,
+        details=f"Test SMS dispatch ({result.get('status', 'unknown')}) to {masked_phone}.",
+    )
+    await db.commit()
+    return result

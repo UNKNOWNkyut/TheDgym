@@ -19,7 +19,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import extract_token_from_request, require_roles
+from app.config import is_allowed_origin
+from app.core.deps import extract_token_from_request, require_roles, resolve_authenticated_user
 from app.core.rate_limit import require_rate_limit
 from app.core.security import decode_access_token
 from app.database import AsyncSessionLocal, get_db
@@ -64,13 +65,11 @@ rate_limit_tap = require_rate_limit("rfid_tap", max_requests=120, window_seconds
 async def authenticate_tap_caller(
     request: Request,
     x_scanner_api_key: Optional[str] = Header(default=None, alias="X-Scanner-API-Key"),
-    api_key_query: Optional[str] = Query(default=None, alias="api_key"),
     access_token_cookie: Optional[str] = Cookie(default=None, alias="access_token"),
     db: AsyncSession = Depends(get_db),
 ) -> Tuple[Optional[User], Optional[AccessScanner]]:
-    scanner_key = x_scanner_api_key or api_key_query
-    if scanner_key:
-        key_hash = hash_scanner_api_key(scanner_key)
+    if x_scanner_api_key:
+        key_hash = hash_scanner_api_key(x_scanner_api_key)
         stmt = select(AccessScanner).where(
             AccessScanner.api_key_hash == key_hash,
             AccessScanner.is_active.is_(True),
@@ -91,21 +90,7 @@ async def authenticate_tap_caller(
             detail="Authentication required (Staff session or X-Scanner-API-Key).",
         )
 
-    payload = decode_access_token(token)
-    if not payload or payload.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session token.",
-        )
-
-    try:
-        user_id = int(payload["sub"])
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject.")
-
-    user = await db.get(User, user_id)
-    if not user or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User inactive or not found.")
+    user = await resolve_authenticated_user(db, token)
 
     if user.role not in (UserRole.ADMIN, UserRole.STAFF):
         raise HTTPException(
@@ -237,28 +222,28 @@ async def webhook_card_tap(
 @router.websocket("/access/ws/live-feed")
 async def websocket_access_live_feed(
     websocket: WebSocket,
-    token: Optional[str] = Query(default=None),
 ):
-    cookie_token = websocket.cookies.get("access_token")
-    raw_token = token or cookie_token
+    if not is_allowed_origin(websocket.headers.get("origin")):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    raw_token = websocket.cookies.get("access_token")
     if not raw_token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    payload = decode_access_token(raw_token)
-    if not payload or payload.get("sub") is None:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+    async def _load_ws_user(db: AsyncSession) -> Optional[User]:
+        try:
+            return await resolve_authenticated_user(db, raw_token)
+        except HTTPException:
+            return None
 
     override_db = websocket.app.dependency_overrides.get(get_db)
     if override_db is not None:
         gen = override_db()
         db = await anext(gen)
         try:
-            try:
-                user = await db.get(User, int(payload["sub"]))
-            except (ValueError, TypeError):
-                user = None
+            user = await _load_ws_user(db)
         finally:
             try:
                 await gen.aclose()
@@ -266,12 +251,9 @@ async def websocket_access_live_feed(
                 pass
     else:
         async with AsyncSessionLocal() as db:
-            try:
-                user = await db.get(User, int(payload["sub"]))
-            except (ValueError, TypeError):
-                user = None
+            user = await _load_ws_user(db)
 
-    if not user or not user.is_active or user.role not in (
+    if not user or user.role not in (
         UserRole.ADMIN,
         UserRole.STAFF,
         UserRole.TRAINER,

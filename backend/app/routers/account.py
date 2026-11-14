@@ -1,17 +1,19 @@
 from pathlib import Path
+import re
 from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.rate_limit import rate_limit_sensitive
-from app.core.security import hash_password, revoke_user_sessions, verify_password
+from app.core.security import hash_password, persist_user_session_revocation, verify_password
 from app.database import get_db
 from app.models.member import Member
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.user_profile import UserProfile
 from app.schemas.account import (
     AccountProfileResponse,
@@ -23,6 +25,7 @@ from app.schemas.account import (
 from app.services.audit import record_audit_log
 
 router = APIRouter(prefix="/api/account", tags=["Member Account Settings"])
+uploads_router = APIRouter(prefix="/api/uploads", tags=["Uploads"])
 
 
 # =========================================================
@@ -41,6 +44,8 @@ ALLOWED_IMAGE_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+_PROFILE_PICTURE_FILENAME_RE = re.compile(r"^user_(\d+)_[0-9a-f]{32}\.(jpg|png|webp)$")
+_EXTENSION_MEDIA_TYPES = {ext: mime for mime, ext in ALLOWED_IMAGE_TYPES.items()}
 
 
 def _detect_image_extension_from_magic_bytes(header: bytes) -> Optional[str]:
@@ -362,7 +367,7 @@ async def change_password(
     current_user.hashed_password = hash_password(data.new_password)
 
     # Check 25: Revoke any previously issued sessions for this user
-    revoke_user_sessions(current_user.id)
+    await persist_user_session_revocation(db, current_user.id)
 
     await record_audit_log(
         db,
@@ -376,3 +381,45 @@ async def change_password(
     await db.commit()
 
     return MessageResponse(message="Password changed successfully.")
+
+
+# =========================================================
+# AUTHENTICATED PROFILE PICTURE DOWNLOAD
+# =========================================================
+
+@uploads_router.get("/profile_pictures/{filename}")
+async def get_profile_picture(
+    filename: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Serve uploaded profile pictures only to the owning user or admin/staff."""
+    match = _PROFILE_PICTURE_FILENAME_RE.fullmatch(filename)
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile picture not found.",
+        )
+
+    owner_user_id = int(match.group(1))
+    if owner_user_id != current_user.id and current_user.role not in (
+        UserRole.ADMIN,
+        UserRole.STAFF,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this profile picture.",
+        )
+
+    upload_root = PROFILE_PICTURE_DIR.resolve()
+    candidate = (upload_root / filename).resolve()
+    if candidate.parent != upload_root or not candidate.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile picture not found.",
+        )
+
+    return FileResponse(
+        candidate,
+        media_type=_EXTENSION_MEDIA_TYPES.get(candidate.suffix.lower(), "application/octet-stream"),
+        headers={"Cache-Control": "private, no-store"},
+    )

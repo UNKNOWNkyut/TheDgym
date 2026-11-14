@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, is_session_revoked_in_db
 from app.database import get_db
 from app.models.user import User, UserRole
 
@@ -27,25 +27,8 @@ def extract_token_from_request(
     return token
 
 
-async def get_current_user(
-    request: Request,
-    bearer_token: Optional[str] = Depends(oauth2_scheme),
-    access_token_cookie: Optional[str] = Cookie(default=None, alias="access_token"),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """
-    Extract and authenticate current user from Bearer header OR httpOnly cookie.
-    Fails closed (Check 63): raises HTTPException 401/403 on any invalid state.
-    """
-    token = extract_token_from_request(request, bearer_token, access_token_cookie)
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please sign in.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
+async def resolve_authenticated_user(db: AsyncSession, token: str) -> User:
+    """Decode JWT, load active user, and verify persistent session/JTI revocation."""
     payload = decode_access_token(token)
     if not payload:
         raise HTTPException(
@@ -70,13 +53,19 @@ async def get_current_user(
         )
 
     stmt = select(User).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    user = (await db.execute(stmt)).scalar_one_or_none()
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found.",
+        )
+
+    if await is_session_revoked_in_db(db, payload, user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or invalid token. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
@@ -86,6 +75,28 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_user(
+    request: Request,
+    bearer_token: Optional[str] = Depends(oauth2_scheme),
+    access_token_cookie: Optional[str] = Cookie(default=None, alias="access_token"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Extract and authenticate current user from Bearer header OR httpOnly cookie.
+    Fails closed (Check 63): raises HTTPException 401/403 on any invalid state.
+    """
+    token = extract_token_from_request(request, bearer_token, access_token_cookie)
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated. Please sign in.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return await resolve_authenticated_user(db, token)
 
 
 def require_roles(allowed_roles: List[UserRole]):

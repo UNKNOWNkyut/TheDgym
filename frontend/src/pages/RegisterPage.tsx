@@ -60,8 +60,8 @@ export function RegisterPage() {
       setValidationError('Please enter a valid email address.')
       return
     }
-    if (password.length < 6) {
-      setValidationError('Password must be at least 6 characters long.')
+    if (password.length < 8) {
+      setValidationError('Password must be at least 8 characters long.')
       return
     }
     if (password !== confirmPassword) {
@@ -360,7 +360,7 @@ export function RegisterPage() {
                 label="Password"
                 type="password"
                 name="password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

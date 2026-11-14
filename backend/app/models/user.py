@@ -26,6 +26,7 @@ class User(Base):
         nullable=False,
     )
     is_active = Column(Boolean, default=True, nullable=False)
+    tokens_valid_after = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

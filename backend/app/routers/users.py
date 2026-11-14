@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_roles
 from app.core.rate_limit import rate_limit_sensitive
-from app.core.security import hash_password, revoke_user_sessions
+from app.core.security import hash_password, persist_user_session_revocation, revoke_user_sessions
 from app.database import get_db
 from app.models.audit_log import AuditLog
 from app.models.user import User, UserRole
@@ -122,7 +122,7 @@ async def update_user(
         user.role = user_update.role
 
     if should_revoke_sessions:
-        revoke_user_sessions(user.id)
+        await persist_user_session_revocation(db, user.id)
 
     await record_audit_log(
         db,

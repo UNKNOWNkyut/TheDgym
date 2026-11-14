@@ -15,12 +15,14 @@ services:
         value: INFO
       - key: JWT_SECRET_KEY
         generateValue: true
+      - key: BIOMETRIC_HMAC_SECRET
+        generateValue: true
       - key: JWT_ISSUER
         value: thedgym-api
       - key: JWT_AUDIENCE
         value: thedgym-client
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "1440"
+        value: "480"
       - key: TRUSTED_PROXY_IPS
         value: 127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10
       - key: DATABASE_URL

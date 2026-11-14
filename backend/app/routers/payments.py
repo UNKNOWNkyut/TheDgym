@@ -45,8 +45,8 @@ from app.services.xendit_service import (
 logger = logging.getLogger("dgym.payments")
 
 router = APIRouter(prefix="/api/payments", tags=["Online Payments & Checkout"])
-rate_limit_checkout = require_rate_limit("payment_checkout", max_requests=10, window_seconds=60)
-rate_limit_webhook = require_rate_limit("payment_webhook", max_requests=60, window_seconds=60)
+rate_limit_checkout = require_rate_limit("payment_checkout", max_requests=10, window_seconds=60, persistent=True)
+rate_limit_webhook = require_rate_limit("payment_webhook", max_requests=60, window_seconds=60, persistent=True)
 
 
 class CreateCheckoutRequest(BaseModel):
@@ -294,9 +294,10 @@ async def create_checkout_session(
     )
 
     if inv_res.get("status") != "success":
+        logger.error("Xendit checkout invoice creation failed: %s", inv_res.get("message"))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to create checkout invoice: {inv_res.get('message')}",
+            detail="Unable to initialize payment checkout at the moment. Please try again shortly.",
         )
 
     await record_audit_log(
