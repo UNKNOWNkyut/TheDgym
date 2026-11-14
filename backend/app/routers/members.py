@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_roles
 from app.core.rate_limit import rate_limit_sensitive
-from app.core.security import persist_user_session_revocation
+from app.core.security import persist_user_session_revocation, revoke_user_sessions
 from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_keycard import MemberKeycard
@@ -28,6 +28,8 @@ from app.models.prediction import Prediction
 from app.models.processed_customer import ProcessedCustomer
 from app.models.raw_transaction import RawTransaction
 from app.models.user import User, UserRole
+from app.models.user_biometric import UserBiometric
+from app.models.user_profile import UserProfile
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
 from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
@@ -64,13 +66,34 @@ async def _normalize_and_check_member_email(
     return email_val
 
 
-async def _find_linked_user_id(db: AsyncSession, email: Optional[str]) -> Optional[int]:
-    """Find linked User.id matching Member.email case-insensitively."""
+async def _find_linked_user(db: AsyncSession, email: Optional[str]) -> Optional[User]:
+    """Find linked User matching Member.email case-insensitively."""
     normalized = email.lower().strip() if (email and email.strip()) else None
     if not normalized:
         return None
-    u_res = await db.execute(select(User.id).where(func.lower(User.email) == normalized))
+    u_res = await db.execute(select(User).where(func.lower(User.email) == normalized))
     return u_res.scalar_one_or_none()
+
+
+async def _cleanup_linked_user_on_permanent_delete(
+    db: AsyncSession,
+    linked_user: User,
+    current_user: User,
+) -> bool:
+    """
+    Remove a linked MEMBER User (plus biometrics/profile/notifications) so the email can re-register.
+    For non-MEMBER accounts (Admin/Staff/Trainer) or self, keep the account and revoke sessions only.
+    """
+    if linked_user.role != UserRole.MEMBER or linked_user.id == current_user.id:
+        await persist_user_session_revocation(db, linked_user.id)
+        return False
+
+    revoke_user_sessions(linked_user.id)
+    await db.execute(delete(UserBiometric).where(UserBiometric.user_id == linked_user.id))
+    await db.execute(delete(UserProfile).where(UserProfile.user_id == linked_user.id))
+    await db.execute(delete(Notification).where(Notification.user_id == linked_user.id))
+    await db.execute(delete(User).where(User.id == linked_user.id))
+    return True
 
 # HELPERS
 
@@ -349,8 +372,8 @@ async def deactivate_member(
     member.is_active = False
     member.status = MemberStatus.INACTIVE
 
-    # Find linked User account case-insensitively to revoke active sessions after commit (Check 25)
-    linked_user_id = await _find_linked_user_id(db, member.email)
+    # Find linked User account case-insensitively to sync status and revoke active sessions (Check 25)
+    linked_user = await _find_linked_user(db, member.email)
 
     await record_audit_log(
         db,
@@ -362,8 +385,10 @@ async def deactivate_member(
         request=request,
         details=f"Deactivated member {member.member_code} ({member.full_name}).",
     )
-    if linked_user_id is not None:
-        await persist_user_session_revocation(db, linked_user_id)
+    if linked_user is not None:
+        if linked_user.role == UserRole.MEMBER and linked_user.id != current_user.id:
+            linked_user.is_active = False
+        await persist_user_session_revocation(db, linked_user.id)
     await db.commit()
 
 
@@ -386,7 +411,7 @@ async def delete_member_permanent(
 
     member_code = member.member_code
     member_name = member.full_name
-    linked_user_id = await _find_linked_user_id(db, member.email)
+    linked_user = await _find_linked_user(db, member.email)
 
     # Detach immutable tap telemetry FKs cleanly so strict FK enforcement never fails
     member_card_ids = select(MemberKeycard.id).where(MemberKeycard.member_id == member_id)
@@ -421,6 +446,12 @@ async def delete_member_permanent(
     await db.execute(delete(MemberMembership).where(MemberMembership.member_id == member_id))
     await db.execute(delete(Member).where(Member.id == member_id))
 
+    deleted_linked_user = False
+    if linked_user is not None:
+        deleted_linked_user = await _cleanup_linked_user_on_permanent_delete(
+            db, linked_user, current_user
+        )
+
     await record_audit_log(
         db,
         action="MEMBER_DELETED_PERMANENT",
@@ -429,10 +460,12 @@ async def delete_member_permanent(
         target_type="member",
         target_id=member_id,
         request=request,
-        details=f"Permanently deleted member {member_code} ({member_name}).",
+        details=(
+            f"Permanently deleted member {member_code} ({member_name}) and linked user account."
+            if deleted_linked_user
+            else f"Permanently deleted member {member_code} ({member_name})."
+        ),
     )
-    if linked_user_id is not None:
-        await persist_user_session_revocation(db, linked_user_id)
     await db.commit()
 
 
@@ -455,6 +488,10 @@ async def reactivate_member(
 
     member.is_active = True
     member.status = MemberStatus.ACTIVE
+
+    linked_user = await _find_linked_user(db, member.email)
+    if linked_user is not None and linked_user.role == UserRole.MEMBER:
+        linked_user.is_active = True
 
     await record_audit_log(
         db,
