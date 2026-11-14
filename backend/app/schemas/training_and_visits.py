@@ -8,9 +8,7 @@ from app.models.pt_session import PTSessionStatus
 from app.schemas.common_types import UtcDatetime
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Visit Schemas
-# ──────────────────────────────────────────────────────────────────────────────
 
 class VisitCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -43,9 +41,7 @@ class VisitResponse(BaseModel):
         from_attributes = True
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # Class Session Schemas
-# ──────────────────────────────────────────────────────────────────────────────
 
 class ClassSessionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -115,9 +111,7 @@ class EnrollMemberCreate(BaseModel):
     notes: Optional[str] = Field(None, max_length=500)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # PT Session Schemas
-# ──────────────────────────────────────────────────────────────────────────────
 
 class PTSessionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")

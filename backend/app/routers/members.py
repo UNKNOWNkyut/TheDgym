@@ -72,9 +72,7 @@ async def _find_linked_user_id(db: AsyncSession, email: Optional[str]) -> Option
     u_res = await db.execute(select(User.id).where(func.lower(User.email) == normalized))
     return u_res.scalar_one_or_none()
 
-# ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _member_to_response(member: Member) -> MemberResponse:
     """Convert Member ORM object to MemberResponse schema."""
@@ -122,9 +120,7 @@ def _member_to_response(member: Member) -> MemberResponse:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # ENDPOINTS
-# ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=List[MemberResponse])
 async def list_members(

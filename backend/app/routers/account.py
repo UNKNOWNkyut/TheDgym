@@ -28,9 +28,9 @@ router = APIRouter(prefix="/api/account", tags=["Member Account Settings"])
 uploads_router = APIRouter(prefix="/api/uploads", tags=["Uploads"])
 
 
-# =========================================================
+
 # PROFILE PICTURE SETTINGS
-# =========================================================
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 PROFILE_PICTURE_DIR = BACKEND_DIR / "uploads" / "profile_pictures"
@@ -62,9 +62,9 @@ def _detect_image_extension_from_magic_bytes(header: bytes) -> Optional[str]:
     return None
 
 
-# =========================================================
+
 # HELPERS
-# =========================================================
+
 
 def _profile_picture_url(profile: Optional[UserProfile]) -> Optional[str]:
     if not profile or not profile.profile_picture_path:
@@ -126,9 +126,9 @@ def _delete_picture_file(relative_path: Optional[str]) -> None:
         pass
 
 
-# =========================================================
+
 # GET ACCOUNT PROFILE
-# =========================================================
+
 
 @router.get("/profile", response_model=AccountProfileResponse)
 async def get_account_profile(
@@ -139,9 +139,9 @@ async def get_account_profile(
     return _profile_response(current_user, profile)
 
 
-# =========================================================
+
 # EDIT ACCOUNT PROFILE
-# =========================================================
+
 
 @router.patch(
     "/profile",
@@ -230,9 +230,9 @@ async def update_account_profile(
     return _profile_response(current_user, profile)
 
 
-# =========================================================
+
 # UPLOAD PROFILE PICTURE
-# =========================================================
+
 
 @router.post(
     "/profile-picture",
@@ -305,9 +305,9 @@ async def upload_profile_picture(
     return ProfilePictureResponse(profile_picture_url=_profile_picture_url(profile))
 
 
-# =========================================================
+
 # DELETE PROFILE PICTURE
-# =========================================================
+
 
 @router.delete("/profile-picture", response_model=ProfilePictureResponse)
 async def delete_profile_picture(
@@ -326,9 +326,9 @@ async def delete_profile_picture(
     return ProfilePictureResponse(profile_picture_url=None)
 
 
-# =========================================================
+
 # CHANGE PASSWORD
-# =========================================================
+
 
 @router.post(
     "/change-password",
@@ -383,9 +383,9 @@ async def change_password(
     return MessageResponse(message="Password changed successfully.")
 
 
-# =========================================================
+
 # AUTHENTICATED PROFILE PICTURE DOWNLOAD
-# =========================================================
+
 
 @uploads_router.get("/profile_pictures/{filename}")
 async def get_profile_picture(

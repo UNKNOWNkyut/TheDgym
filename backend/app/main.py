@@ -148,9 +148,9 @@ def _resolve_spa_file(dist_dir: Path, request_path: str) -> Path | None:
     return index_file if index_file.is_file() else None
 
 
-# =========================================================
+
 # APPLICATION LIFESPAN
-# =========================================================
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -159,7 +159,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     await run_startup_column_migrations(engine)
 
-    # Seed baseline plans in all environments; gate demo users/members/keycards to development (ANTIGRAV-06).
+    # Seed baseline plans in all environments; gate demo users/members/keycards to development.
     async with AsyncSessionLocal() as session:
         await seed_plans(session)
         if settings.ENVIRONMENT == "development":
@@ -190,9 +190,7 @@ async def lifespan(app: FastAPI):
         await engine.dispose()
 
 
-# =========================================================
-# FASTAPI APP (Check 10: Disable Swagger/OpenAPI in prod)
-# =========================================================
+# FASTAPI APP (Disable Swagger/OpenAPI in prod)
 
 _is_prod = settings.ENVIRONMENT == "production"
 _SPA_CSP = (
@@ -223,10 +221,9 @@ app = FastAPI(
 )
 
 
-# =========================================================
+
 # SECURITY HEADERS, CSRF & PAYLOAD SIZE LIMIT MIDDLEWARE
-# (Checks 21, 46, 64, ANTIGRAV-07, ANTIGRAV-10)
-# =========================================================
+
 
 def _requires_csrf_header(request: Request) -> bool:
     if request.method not in _STATE_CHANGING_METHODS:
@@ -245,7 +242,7 @@ def _requires_csrf_header(request: Request) -> bool:
 
 @app.middleware("http")
 async def security_hardening_middleware(request: Request, call_next):
-    # Check 64: Reject oversized request bodies early
+    # Reject oversized request bodies early
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -260,7 +257,7 @@ async def security_hardening_middleware(request: Request, call_next):
                 content={"detail": "Invalid Content-Length header."},
             )
 
-    # ANTIGRAV-07: Enforce X-Requested-With custom header on cookie-authenticated mutations
+    # Enforce X-Requested-With custom header on cookie-authenticated mutations
     if _requires_csrf_header(request):
         if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest":
             return JSONResponse(
@@ -278,6 +275,9 @@ async def security_hardening_middleware(request: Request, call_next):
 
     response = await call_next(request)
 
+    
+    
+    # serves ng index.html para sa lahat ng non-API GET routes
     served_spa = False
     if (
         response.status_code == status.HTTP_404_NOT_FOUND
@@ -290,7 +290,7 @@ async def security_hardening_middleware(request: Request, call_next):
             response = FileResponse(spa_file)
             served_spa = True
 
-    # Check 46 & ANTIGRAV-10: Standard HTTP Security Headers
+    # Standard HTTP Security Headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -301,7 +301,7 @@ async def security_hardening_middleware(request: Request, call_next):
     if _is_prod:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-    # Check 21/22 & ANTIGRAV-10: Content-Security-Policy & Cache-Control
+    # Content-Security-Policy & Cache-Control
     if path.startswith("/api/uploads"):
         response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
     elif path in ("/docs", "/redoc") or path.startswith("/docs/"):
@@ -326,9 +326,9 @@ async def security_hardening_middleware(request: Request, call_next):
     return response
 
 
-# =========================================================
-# GLOBAL EXCEPTION HANDLER (Check 12: No Stack Trace Leaks)
-# =========================================================
+
+# GLOBAL EXCEPTION HANDLER (No Stack Trace Leaks)
+
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -344,9 +344,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-# =========================================================
-# CORS (Check 19: Explicit Origin, Method & Header Whitelist)
-# =========================================================
+
+# CORS (Explicit Origin, Method & Header Whitelist)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -365,9 +365,9 @@ app.add_middleware(
 )
 
 
-# =========================================================
+
 # ROUTERS
-# =========================================================
+
 
 app.include_router(auth_router)
 app.include_router(account_router)
@@ -386,9 +386,9 @@ app.include_router(access_control_router)
 app.include_router(payments_router)
 
 
-# =========================================================
+
 # HEALTH CHECK
-# =========================================================
+
 
 @app.get("/api/health", tags=["Health"])
 async def health_check(db: AsyncSession = Depends(get_db)):
