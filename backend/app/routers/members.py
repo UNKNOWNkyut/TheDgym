@@ -18,7 +18,7 @@ from app.database import get_db
 from app.models.member import Member, MemberStatus
 from app.models.member_keycard import MemberKeycard
 from app.models.keycard_tap_log import KeycardTapLog
-from app.models.member_membership import MemberMembership
+from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.visit import Visit
 from app.models.pt_session import PTSession
 from app.models.class_session import ClassEnrollment
@@ -33,6 +33,7 @@ from app.models.user_profile import UserProfile
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
 from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
+from app.services.membership_activation import expire_elapsed_memberships
 from app.services.overview_kpis import compute_overview_kpis
 
 router = APIRouter(prefix="/api/members", tags=["Members"])
@@ -66,6 +67,10 @@ async def _normalize_and_check_member_email(
     return email_val
 
 
+def _is_customer_role(role: UserRole) -> bool:
+    return role in (UserRole.MEMBER, UserRole.USER)
+
+
 async def _find_linked_user(db: AsyncSession, email: Optional[str]) -> Optional[User]:
     """Find linked User matching Member.email case-insensitively."""
     normalized = email.lower().strip() if (email and email.strip()) else None
@@ -81,10 +86,10 @@ async def _cleanup_linked_user_on_permanent_delete(
     current_user: User,
 ) -> bool:
     """
-    Remove a linked MEMBER User (plus biometrics/profile/notifications) so the email can re-register.
-    For non-MEMBER accounts (Admin/Staff/Trainer) or self, keep the account and revoke sessions only.
+    Remove a linked customer User (plus biometrics/profile/notifications) so the email can re-register.
+    For non-customer accounts (Admin/Staff/Trainer) or self, keep the account and revoke sessions only.
     """
-    if linked_user.role != UserRole.MEMBER or linked_user.id == current_user.id:
+    if not _is_customer_role(linked_user.role) or linked_user.id == current_user.id:
         await persist_user_session_revocation(db, linked_user.id)
         return False
 
@@ -155,6 +160,9 @@ async def list_members(
     limit: int = Query(50, ge=1, le=200),
 ):
     """List all gym members with optional search and status filter. Admin, Staff, and Trainers."""
+    if await expire_elapsed_memberships(db):
+        await db.commit()
+
     stmt = (
         select(Member)
         .options(selectinload(Member.memberships).selectinload(MemberMembership.plan))
@@ -174,6 +182,18 @@ async def list_members(
 
     if status_filter:
         stmt = stmt.where(Member.status == status_filter)
+    else:
+        # Exclude pre-activation unpaid online placeholders until their first plan is paid
+        has_paid_or_expired_history = Member.memberships.any(
+            MemberMembership.status.in_([MembershipStatus.ACTIVE, MembershipStatus.EXPIRED])
+        )
+        stmt = stmt.where(
+            or_(
+                Member.status != MemberStatus.INACTIVE,
+                Member.is_active.is_(False),
+                has_paid_or_expired_history,
+            )
+        )
 
     stmt = stmt.order_by(Member.joined_at.desc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
@@ -386,7 +406,7 @@ async def deactivate_member(
         details=f"Deactivated member {member.member_code} ({member.full_name}).",
     )
     if linked_user is not None:
-        if linked_user.role == UserRole.MEMBER and linked_user.id != current_user.id:
+        if _is_customer_role(linked_user.role) and linked_user.id != current_user.id:
             linked_user.is_active = False
         await persist_user_session_revocation(db, linked_user.id)
     await db.commit()
@@ -490,7 +510,7 @@ async def reactivate_member(
     member.status = MemberStatus.ACTIVE
 
     linked_user = await _find_linked_user(db, member.email)
-    if linked_user is not None and linked_user.role == UserRole.MEMBER:
+    if linked_user is not None and _is_customer_role(linked_user.role):
         linked_user.is_active = True
 
     await record_audit_log(

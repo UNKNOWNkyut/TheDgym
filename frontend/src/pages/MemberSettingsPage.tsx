@@ -366,7 +366,7 @@ export function MemberSettingsPage() {
                 />
               </button>
 
-              {user.role === 'member' && (
+              {(user.role === 'member' || user.role === 'user') && (
                 <button
                   type="button"
                   onClick={() => navigate('/')}

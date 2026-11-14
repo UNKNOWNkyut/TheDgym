@@ -213,7 +213,7 @@ function App() {
             <Route
               path="/settings"
               element={
-                <ProtectedRoute allowedRoles={['member']}>
+                <ProtectedRoute allowedRoles={['member', 'user']}>
                   <MemberSettingsPage />
                 </ProtectedRoute>
               }
@@ -245,7 +245,14 @@ function App() {
               }
             >
               <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/dashboard/book" element={<BookTrainerPage />} />
+              <Route
+                path="/dashboard/book"
+                element={
+                  <ProtectedRoute allowedRoles={['member']}>
+                    <BookTrainerPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/dashboard/plan"
                 element={

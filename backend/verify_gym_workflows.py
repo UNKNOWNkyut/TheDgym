@@ -246,6 +246,43 @@ async def run_phase9_suite() -> None:
             assert [t["full_name"] for t in tr_list] == ["Coach Ivan", "Coach Kresler", "Coach Marta"]
 
             pt_dt = (now_utc + timedelta(days=3)).replace(hour=9, minute=0, second=0, microsecond=0)
+            r_book_denied = await ac.post(
+                "/api/pt-sessions/book",
+                headers=member_hdrs,
+                json={
+                    "trainer_id": kresler_id,
+                    "scheduled_at": pt_dt.isoformat(),
+                    "duration_minutes": 90,
+                    "notes": "Should be rejected without active paid plan",
+                },
+            )
+            assert r_book_denied.status_code == 403, r_book_denied.text
+
+            r_portal_mem = await ac.post(
+                "/api/members",
+                headers=admin_hdrs,
+                json={
+                    "first_name": "Portal",
+                    "last_name": "Member",
+                    "email": "member@thedgym.com",
+                    "phone": "09694839999",
+                },
+            )
+            assert r_portal_mem.status_code == 201, r_portal_mem.text
+            monthly_plan_id = next(p["id"] for p in api_plans if p["slug"] == "monthly")
+            r_portal_ms = await ac.post(
+                "/api/memberships",
+                headers=admin_hdrs,
+                json={
+                    "member_id": r_portal_mem.json()["id"],
+                    "plan_id": monthly_plan_id,
+                    "start_date": now_utc.isoformat(),
+                    "paid_amount": "1999.00",
+                    "payment_method": "gcash",
+                },
+            )
+            assert r_portal_ms.status_code == 201, r_portal_ms.text
+
             r_book = await ac.post(
                 "/api/pt-sessions/book",
                 headers=member_hdrs,

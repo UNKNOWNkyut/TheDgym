@@ -48,7 +48,7 @@ function resolvePostLoginDestination(loggedInUser: User, redirectTarget: string 
   ) {
     return defaultDest
   }
-  if (loggedInUser.role === 'member' && redirectTarget.startsWith('/manage')) {
+  if ((loggedInUser.role === 'member' || loggedInUser.role === 'user') && redirectTarget.startsWith('/manage')) {
     return defaultDest
   }
   if (

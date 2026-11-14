@@ -104,7 +104,7 @@ function buildSlotDate(dateStr: string, slot: string): Date | null {
 export function BookTrainerPage() {
   const { user } = useAuth()
 
-  if (user && user.role === 'member' && !user.has_active_membership) {
+  if (user && (user.role === 'user' || (user.role === 'member' && !user.has_active_membership))) {
     return <Navigate to="/dashboard" replace />
   }
 

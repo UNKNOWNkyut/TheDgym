@@ -11,6 +11,7 @@ from app.models.audit_log import AuditLog
 from app.models.user import User, UserRole
 from app.schemas.auth import AuditLogResponse, UserCreateAdmin, UserResponse, UserUpdate
 from app.services.audit import record_audit_log
+from app.services.membership_activation import expire_elapsed_memberships
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -21,6 +22,9 @@ async def list_users(
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """List all registered gym users. Requires Admin or Staff role."""
+    if await expire_elapsed_memberships(db):
+        await db.commit()
+
     stmt = select(User).order_by(User.created_at.desc())
     result = await db.execute(stmt)
     users = result.scalars().all()

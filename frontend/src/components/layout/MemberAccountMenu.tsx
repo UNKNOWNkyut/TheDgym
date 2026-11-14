@@ -174,7 +174,7 @@ export function MemberAccountMenu({ user, onLogout }: MemberAccountMenuProps) {
           </div>
 
           <div className="mt-1">
-            <Badge variant="success">member</Badge>
+            <Badge variant={user.role === 'member' ? 'success' : 'warning'}>{user.role}</Badge>
           </div>
         </div>
       </div>

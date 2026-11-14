@@ -1,6 +1,6 @@
 // Auth Types
 
-export type UserRole = 'admin' | 'staff' | 'trainer' | 'member'
+export type UserRole = 'admin' | 'staff' | 'trainer' | 'member' | 'user'
 
 export type SupportedIdType =
   | 'philsys'

@@ -16,6 +16,7 @@ const ROLE_PROFILE_TARGETS: Record<UserRole, { link: string; ariaLabel: string }
   staff: { link: '/manage/scanner', ariaLabel: 'Go to Staff Scanner' },
   trainer: { link: '/dashboard', ariaLabel: 'Go to Trainer Dashboard' },
   member: { link: '/dashboard', ariaLabel: 'Go to Profile Dashboard' },
+  user: { link: '/dashboard', ariaLabel: 'Go to Profile Dashboard' },
 }
 
 const PUBLIC_MENU_ITEMS: StaggeredMenuItem[] = [

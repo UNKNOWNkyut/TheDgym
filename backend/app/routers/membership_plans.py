@@ -26,7 +26,7 @@ from app.schemas.gym import (
 from app.services.membership_activation import (
     activate_member_and_notify_on_payment,
     broadcast_admin_member_notification,
-    count_prior_paid_memberships,
+    has_other_active_membership,
 )
 
 router = APIRouter(tags=["Membership Plans & Assignments"])
@@ -165,7 +165,7 @@ async def assign_membership(
     if not plan.is_active:
         raise HTTPException(status_code=400, detail="This membership plan is no longer active.")
 
-    prior_paid = await count_prior_paid_memberships(db, member_id=member.id)
+    had_active_before = await has_other_active_membership(db, member_id=member.id)
 
     # Calculate end_date from plan duration
     start = data.start_date
@@ -195,7 +195,7 @@ async def assign_membership(
         plan=plan,
         paid_amount=paid,
         payment_method=data.payment_method,
-        is_new_member_activation=(prior_paid == 0),
+        is_new_member_activation=(not had_active_before),
     )
 
     await db.commit()
@@ -259,7 +259,7 @@ async def update_membership(
         member = await db.get(Member, ms.member_id)
         plan = await db.get(MembershipPlan, ms.plan_id)
         if member and plan:
-            prior_paid = await count_prior_paid_memberships(
+            had_active_before = await has_other_active_membership(
                 db,
                 member_id=member.id,
                 exclude_membership_id=ms.id,
@@ -276,7 +276,7 @@ async def update_membership(
                 plan=plan,
                 paid_amount=paid_val,
                 payment_method=ms.payment_method,
-                is_new_member_activation=(prior_paid == 0),
+                is_new_member_activation=(not had_active_before),
             )
 
     await db.commit()

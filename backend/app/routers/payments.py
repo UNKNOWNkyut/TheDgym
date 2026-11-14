@@ -31,7 +31,7 @@ from app.services.audit import record_audit_log
 from app.services.membership_activation import (
     activate_member_and_notify_on_payment,
     broadcast_admin_member_notification,
-    count_prior_paid_memberships,
+    has_other_active_membership,
 )
 from app.services.xendit_service import (
     create_xendit_invoice,
@@ -172,7 +172,7 @@ async def _activate_membership_from_xendit(
             return existing_ms, True
         raise
 
-    prior_paid = await count_prior_paid_memberships(
+    had_active_before = await has_other_active_membership(
         db,
         member_id=member.id,
         exclude_membership_id=new_ms.id,
@@ -184,7 +184,7 @@ async def _activate_membership_from_xendit(
         plan=plan,
         paid_amount=paid_amount,
         payment_method=mapped_pm,
-        is_new_member_activation=(prior_paid == 0),
+        is_new_member_activation=(not had_active_before),
     )
     await db.commit()
     await db.refresh(new_ms)

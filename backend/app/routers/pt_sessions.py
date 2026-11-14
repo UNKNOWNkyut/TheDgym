@@ -5,13 +5,13 @@ from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.init_members import generate_member_code
-
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
+from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.pt_session import PTSession, PTSessionStatus
+from app.services.membership_activation import expire_elapsed_memberships
 from app.schemas.training_and_visits import (
     PTSessionCreate,
     PTSessionBookCreate,
@@ -69,33 +69,43 @@ async def _load_pt_session(session_id: int, db: AsyncSession) -> Optional[PTSess
     return result.scalar_one_or_none()
 
 
-async def _get_or_create_member_for_user(user: User, db: AsyncSession) -> Member:
-    """Finds or creates a Member record linked to the authenticated user."""
-    # Try finding by normalized email (case-insensitive)
-    normalized_email = user.email.lower().strip()
-    stmt = select(Member).where(func.lower(Member.email) == normalized_email)
-    result = await db.execute(stmt)
-    member = result.scalar_one_or_none()
-    if member:
-        return member
+async def _require_active_member_for_pt(user: User, db: AsyncSession) -> Member:
+    """Require an active 'member' account with a valid non-expired membership to book PT."""
+    if await expire_elapsed_memberships(db):
+        await db.commit()
+        await db.refresh(user)
 
-    member_code = await generate_member_code(db)
+    if user.role != UserRole.MEMBER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="An active gym membership is required to book a personal trainer.",
+        )
 
-    parts = [p for p in (user.full_name or "").strip().split(" ", 1) if p]
-    first_name = parts[0] if parts else "Member"
-    last_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else "Member"
-
-    member = Member(
-        member_code=member_code,
-        first_name=first_name,
-        last_name=last_name,
-        email=normalized_email,
-        phone=user.phone,
-        status=MemberStatus.INACTIVE,
-        notes=f"Auto-registered via portal account #{user.id}",
+    normalized_email = (user.email or "").lower().strip()
+    stmt = (
+        select(Member)
+        .where(func.lower(Member.email) == normalized_email)
+        .options(selectinload(Member.memberships))
     )
-    db.add(member)
-    await db.flush()
+    member = (await db.execute(stmt)).scalar_one_or_none()
+    if not member or not member.is_active or member.status == MemberStatus.SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your member account is currently suspended or deactivated. Please contact the gym desk.",
+        )
+
+    now = datetime.now(timezone.utc)
+    has_active_plan = any(
+        ms.status == MembershipStatus.ACTIVE
+        and ms.end_date is not None
+        and (ms.end_date.replace(tzinfo=timezone.utc) if ms.end_date.tzinfo is None else ms.end_date.astimezone(timezone.utc)) > now
+        for ms in (member.memberships or [])
+    )
+    if not has_active_plan:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="An active gym membership is required to book a personal trainer.",
+        )
     return member
 
 
@@ -186,13 +196,8 @@ async def book_pt_session(
             detail="Cannot book a personal training session in the past.",
         )
 
-    # Get or create member record for the logged-in user
-    member = await _get_or_create_member_for_user(current_user, db)
-    if not member.is_active or member.status == MemberStatus.SUSPENDED:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your member account is currently suspended or deactivated. Please contact the gym desk.",
-        )
+    # Require an active paid membership before allowing coach booking
+    member = await _require_active_member_for_pt(current_user, db)
 
     pt = PTSession(
         trainer_id=payload.trainer_id,

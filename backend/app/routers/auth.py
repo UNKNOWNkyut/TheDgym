@@ -51,6 +51,11 @@ from app.schemas.auth import (
 )
 from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
+from app.services.membership_activation import (
+    broadcast_admin_user_registration,
+    expire_elapsed_memberships,
+    notify_admins_new_registered_user,
+)
 from app.services.biometrics import (
     FACE_LOGIN_MATCH_THRESHOLD,
     ID_SELFIE_MATCH_THRESHOLD,
@@ -93,6 +98,10 @@ def _as_utc(dt: datetime | None) -> datetime | None:
 
 async def _build_user_response(user: User, db: AsyncSession) -> UserResponse:
     """Build UserResponse with membership status, active plan, and profile picture."""
+    if await expire_elapsed_memberships(db):
+        await db.commit()
+        await db.refresh(user)
+
     stmt_mem = (
         select(Member)
         .where(Member.email == user.email.lower().strip())
@@ -111,7 +120,7 @@ async def _build_user_response(user: User, db: AsyncSession) -> UserResponse:
         pending_m = None
         for m in member.memberships or []:
             end_d = _as_utc(m.end_date)
-            if end_d and m.status == MembershipStatus.ACTIVE and end_d >= now:
+            if end_d and m.status == MembershipStatus.ACTIVE and end_d > now:
                 active_m = m
                 break
             if m.status == MembershipStatus.PENDING and pending_m is None:
@@ -402,14 +411,14 @@ async def register(
             detail="An account with this email address already exists.",
         )
 
-    # Create new user
+    # Create new user (starts as registered "user" until a plan payment promotes them to "member")
     clean_phone = user_in.phone.strip() if user_in.phone else None
     new_user = User(
         email=normalized_email,
         hashed_password=hash_password(user_in.password),
         full_name=user_in.full_name.strip(),
         phone=clean_phone,
-        role=UserRole.MEMBER,
+        role=UserRole.USER,
         is_active=True,
     )
     db.add(new_user)
@@ -431,10 +440,7 @@ async def register(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     db.add(biometric_row)
 
-    first_name, last_name = _split_full_name(user_in.full_name, "User", "Account")
-    member_code = await generate_member_code(db)
-
-    # If user selected a training plan in registration Step 2
+    # If user selected a training plan in registration Step 2, stage an INACTIVE placeholder + PENDING plan
     plan = None
     if user_in.plan_slug and user_in.plan_slug.strip():
         stmt_plan = select(MembershipPlan).where(
@@ -443,20 +449,20 @@ async def register(
         )
         plan = (await db.execute(stmt_plan)).scalar_one_or_none()
 
-    # SKIP & REGISTER: Registered user remains INACTIVE until payment is confirmed
-    new_mem = Member(
-        member_code=member_code,
-        first_name=first_name,
-        last_name=last_name,
-        email=normalized_email,
-        phone=clean_phone,
-        status=MemberStatus.INACTIVE,
-        is_active=True,
-    )
-    db.add(new_mem)
-    await db.flush()
-
     if plan:
+        first_name, last_name = _split_full_name(user_in.full_name, "User", "Account")
+        new_mem = Member(
+            member_code=await generate_member_code(db),
+            first_name=first_name,
+            last_name=last_name,
+            email=normalized_email,
+            phone=clean_phone,
+            status=MemberStatus.INACTIVE,
+            is_active=True,
+        )
+        db.add(new_mem)
+        await db.flush()
+
         now = datetime.now(timezone.utc)
         duration = plan.duration_days or 30
         db.add(
@@ -472,6 +478,7 @@ async def register(
             )
         )
 
+    await notify_admins_new_registered_user(db, user=new_user)
     await record_audit_log(
         db,
         action="AUTH_REGISTER_SUCCESS",
@@ -484,6 +491,7 @@ async def register(
     )
     await db.commit()
     await db.refresh(new_user)
+    await broadcast_admin_user_registration(new_user)
 
     return await _issue_auth_response(new_user, response, db)
 
@@ -619,37 +627,21 @@ async def google_auth(
             detail="Google account did not provide an email address.",
         )
 
-    # 3. Check if user already exists (keep User + INACTIVE Member creation atomic)
+    # 3. Check if user already exists; new accounts start as "user" without a Member row until payment
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    is_new_user = user is None
 
-    if not user:
+    if is_new_user:
         user = User(
             email=email,
             hashed_password=hash_password(secrets.token_urlsafe(32)),
             full_name=full_name[:255],
-            role=UserRole.MEMBER,
+            role=UserRole.USER,
             is_active=True,
         )
         db.add(user)
         await db.flush()
-
-        # Ensure Member record exists as INACTIVE (registered account until plan is availed)
-        existing_mem = (
-            await db.execute(select(Member).where(Member.email == email))
-        ).scalar_one_or_none()
-        if not existing_mem:
-            first_name, last_name = _split_full_name(full_name)
-            member_code = await generate_member_code(db)
-            db.add(
-                Member(
-                    member_code=member_code,
-                    first_name=first_name,
-                    last_name=last_name,
-                    email=email,
-                    status=MemberStatus.INACTIVE,
-                    is_active=True,
-                )
-            )
+        await notify_admins_new_registered_user(db, user=user)
 
     if not user.is_active:
         raise HTTPException(
@@ -668,6 +660,8 @@ async def google_auth(
     )
     await db.commit()
     await db.refresh(user)
+    if is_new_user:
+        await broadcast_admin_user_registration(user)
 
     # 4. Require Step 2 face verification / first-login enrollment before issuing session JWT
     return await _issue_face_challenge(user, db)

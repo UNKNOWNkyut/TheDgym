@@ -12,6 +12,17 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
     `uq_member_memberships_payment_reference_nonempty`, `uq_visits_member_active_open`).
     Safe across both SQLite and PostgreSQL.
     """
+    if engine.dialect.name == "postgresql":
+        async with engine.connect() as ac_raw:
+            ac_conn = await ac_raw.execution_options(isolation_level="AUTOCOMMIT")
+            has_userrole_type = await ac_conn.scalar(
+                text("SELECT 1 FROM pg_type WHERE typname = 'userrole'")
+            )
+            if has_userrole_type:
+                await ac_conn.execute(
+                    text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'user'")
+                )
+
     async with engine.begin() as conn:
         def _get_existing_columns(sync_conn, table_name: str) -> set[str]:
             inspector = inspect(sync_conn)

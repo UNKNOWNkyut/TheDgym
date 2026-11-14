@@ -29,7 +29,7 @@ from app.models.member_keycard import (
 from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.notification import Notification
 from app.models.pt_session import PTSession, PTSessionStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.visit import EntryMethod, Visit, VisitType
 from app.schemas.access_control import PairingSessionStatus, TapVerificationResponse
 from app.services.audit import record_audit_log
@@ -134,11 +134,16 @@ def _ensure_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-def _membership_effective_end_utc(end_date: datetime) -> datetime:
+def _membership_effective_end_utc(
+    end_date: datetime,
+    duration_days: Optional[int] = None,
+) -> datetime:
     """
-    Ensure a member whose membership expires on a given date in Philippine Time
-    can still enter until 11:59:59 PM PH Time on that expiration date.
+    1-Day passes expire at the exact 24-hour timestamp (`end_date`); multi-day plans
+    remain valid until 11:59:59 PM Philippine Time on their expiration date.
     """
+    if duration_days == 1:
+        return _ensure_utc(end_date)
     end_ph = to_ph_time(end_date)
     eod_ph = end_ph.replace(hour=23, minute=59, second=59, microsecond=999999)
     return eod_ph.astimezone(timezone.utc)
@@ -567,7 +572,8 @@ def _classify_memberships(
 
     for ms in member.memberships:
         start_dt = _ensure_utc(ms.start_date)
-        effective_end_dt = _membership_effective_end_utc(ms.end_date)
+        duration_days = ms.plan.duration_days if ms.plan else None
+        effective_end_dt = _membership_effective_end_utc(ms.end_date, duration_days=duration_days)
 
         if ms.status == MembershipStatus.ACTIVE:
             if effective_end_dt < now:
@@ -592,6 +598,13 @@ async def _deny_without_active_membership(
     """Step 4 denial: payment pending, expired, or no membership at all."""
     if expired and member.status == MemberStatus.ACTIVE:
         member.status = MemberStatus.EXPIRED
+        if member.email:
+            u_res = await ctx.db.execute(
+                select(User).where(User.email == member.email.lower().strip())
+            )
+            linked_user = u_res.scalar_one_or_none()
+            if linked_user and linked_user.role == UserRole.MEMBER:
+                linked_user.role = UserRole.USER
 
     if pending:
         pending_ms = sorted(pending, key=lambda m: _ensure_utc(m.created_at), reverse=True)[0]

@@ -39,6 +39,7 @@ from app.init_training import seed_phase5
 from app.init_plans import seed_plans
 from app.services.audit import redact_sensitive_text
 from app.services.churn_pipeline import seed_simulated_gym_analytics
+from app.services.membership_activation import expire_elapsed_memberships
 from app.services.visit_sweeper import sweep_overdue_open_visits
 
 def _configure_logging() -> None:
@@ -169,6 +170,8 @@ async def lifespan(app: FastAPI):
             await seed_keycards(session)
             await seed_simulated_gym_analytics(session)
         await sweep_overdue_open_visits(session)
+        if await expire_elapsed_memberships(session):
+            await session.commit()
 
     async def _periodic_auto_checkout_loop():
         while True:
@@ -176,6 +179,8 @@ async def lifespan(app: FastAPI):
             try:
                 async with AsyncSessionLocal() as bg_session:
                     await sweep_overdue_open_visits(bg_session)
+                    if await expire_elapsed_memberships(bg_session):
+                        await bg_session.commit()
             except Exception as exc:
                 logger.warning("Auto-checkout background sweep error: %s", exc)
 

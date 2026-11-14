@@ -16,6 +16,7 @@ from app.schemas.training_and_visits import (
     ClassSessionCreate, ClassSessionUpdate, ClassSessionResponse,
     EnrollMemberCreate, EnrollmentResponse,
 )
+from app.services.membership_activation import expire_elapsed_memberships
 from app.services.visit_sweeper import to_ph_time
 
 router = APIRouter(prefix="/api/classes", tags=["Classes"])
@@ -95,11 +96,21 @@ async def _resolve_member_for_user(
         return None
     stmt = select(Member).where(func.lower(Member.email) == normalized_email)
     if load_memberships:
-        stmt = stmt.options(selectinload(Member.memberships))
+        stmt = stmt.options(selectinload(Member.memberships).selectinload(MemberMembership.plan))
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def _require_active_member_for_class(user: User, db: AsyncSession) -> Member:
+    if await expire_elapsed_memberships(db):
+        await db.commit()
+        await db.refresh(user)
+
+    if user.role != UserRole.MEMBER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="An active gym membership is required to reserve group classes.",
+        )
+
     member = await _resolve_member_for_user(user, db, load_memberships=True)
     if not member or not member.is_active or member.status == MemberStatus.SUSPENDED:
         raise HTTPException(
@@ -108,12 +119,22 @@ async def _require_active_member_for_class(user: User, db: AsyncSession) -> Memb
         )
 
     now = datetime.now(timezone.utc)
-    has_valid_pass = any(
-        ms.status == MembershipStatus.ACTIVE
-        and _ensure_utc(ms.start_date) <= now
-        <= to_ph_time(ms.end_date).replace(hour=23, minute=59, second=59, microsecond=999999).astimezone(timezone.utc)
-        for ms in (member.memberships or [])
-    )
+    has_valid_pass = False
+    for ms in member.memberships or []:
+        if ms.status != MembershipStatus.ACTIVE:
+            continue
+        is_day_pass = bool(ms.plan and (ms.plan.duration_days or 0) == 1)
+        end_cutoff = (
+            _ensure_utc(ms.end_date)
+            if is_day_pass
+            else to_ph_time(ms.end_date)
+            .replace(hour=23, minute=59, second=59, microsecond=999999)
+            .astimezone(timezone.utc)
+        )
+        if _ensure_utc(ms.start_date) <= now <= end_cutoff:
+            has_valid_pass = True
+            break
+
     if not has_valid_pass:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

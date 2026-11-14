@@ -134,9 +134,12 @@ export function YourPlanPage() {
     };
   }, []);
 
-  // Strict role guarding: Admins always route to /manage, Trainers always route to /dashboard
+  // Strict role guarding: Admins -> /manage; Trainers, unsubscribed Users & expired Members -> /dashboard
   if (user?.role === 'admin') return <Navigate to="/manage" replace />;
-  if (user?.role === 'trainer') return <Navigate to="/dashboard" replace />;
+  if (user?.role === 'trainer' || user?.role === 'user') return <Navigate to="/dashboard" replace />;
+  if (user?.role === 'member' && !user?.has_active_membership && user?.membership_status !== 'active') {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   // Multi-user isolated storage keys
   const userKey = resolveUserStorageKey(user);

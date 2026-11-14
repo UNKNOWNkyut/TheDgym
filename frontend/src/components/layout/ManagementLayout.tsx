@@ -100,7 +100,7 @@ const NAV_ITEMS: NavConfig[] = [
   {
     label: 'My Dashboard',
     href: '/dashboard',
-    roles: ['trainer', 'member'],
+    roles: ['trainer', 'member', 'user'],
     icon: <NavIcon d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />,
   },
   {
@@ -145,9 +145,9 @@ export function ManagementLayout() {
     if (!item.roles) return true
     if (!user || !item.roles.includes(user.role)) return false
 
-    // Hide Book a Coach for non-members who have not availed an active plan
-    if (item.href === '/dashboard/book') {
-      return Boolean(user.has_active_membership)
+    // Hide Your Plan and Book a Coach unless user is an active paid member
+    if (item.href === '/dashboard/book' || item.href === '/dashboard/plan') {
+      return user.role === 'member' && Boolean(user.has_active_membership)
     }
 
     return true
@@ -160,7 +160,9 @@ export function ManagementLayout() {
         ? 'Staff Portal'
         : user?.role === 'trainer'
           ? 'Coach Portal'
-          : 'Member Portal'
+          : user?.role === 'user'
+            ? 'User Portal'
+            : 'Member Portal'
 
   return (
     <div className="h-screen w-screen bg-background flex overflow-hidden">
@@ -232,7 +234,7 @@ export function ManagementLayout() {
         </nav>
 
         {user &&
-          (user.role === 'member' ? (
+          (user.role === 'member' || user.role === 'user' ? (
             <MemberAccountMenu user={user} onLogout={handleLogout} />
           ) : (
             <div className="p-4 border-t border-white/8 bg-surface-2/40">
@@ -285,7 +287,7 @@ export function ManagementLayout() {
             </button>
 
             {/* Back to Home - Visible ONLY for member or registered user, NOT for admin, staff, or trainer */}
-            {user && user.role === 'member' && (
+            {user && (user.role === 'member' || user.role === 'user') && (
               <Link
                 to="/"
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/25 text-xs font-medium text-white/70 hover:text-white transition-all duration-150 group"

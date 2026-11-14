@@ -45,8 +45,12 @@ function getRoleBadgeVariant(role: string) {
       return 'info' as const
     case 'trainer':
       return 'warning' as const
-    default:
+    case 'member':
       return 'success' as const
+    case 'user':
+      return 'warning' as const
+    default:
+      return 'info' as const
   }
 }
 
@@ -233,7 +237,7 @@ export function ManageUsersPage() {
   const filteredUsers = filterUsers(users, search, roleFilter, statusFilter)
   const activeCount = users.filter((u) => u.is_active).length
   const disabledCount = users.length - activeCount
-  const teamCount = users.filter((u) => u.role !== 'member').length
+  const teamCount = users.filter((u) => u.role !== 'member' && u.role !== 'user').length
   const hasActiveFilters = Boolean(search.trim() || roleFilter || statusFilter)
 
   const handleFieldChange = <K extends keyof CreateUserFormState>(
@@ -385,6 +389,9 @@ export function ManageUsersPage() {
             </option>
             <option value="member" className="bg-surface-2">
               Member
+            </option>
+            <option value="user" className="bg-surface-2">
+              User (Registered)
             </option>
           </select>
 
