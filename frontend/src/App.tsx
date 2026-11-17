@@ -35,6 +35,7 @@ const MemberFormPage = lazy(() => import('@/pages/manage/MemberFormPage').then((
 const MemberDetailPage = lazy(() => import('@/pages/manage/MemberDetailPage').then((m) => ({ default: m.MemberDetailPage })))
 const ManagePlansPage = lazy(() => import('@/pages/manage/ManagePlansPage').then((m) => ({ default: m.ManagePlansPage })))
 const ManageUsersPage = lazy(() => import('@/pages/manage/ManageUsersPage').then((m) => ({ default: m.ManageUsersPage })))
+const ManageAuditPage = lazy(() => import('@/pages/manage/ManageAuditPage').then((m) => ({ default: m.ManageAuditPage })))
 const ManageVisitsPage = lazy(() => import('@/pages/manage/ManageVisitsPage').then((m) => ({ default: m.ManageVisitsPage })))
 const MobileScannerPage = lazy(() => import('@/pages/manage/MobileScannerPage').then((m) => ({ default: m.MobileScannerPage })))
 const ManageClassesPage = lazy(() => import('@/pages/manage/ManageClassesPage').then((m) => ({ default: m.ManageClassesPage })))
@@ -306,6 +307,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <ManageUsersPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/manage/audit"
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <ManageAuditPage />
                   </ProtectedRoute>
                 }
               />

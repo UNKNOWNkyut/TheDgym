@@ -6,6 +6,7 @@ import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { PaginationControls } from '@/components/ui/PaginationControls'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import type { Member, MemberStatus } from '@/types/auth'
@@ -45,6 +46,9 @@ export function ManageMembersPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [skip, setSkip] = useState(0)
+  const [hasNext, setHasNext] = useState(false)
+  const MEMBERS_PAGE_SIZE = 25
   
   // Modal states for Deactivate, Reactivate & Delete
   const [deactivateTarget, setDeactivateTarget] = useState<Member | null>(null)
@@ -63,17 +67,20 @@ export function ManageMembersPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.getMembers({
+      const page = await api.getMembersPage({
         search: search || undefined,
         status: statusFilter || undefined,
+        skip,
+        limit: MEMBERS_PAGE_SIZE,
       })
-      setMembers(data)
+      setMembers(page.items)
+      setHasNext(page.has_next)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load members.')
     } finally {
       setLoading(false)
     }
-  }, [search, statusFilter])
+  }, [search, statusFilter, skip])
 
   // Debounced fetch on search/filter change
   useEffect(() => {
@@ -205,13 +212,19 @@ export function ManageMembersPage() {
               type="text"
               placeholder="Search by name, email, phone, or member code..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setSkip(0)
+              }}
               className="w-full pl-10 pr-4 py-2.5 bg-surface border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-red/40 transition-colors"
             />
           </div>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setSkip(0)
+            }}
             className="px-4 py-2.5 bg-surface border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors"
           >
             {STATUS_OPTIONS.map((opt) => (
@@ -385,6 +398,18 @@ export function ManageMembersPage() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="px-4 pb-4">
+            <PaginationControls
+              skip={skip}
+              limit={MEMBERS_PAGE_SIZE}
+              itemCount={members.length}
+              hasNext={hasNext}
+              loading={loading}
+              onPrev={() => setSkip((prev) => Math.max(0, prev - MEMBERS_PAGE_SIZE))}
+              onNext={() => setSkip((prev) => prev + MEMBERS_PAGE_SIZE)}
+              itemLabel="members"
+            />
           </div>
         </div>
 

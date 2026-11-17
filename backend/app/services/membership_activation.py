@@ -23,6 +23,7 @@ from app.models.membership_plan import MembershipPlan
 from app.models.notification import Notification
 from app.models.user import User, UserRole
 from app.services.access_service import live_feed_manager
+from app.services.pagination import read_page_cache
 
 
 def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
@@ -182,6 +183,8 @@ async def activate_member_and_notify_on_payment(
     if linked_user is not None and linked_user.role == UserRole.USER:
         linked_user.role = UserRole.MEMBER
 
+    read_page_cache.invalidate_prefix("members:", "users:")
+
     if not is_new_member_activation:
         return False
 
@@ -239,6 +242,7 @@ async def expire_elapsed_memberships(
         if linked_user is not None and linked_user.role == UserRole.MEMBER:
             linked_user.role = UserRole.USER
 
+    read_page_cache.invalidate_prefix("members:", "users:")
     return expired_count
 
 

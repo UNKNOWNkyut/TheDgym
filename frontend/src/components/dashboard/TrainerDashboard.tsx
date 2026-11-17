@@ -10,9 +10,11 @@ import {
   Flame,
   RefreshCw,
   ShieldAlert,
+  TrendingUp,
   Users,
   X,
 } from 'lucide-react';
+import { ClientProgressModal } from '@/components/dashboard/ClientProgressModal';
 import { useAuth } from '@/context/AuthContext';
 import { CLASS_TYPE_LABELS } from '@/constants/coaches';
 import { GYM_INFO } from '@/constants/gymInfo';
@@ -191,6 +193,10 @@ export function TrainerDashboard() {
   const [coachFreeNotes, setCoachFreeNotes] = useState('');
   const [isSavingLog, setIsSavingLog] = useState(false);
   const [loggerError, setLoggerError] = useState<string | null>(null);
+  const [progressModalTarget, setProgressModalTarget] = useState<{
+    memberId: number;
+    memberName?: string;
+  } | null>(null);
 
   const fetchDashboardFeeds = useCallback(async () => {
     if (!user) return;
@@ -693,6 +699,20 @@ export function TrainerDashboard() {
 
                               <button
                                 type="button"
+                                onClick={() =>
+                                  setProgressModalTarget({
+                                    memberId: sess.member_id,
+                                    memberName: sess.member_name || sess.member_code || undefined,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono border border-red/30 bg-red/10 text-red hover:bg-red hover:text-white transition-colors cursor-pointer"
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                <span>View Progress</span>
+                              </button>
+
+                              <button
+                                type="button"
                                 disabled={isBusy}
                                 onClick={() => openLoggerForSession(sess)}
                                 className={`${NEUTRAL_ACTION_BTN} hover:text-white hover:border-zinc-700`}
@@ -739,7 +759,20 @@ export function TrainerDashboard() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProgressModalTarget({
+                                memberId: req.member_id,
+                                memberName: req.member_name || req.member_code || undefined,
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono border border-red/30 bg-red/10 text-red hover:bg-red hover:text-white transition-colors cursor-pointer"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5" />
+                            <span>View Progress</span>
+                          </button>
                           <button
                             type="button"
                             disabled={isBusy}
@@ -998,9 +1031,24 @@ export function TrainerDashboard() {
                           >
                             {sess.member_name || sess.member_code || `Member #${sess.member_id}`}
                           </Link>
-                          <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                            {formatDateTimeLabel(sess.scheduled_at)}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setProgressModalTarget({
+                                  memberId: sess.member_id,
+                                  memberName: sess.member_name || sess.member_code || undefined,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red/30 bg-red/10 text-[10px] font-mono text-red hover:bg-red hover:text-white transition-colors cursor-pointer"
+                            >
+                              <TrendingUp className="w-3 h-3" />
+                              <span>View Progress</span>
+                            </button>
+                            <span className="text-[10px] text-zinc-400 font-mono shrink-0">
+                              {formatDateTimeLabel(sess.scheduled_at)}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-xs text-zinc-300 mt-0.5">
                           {sess.coach_notes || `${sess.duration_minutes} min session completed`}
@@ -1201,6 +1249,12 @@ export function TrainerDashboard() {
             </div>
           </div>
         )}
+
+        <ClientProgressModal
+          memberId={progressModalTarget?.memberId ?? null}
+          fallbackName={progressModalTarget?.memberName}
+          onClose={() => setProgressModalTarget(null)}
+        />
       </div>
     </div>
   );

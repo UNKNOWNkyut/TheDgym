@@ -4,9 +4,9 @@ Access: Admin and Staff only (read + create + update), Admin only (delete).
 """
 import re
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select, func, or_, delete, update
+from sqlalchemy import desc, select, func, or_, delete, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,12 @@ from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
 from app.services.membership_activation import expire_elapsed_memberships
 from app.services.overview_kpis import compute_overview_kpis
+from app.services.pagination import (
+    PaginatedPage,
+    make_cache_key,
+    read_page_cache,
+    slice_limit_plus_one,
+)
 
 router = APIRouter(prefix="/api/members", tags=["Members"])
 
@@ -150,7 +156,7 @@ def _member_to_response(member: Member) -> MemberResponse:
 
 # ENDPOINTS
 
-@router.get("", response_model=List[MemberResponse])
+@router.get("", response_model=Union[PaginatedPage[MemberResponse], List[MemberResponse]])
 async def list_members(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
@@ -158,18 +164,32 @@ async def list_members(
     status_filter: Optional[MemberStatus] = Query(None, alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    paginated: bool = Query(False),
 ):
-    """List all gym members with optional search and status filter. Admin, Staff, and Trainers."""
+    """List gym members with deterministic `(joined_at, id)` sorting and `limit + 1` pagination."""
     if await expire_elapsed_memberships(db):
         await db.commit()
+
+    norm_search = search.strip() if search and search.strip() else None
+    cache_key = make_cache_key(
+        "members",
+        search=norm_search,
+        status=status_filter.value if status_filter else None,
+        skip=skip,
+        limit=limit,
+        paginated=paginated,
+    )
+    cached = read_page_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     stmt = (
         select(Member)
         .options(selectinload(Member.memberships).selectinload(MemberMembership.plan))
     )
 
-    if search:
-        search_term = f"%{search.strip()}%"
+    if norm_search:
+        search_term = f"%{norm_search}%"
         stmt = stmt.where(
             or_(
                 Member.first_name.ilike(search_term),
@@ -195,10 +215,30 @@ async def list_members(
             )
         )
 
-    stmt = stmt.order_by(Member.joined_at.desc()).offset(skip).limit(limit)
+    stmt = (
+        stmt.order_by(desc(Member.joined_at), desc(Member.id))
+        .offset(skip)
+        .limit(limit + 1)
+    )
     result = await db.execute(stmt)
     members = result.scalars().all()
-    return [_member_to_response(m) for m in members]
+    page = slice_limit_plus_one(
+        [_member_to_response(m) for m in members],
+        skip=skip,
+        limit=limit,
+    )
+    payload: Union[PaginatedPage[MemberResponse], List[MemberResponse]] = (
+        PaginatedPage[MemberResponse](
+            items=page.items,
+            skip=skip,
+            limit=limit,
+            has_next=page.has_next,
+            next_skip=page.next_skip,
+        )
+        if paginated
+        else page.items
+    )
+    return read_page_cache.set(cache_key, payload)
 
 
 @router.get("/stats", tags=["Members"])
@@ -293,6 +333,7 @@ async def create_member(
         details=f"Registered member {new_member.member_code} ({new_member.full_name}).",
     )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
 
     # Re-fetch with relationships loaded
     stmt = (
@@ -361,6 +402,7 @@ async def update_member(
         request=request,
     )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
 
     stmt = (
         select(Member)
@@ -410,6 +452,7 @@ async def deactivate_member(
             linked_user.is_active = False
         await persist_user_session_revocation(db, linked_user.id)
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
 
 
 @router.delete(
@@ -487,6 +530,7 @@ async def delete_member_permanent(
         ),
     )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:", "visits:", "tap_logs:")
 
 
 @router.post(
@@ -524,6 +568,7 @@ async def reactivate_member(
         details=f"Reactivated member {member.member_code} ({member.full_name}).",
     )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
 
     stmt = (
         select(Member)

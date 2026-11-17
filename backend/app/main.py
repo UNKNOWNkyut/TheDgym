@@ -19,6 +19,7 @@ from app.routers import (
     access_control_router,
     account_router,
     analytics_router,
+    audit_router,
     auth_router,
     class_sessions_router,
     finance_router,
@@ -26,6 +27,7 @@ from app.routers import (
     membership_plans_router,
     notifications_router,
     payments_router,
+    progress_router,
     pt_sessions_router,
     retention_router,
     uploads_router,
@@ -378,6 +380,7 @@ app.include_router(auth_router)
 app.include_router(account_router)
 app.include_router(uploads_router)
 app.include_router(users_router)
+app.include_router(audit_router)
 app.include_router(members_router)
 app.include_router(membership_plans_router)
 app.include_router(visits_router)
@@ -389,6 +392,7 @@ app.include_router(retention_router)
 app.include_router(notifications_router)
 app.include_router(access_control_router)
 app.include_router(payments_router)
+app.include_router(progress_router)
 
 
 

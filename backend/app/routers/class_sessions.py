@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Text, desc, func, insert, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from app.schemas.training_and_visits import (
     ClassSessionCreate, ClassSessionUpdate, ClassSessionResponse,
     EnrollMemberCreate, EnrollmentResponse,
 )
+from app.services.audit import record_audit_log
 from app.services.membership_activation import expire_elapsed_memberships
 from app.services.visit_sweeper import to_ph_time
 
@@ -146,12 +147,24 @@ async def _require_active_member_for_class(user: User, db: AsyncSession) -> Memb
 @router.post("", response_model=ClassSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_class_session(
     payload: ClassSessionCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """Create a new class session."""
     session = ClassSession(**payload.model_dump())
     db.add(session)
+    await db.flush()
+    await record_audit_log(
+        db,
+        action="class.created",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="class_session",
+        target_id=session.id,
+        request=request,
+        details=f"Created class session '{session.class_type.value if hasattr(session.class_type, 'value') else session.class_type}' (#{session.id}).",
+    )
     await db.commit()
 
     loaded = await _load_session(session.id, db)
@@ -244,6 +257,7 @@ async def update_class_session(
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_class_session(
     session_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -252,6 +266,16 @@ async def delete_class_session(
     if not session:
         raise HTTPException(status_code=404, detail="Class session not found.")
     await db.delete(session)
+    await record_audit_log(
+        db,
+        action="class.deleted",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="class_session",
+        target_id=session_id,
+        request=request,
+        details=f"Deleted class session #{session_id}.",
+    )
     await db.commit()
 
 
@@ -358,6 +382,7 @@ async def _atomic_enroll_member(
 @router.post("/{session_id}/enroll/self", response_model=EnrollmentResponse, status_code=status.HTTP_201_CREATED)
 async def self_enroll_class(
     session_id: int,
+    request: Request,
     payload: Optional[SelfEnrollCreate] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -365,13 +390,26 @@ async def self_enroll_class(
     """Allow an active member to reserve a spot for themselves in a group class."""
     member = await _require_active_member_for_class(current_user, db)
     notes = payload.notes if payload else None
-    return await _atomic_enroll_member(db, session_id, member, notes)
+    enrollment = await _atomic_enroll_member(db, session_id, member, notes)
+    await record_audit_log(
+        db,
+        action="class.enrolled",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="class_session",
+        target_id=session_id,
+        request=request,
+        details=f"Member {member.member_code} enrolled in class #{session_id}.",
+        commit=True,
+    )
+    return enrollment
 
 
 @router.post("/{session_id}/enroll", response_model=EnrollmentResponse, status_code=status.HTTP_201_CREATED)
 async def enroll_member(
     session_id: int,
     payload: EnrollMemberCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -379,12 +417,25 @@ async def enroll_member(
     member = await db.get(Member, payload.member_id)
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
-    return await _atomic_enroll_member(db, session_id, member, payload.notes)
+    enrollment = await _atomic_enroll_member(db, session_id, member, payload.notes)
+    await record_audit_log(
+        db,
+        action="class.enrolled",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="class_session",
+        target_id=session_id,
+        request=request,
+        details=f"Enrolled {member.member_code} in class #{session_id}.",
+        commit=True,
+    )
+    return enrollment
 
 
 @router.delete("/{session_id}/enroll/self", status_code=status.HTTP_204_NO_CONTENT)
 async def self_unenroll_class(
     session_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -401,6 +452,16 @@ async def self_unenroll_class(
     if not enrollment:
         raise HTTPException(status_code=404, detail="Enrollment not found.")
     await db.delete(enrollment)
+    await record_audit_log(
+        db,
+        action="class.unenrolled",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="class_session",
+        target_id=session_id,
+        request=request,
+        details=f"Member {member.member_code} cancelled class #{session_id} reservation.",
+    )
     await db.commit()
 
 
@@ -408,6 +469,7 @@ async def self_unenroll_class(
 async def unenroll_member(
     session_id: int,
     member_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -421,4 +483,14 @@ async def unenroll_member(
     if not enrollment:
         raise HTTPException(status_code=404, detail="Enrollment not found.")
     await db.delete(enrollment)
+    await record_audit_log(
+        db,
+        action="class.unenrolled",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="class_session",
+        target_id=session_id,
+        request=request,
+        details=f"Removed member #{member_id} from class #{session_id}.",
+    )
     await db.commit()

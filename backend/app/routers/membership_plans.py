@@ -5,7 +5,7 @@ Membership Assignment router — assign plans to members, track payments.
 from datetime import timedelta, timezone, datetime
 from decimal import Decimal
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,11 +23,13 @@ from app.schemas.gym import (
     MembershipResponse,
     MembershipUpdate,
 )
+from app.services.audit import record_audit_log
 from app.services.membership_activation import (
     activate_member_and_notify_on_payment,
     broadcast_admin_member_notification,
     has_other_active_membership,
 )
+from app.services.pagination import read_page_cache
 
 router = APIRouter(tags=["Membership Plans & Assignments"])
 
@@ -62,6 +64,7 @@ async def get_plan(
 @router.post("/api/plans", response_model=MembershipPlanResponse, status_code=status.HTTP_201_CREATED)
 async def create_plan(
     plan_in: MembershipPlanCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -76,7 +79,19 @@ async def create_plan(
 
     plan = MembershipPlan(**plan_in.model_dump())
     db.add(plan)
+    await db.flush()
+    await record_audit_log(
+        db,
+        action="plan.created",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="plan",
+        target_id=plan.id,
+        request=request,
+        details=f"Created membership plan '{plan.name}' (PHP {plan.price_php}).",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
     await db.refresh(plan)
     return plan
 
@@ -85,6 +100,7 @@ async def create_plan(
 async def update_plan(
     plan_id: int,
     plan_update: MembershipPlanUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -98,7 +114,18 @@ async def update_plan(
     for field, value in update_data.items():
         setattr(plan, field, value)
 
+    await record_audit_log(
+        db,
+        action="plan.updated",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="plan",
+        target_id=plan.id,
+        request=request,
+        details=f"Updated plan '{plan.name}'.",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
     await db.refresh(plan)
     return plan
 
@@ -106,6 +133,7 @@ async def update_plan(
 @router.delete("/api/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deactivate_plan(
     plan_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
@@ -115,7 +143,18 @@ async def deactivate_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="Membership plan not found.")
     plan.is_active = False
+    await record_audit_log(
+        db,
+        action="plan.deactivated",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="plan",
+        target_id=plan.id,
+        request=request,
+        details=f"Deactivated plan '{plan.name}'.",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
 
 
 # MEMBERSHIP ASSIGNMENTS
@@ -141,6 +180,7 @@ def _build_membership_response(ms: MemberMembership) -> MembershipResponse:
 @router.post("/api/memberships", response_model=MembershipResponse, status_code=status.HTTP_201_CREATED)
 async def assign_membership(
     data: AssignMembershipCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -198,7 +238,19 @@ async def assign_membership(
         is_new_member_activation=(not had_active_before),
     )
 
+    await db.flush()
+    await record_audit_log(
+        db,
+        action="membership.assigned",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="membership",
+        target_id=new_ms.id,
+        request=request,
+        details=f"Assigned '{plan.name}' to {member.full_name} ({member.member_code}) — PHP {paid}.",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
     if admin_notified:
         await broadcast_admin_member_notification(member)
     await db.refresh(new_ms)
@@ -226,6 +278,7 @@ async def get_membership(
 async def update_membership(
     membership_id: int,
     update: MembershipUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -279,7 +332,18 @@ async def update_membership(
                 is_new_member_activation=(not had_active_before),
             )
 
+    await record_audit_log(
+        db,
+        action="membership.updated",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="membership",
+        target_id=ms.id,
+        request=request,
+        details=f"Updated membership #{ms.id} status={ms.status.value} paid_amount={ms.paid_amount}.",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("members:", "users:")
     if admin_notified and member:
         await broadcast_admin_member_notification(member)
     await db.refresh(ms)

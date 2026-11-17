@@ -10,12 +10,14 @@ import type {
   AppNotification,
   AssignMembershipCreate,
   AtRiskMemberItem,
+  AuditLogEntry,
   BiometricProvidersStatus,
   CheckoutSessionResponse,
   ChurnOverview,
   ClassEnrollment,
   ClassSession,
   ClassSessionCreate,
+  ClientProgressReport,
   CreateCheckoutPayload,
   Expense,
   ExpenseCategory,
@@ -38,8 +40,11 @@ import type {
   MembershipSummary,
   MemberStats,
   OcrScanResponse,
+  PaginatedResponse,
   PairingSessionStatus,
   PaymentVerifyResponse,
+  ProgressEntry,
+  ProgressEntryCreatePayload,
   PTSession,
   PTSessionBookCreate,
   PTSessionCreate,
@@ -48,6 +53,8 @@ import type {
   TapVerificationResult,
   TokenResponse,
   TrainerProfile,
+  TrainingPlanRecord,
+  TrainingPlanUpsertPayload,
   User,
   Visit,
   VisitCreate,
@@ -311,6 +318,29 @@ export const api = {
     return request<User[]>('/api/users')
   },
 
+  async getUsersPage(params?: {
+    search?: string
+    role?: string
+    is_active?: boolean
+    skip?: number
+    limit?: number
+  }): Promise<PaginatedResponse<User>> {
+    return request<PaginatedResponse<User>>(
+      `/api/users${buildQuery({ ...params, paginated: true })}`,
+    )
+  },
+
+  async getAuditLogsPage(params?: {
+    search?: string
+    action?: string
+    outcome?: string
+    actor_role?: string
+    skip?: number
+    limit?: number
+  }): Promise<PaginatedResponse<AuditLogEntry>> {
+    return request<PaginatedResponse<AuditLogEntry>>(`/api/audit-logs${buildQuery(params)}`)
+  },
+
   async createUser(data: {
     email: string
     password: string
@@ -368,6 +398,17 @@ export const api = {
     limit?: number
   }): Promise<Member[]> {
     return request<Member[]>(`/api/members${buildQuery(params)}`)
+  },
+
+  async getMembersPage(params?: {
+    search?: string
+    status?: string
+    skip?: number
+    limit?: number
+  }): Promise<PaginatedResponse<Member>> {
+    return request<PaginatedResponse<Member>>(
+      `/api/members${buildQuery({ ...params, paginated: true })}`,
+    )
   },
 
   async getMemberStats(): Promise<MemberStats> {
@@ -454,6 +495,18 @@ export const api = {
     limit?: number
   }): Promise<Visit[]> {
     return request<Visit[]>(`/api/visits${buildQuery(params)}`)
+  },
+
+  async getVisitsPage(params?: {
+    member_id?: number
+    date_from?: string
+    date_to?: string
+    skip?: number
+    limit?: number
+  }): Promise<PaginatedResponse<Visit>> {
+    return request<PaginatedResponse<Visit>>(
+      `/api/visits${buildQuery({ ...params, paginated: true })}`,
+    )
   },
 
   // Class Sessions
@@ -776,6 +829,49 @@ export const api = {
     limit?: number
   }): Promise<KeycardTapLog[]> {
     return request<KeycardTapLog[]>(`/api/access/logs${buildQuery(params)}`)
+  },
+
+  async getKeycardTapLogsPage(params?: {
+    granted_only?: boolean
+    skip?: number
+    limit?: number
+  }): Promise<PaginatedResponse<KeycardTapLog>> {
+    return request<PaginatedResponse<KeycardTapLog>>(
+      `/api/access/logs${buildQuery({ ...params, paginated: true })}`,
+    )
+  },
+
+  // Client Progress & Assigned Plans
+
+  async getMemberProgressReport(memberId: number): Promise<ClientProgressReport> {
+    return request<ClientProgressReport>(`/api/progress/member/${memberId}`)
+  },
+
+  async createMemberProgressEntry(
+    memberId: number,
+    data: ProgressEntryCreatePayload,
+  ): Promise<ProgressEntry> {
+    return request<ProgressEntry>(`/api/progress/member/${memberId}/entries`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updateMemberTrainingPlan(
+    memberId: number,
+    data: TrainingPlanUpsertPayload,
+  ): Promise<TrainingPlanRecord> {
+    return request<TrainingPlanRecord>(`/api/progress/member/${memberId}/plan`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async syncMyTrainingPlan(data: TrainingPlanUpsertPayload): Promise<TrainingPlanRecord> {
+    return request<TrainingPlanRecord>('/api/progress/me/plan', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
   },
 
   async getMemberKeycards(memberId: number): Promise<MemberKeycard[]> {

@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String, Text, Date
+from sqlalchemy import Boolean, Column, DateTime, Enum, Index, Integer, String, Text, Date
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -22,6 +22,10 @@ class Gender(str, enum.Enum):
 
 class Member(Base):
     __tablename__ = "members"
+    __table_args__ = (
+        Index("ix_members_joined_id", "joined_at", "id"),
+        Index("ix_members_status_joined_id", "status", "joined_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     # Auto-generated code e.g. DGM-0001

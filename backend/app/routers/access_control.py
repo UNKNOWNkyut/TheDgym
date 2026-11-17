@@ -1,7 +1,7 @@
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import (
     APIRouter,
@@ -50,6 +50,12 @@ from app.services.access_service import (
     runtime_state,
 )
 from app.services.audit import record_audit_log
+from app.services.pagination import (
+    PaginatedPage,
+    make_cache_key,
+    read_page_cache,
+    slice_limit_plus_one,
+)
 
 logger = logging.getLogger("dgym.access_control")
 
@@ -154,7 +160,7 @@ async def verify_and_log_keycard_tap(
     db: AsyncSession = Depends(get_db),
 ):
     actor_user, scanner = auth_ctx
-    return await process_card_tap(
+    result = await process_card_tap(
         raw_uid=payload.card_uid,
         scanner_id=payload.scanner_id,
         request=request,
@@ -162,6 +168,8 @@ async def verify_and_log_keycard_tap(
         scanner=scanner,
         db=db,
     )
+    read_page_cache.invalidate_prefix("tap_logs:", "visits:")
+    return result
 
 
 # State-changing: POST only (a GET here could be triggered cross-site by a plain <img> tag).
@@ -201,7 +209,7 @@ async def webhook_card_tap(
         )
 
     actor_user, scanner = auth_ctx
-    return await process_card_tap(
+    result = await process_card_tap(
         raw_uid=normalize_card_uid(str(resolved_uid)),
         scanner_id=None,
         request=request,
@@ -209,6 +217,8 @@ async def webhook_card_tap(
         scanner=scanner,
         db=db,
     )
+    read_page_cache.invalidate_prefix("tap_logs:", "visits:")
+    return result
 
 
 # 2. Real-Time WebSocket Live Feed for Reception & Mobile Scanner Screens
@@ -289,23 +299,37 @@ GRANTED_DECISIONS = {
 
 @router.get(
     "/access/logs",
-    response_model=List[KeycardTapLogResponse],
+    response_model=Union[PaginatedPage[KeycardTapLogResponse], List[KeycardTapLogResponse]],
     summary="List recent smart keycard tap events (both granted and denied)",
 )
 async def list_keycard_tap_logs(
     granted_only: Optional[bool] = Query(default=None),
+    skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    paginated: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
+    cache_key = make_cache_key(
+        "tap_logs",
+        granted_only=granted_only,
+        skip=skip,
+        limit=limit,
+        paginated=paginated,
+    )
+    cached = read_page_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     stmt = (
         select(KeycardTapLog)
         .options(
             selectinload(KeycardTapLog.member),
             selectinload(KeycardTapLog.scanner),
         )
-        .order_by(desc(KeycardTapLog.tapped_at))
-        .limit(limit)
+        .order_by(desc(KeycardTapLog.tapped_at), desc(KeycardTapLog.id))
+        .offset(skip)
+        .limit(limit + 1)
     )
 
     if granted_only is True:
@@ -337,7 +361,19 @@ async def list_keycard_tap_logs(
                 tapped_at=item.tapped_at,
             )
         )
-    return results
+    page = slice_limit_plus_one(results, skip=skip, limit=limit)
+    payload: Union[PaginatedPage[KeycardTapLogResponse], List[KeycardTapLogResponse]] = (
+        PaginatedPage[KeycardTapLogResponse](
+            items=page.items,
+            skip=skip,
+            limit=limit,
+            has_next=page.has_next,
+            next_skip=page.next_skip,
+        )
+        if paginated
+        else page.items
+    )
+    return read_page_cache.set(cache_key, payload)
 
 
 # 4. Member Keycard Pairing, Listing & Revocation

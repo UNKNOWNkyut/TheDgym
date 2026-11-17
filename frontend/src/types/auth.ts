@@ -658,3 +658,108 @@ export interface PaymentVerifyResponse {
   membership_activated: boolean
   membership_id?: number
 }
+
+export interface PaginatedResponse<T> {
+  items: T[]
+  skip: number
+  limit: number
+  has_next: boolean
+  next_skip: number | null
+}
+
+export interface AuditLogEntry {
+  id: number
+  actor_user_id: number | null
+  actor_email: string | null
+  actor_role: string | null
+  action: string
+  target_type: string | null
+  target_id: string | null
+  ip_address: string | null
+  user_agent: string | null
+  outcome: string
+  details: string | null
+  created_at: string
+}
+
+export interface TrainingPlanRecord {
+  id: number
+  member_id: number
+  goal_focus: string | null
+  workout_plan_summary: string | null
+  workout_split_json: string | null
+  meal_plan_summary: string | null
+  meal_plan_json: string | null
+  updated_at: string
+}
+
+export interface TrainingPlanUpsertPayload {
+  goal_focus?: string | null
+  workout_plan_summary?: string | null
+  workout_split_json?: string | null
+  meal_plan_summary?: string | null
+  meal_plan_json?: string | null
+}
+
+export interface ProgressEntry {
+  id: number
+  member_id: number
+  recorded_by_user_id: number | null
+  recorded_by_name: string | null
+  exercise_name: string | null
+  weight_kg: number | null
+  sets: number | null
+  reps: number | null
+  training_volume: number | null
+  rpe: number | null
+  rir: number | null
+  rest_seconds: number | null
+  body_weight_kg: number | null
+  waist_cm: number | null
+  hips_cm: number | null
+  chest_cm: number | null
+  arms_cm: number | null
+  thighs_cm: number | null
+  resting_heart_rate: number | null
+  notes: string | null
+  recorded_at: string
+}
+
+export interface ProgressEntryCreatePayload {
+  exercise_name?: string
+  weight_kg?: number
+  sets?: number
+  reps?: number
+  rpe?: number
+  rir?: number
+  rest_seconds?: number
+  body_weight_kg?: number
+  waist_cm?: number
+  hips_cm?: number
+  chest_cm?: number
+  arms_cm?: number
+  thighs_cm?: number
+  resting_heart_rate?: number
+  notes?: string
+}
+
+export interface ProgressAttendanceSummary {
+  visits_last_30_days: number
+  total_visits: number
+  completed_pt_sessions: number
+  active_week_streak: number
+  last_visit_at: string | null
+  latest_resting_heart_rate: number | null
+}
+
+export interface ClientProgressReport {
+  member_id: number
+  member_code: string
+  member_name: string
+  member_status: string
+  active_plan_name: string | null
+  assigned_plan: TrainingPlanRecord | null
+  attendance: ProgressAttendanceSummary
+  entries: ProgressEntry[]
+  recent_coach_notes: string[]
+}

@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PULSEFIT — System Architecture &amp; System Integration</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 10mm 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", "Inter", Arial, sans-serif;
+      color: #111827;
+      background: #ffffff;
+      line-height: 1.48;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      width: 273mm;
+      min-height: 186mm;
+      padding: 4mm 2mm;
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+    }
+
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #dc2626;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+
+    .doc-kicker {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #dc2626;
+    }
+
+    .doc-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #09090b;
+      letter-spacing: -0.02em;
+    }
+
+    .doc-meta {
+      text-align: right;
+      font-size: 9.5px;
+      color: #4b5563;
+      font-family: "Consolas", monospace;
+    }
+
+    .diagram-frame {
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fafafa;
+      padding: 6px;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .diagram-frame svg {
+      width: 100%;
+      height: auto;
+      max-height: 152mm;
+      display: block;
+    }
+
+    .doc-footer {
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8.5px;
+      color: #6b7280;
+      font-family: "Consolas", monospace;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 4px;
+    }
+
+    .prose-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      flex: 1;
+      align-content: start;
+    }
+
+    .prose-card {
+      border: 1px solid #e5e7eb;
+      border-left: 3.5px solid #dc2626;
+      border-radius: 8px;
+      background: #fcfcfd;
+      padding: 10px 13px;
+    }
+
+    .prose-card h2 {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .prose-card p, .prose-card li {
+      font-size: 10.2px;
+      color: #374151;
+      line-height: 1.46;
+    }
+
+    .prose-card ul {
+      padding-left: 15px;
+      margin-top: 4px;
+    }
+
+    .prose-card li {
+      margin-bottom: 4px;
+    }
+
+    .span-2 {
+      grid-column: span 2;
+    }
+
+    .mono {
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 9.4px;
+      background: #f3f4f6;
+      padding: 0.5px 3.5px;
+      border-radius: 3px;
+      color: #111827;
+    }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 9.5px;
+    }
+
+    .summary-table th, .summary-table td {
+      border: 1px solid #e5e7eb;
+      padding: 5px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .summary-table th {
+      background: #111827;
+      color: #ffffff;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 8.5px;
+      letter-spacing: 0.06em;
+    }
+
+    .summary-table tr:nth-child(even) td {
+      background: #f9fafb;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ==================== PAGE 1: SYSTEM ARCHITECTURE DIAGRAM ==================== -->
+<section class="page">
+  <header class="doc-header">
+    <div>
+      <div class="doc-kicker">Figure 1 • System Architecture Diagram</div>
+      <h1 class="doc-title">PULSEFIT / The DGym — 4-Tier Client–Server &amp; Event-Driven Architecture</h1>
+    </div>
+    <div class="doc-meta">
+      Orientation: Landscape (A4)<br />
+      Stack: React 19 + FastAPI + PostgreSQL 16 + XGBoost
+    </div>
+  </header>
+
+  <div class="diagram-frame">
+    <svg viewBox="0 0 1120 600" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+      <defs>
+        <marker id="arr-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#1f2937" />
+        </marker>
+        <marker id="arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626" />
+        </marker>
+        <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb" />
+        </marker>
+      </defs>
+
+      <!-- Layer Backgrounds -->
+      <rect x="10" y="10" width="168" height="580" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" />
+      <text x="94" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">USERS &amp; ACTORS</text>
+
+      <rect x="196" y="10" width="236" height="580" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" />
+      <text x="314" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">CLIENT PRESENTATION TIER</text>
+
+      <rect x="454" y="10" width="320" height="580" rx="10" fill="#fff7f7" stroke="#fca5a5" stroke-width="1.5" />
+      <text x="614" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#991b1b">APPLICATION &amp; SERVICE TIER (FASTAPI)</text>
+
+      <rect x="794" y="10" width="154" height="580" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" />
+      <text x="871" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">DATA TIER</text>
+
+      <rect x="966" y="10" width="144" height="580" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5" />
+      <text x="1038" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#1e3a8a">EXTERNAL APIs</text>
+
+      <!-- COLUMN 1: ACTORS -->
+      <g font-size="10" fill="#1e293b">
+        <rect x="22" y="54" width="144" height="72" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2" />
+        <text x="94" y="75" text-anchor="middle" font-weight="700">Gym Administrator</text>
+        <text x="94" y="92" text-anchor="middle" font-size="9" fill="#475569">Plans, Users, Audit Tab,</text>
+        <text x="94" y="106" text-anchor="middle" font-size="9" fill="#475569">Finance &amp; Churn ML</text>
+
+        <rect x="22" y="148" width="144" height="72" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2" />
+        <text x="94" y="169" text-anchor="middle" font-weight="700">Front-Desk Staff</text>
+        <text x="94" y="186" text-anchor="middle" font-size="9" fill="#475569">NFC Scanner Terminal,</text>
+        <text x="94" y="200" text-anchor="middle" font-size="9" fill="#475569">Cash/POS Confirmation</text>
+
+        <rect x="22" y="242" width="144" height="78" rx="7" fill="#ffffff" stroke="#dc2626" stroke-width="1.4" />
+        <text x="94" y="263" text-anchor="middle" font-weight="700" fill="#991b1b">Coach / Trainer</text>
+        <text x="94" y="280" text-anchor="middle" font-size="9" fill="#475569">PT Agenda, Approvals,</text>
+        <text x="94" y="294" text-anchor="middle" font-size="9" fill="#475569">Client Progress Modal</text>
+
+        <rect x="22" y="342" width="144" height="82" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2" />
+        <text x="94" y="363" text-anchor="middle" font-weight="700">Member / Registered User</text>
+        <text x="94" y="380" text-anchor="middle" font-size="9" fill="#475569">"user" -&gt; pays -&gt; "member"</text>
+        <text x="94" y="394" text-anchor="middle" font-size="9" fill="#475569">Your Plan, Book Coach,</text>
+        <text x="94" y="408" text-anchor="middle" font-size="9" fill="#475569">24h Day-Pass Demotion</text>
+
+        <rect x="22" y="446" width="144" height="78" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.2" />
+        <text x="94" y="467" text-anchor="middle" font-weight="700">RFID / NFC Hardware</text>
+        <text x="94" y="484" text-anchor="middle" font-size="9" fill="#475569">Android Web NFC Reader</text>
+        <text x="94" y="498" text-anchor="middle" font-size="9" fill="#475569">&amp; USB HID Card Reader</text>
+      </g>
+
+      <!-- COLUMN 2: CLIENT PRESENTATION TIER -->
+      <g font-size="10" fill="#1e293b">
+        <rect x="210" y="54" width="208" height="106" rx="8" fill="#111827" stroke="#111827" />
+        <text x="314" y="75" text-anchor="middle" font-weight="700" fill="#ffffff">React 19 + Vite + TypeScript SPA</text>
+        <text x="314" y="93" text-anchor="middle" font-size="9" fill="#d1d5db">Tailwind CSS • GSAP (useGSAP)</text>
+        <text x="314" y="109" text-anchor="middle" font-size="9" fill="#d1d5db">Role-Guarded Routes (ProtectedRoute)</text>
+        <text x="314" y="125" text-anchor="middle" font-size="9" fill="#fca5a5">Public / Member / Trainer / Admin Portals</text>
+        <text x="314" y="142" text-anchor="middle" font-size="8.5" fill="#9ca3af">PaginationControls (limit+1 Prev/Next)</text>
+
+        <rect x="210" y="182" width="208" height="90" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" />
+        <text x="314" y="203" text-anchor="middle" font-weight="700">Admin &amp; Trainer UI Modules</text>
+        <text x="314" y="220" text-anchor="middle" font-size="9" fill="#475569">• ClientProgressModal (Strength/Body/RHR)</text>
+        <text x="314" y="236" text-anchor="middle" font-size="9" fill="#475569">• ManageAuditPage (/manage/audit)</text>
+        <text x="314" y="252" text-anchor="middle" font-size="9" fill="#475569">• ManageMembers, Users, Visits, Finance</text>
+
+        <rect x="210" y="294" width="208" height="90" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" />
+        <text x="314" y="315" text-anchor="middle" font-weight="700">Biometric &amp; Planner Browser APIs</text>
+        <text x="314" y="332" text-anchor="middle" font-size="9" fill="#475569">• MediaDevices Camera (ID Scan + Liveness)</text>
+        <text x="314" y="348" text-anchor="middle" font-size="9" fill="#475569">• Local face-api.js 128-D Descriptors</text>
+        <text x="314" y="364" text-anchor="middle" font-size="9" fill="#475569">• YourPlanPage Workout &amp; Meal Sync</text>
+
+        <rect x="210" y="406" width="208" height="90" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" />
+        <text x="314" y="427" text-anchor="middle" font-weight="700">Hardware &amp; Live Event Client</text>
+        <text x="314" y="444" text-anchor="middle" font-size="9" fill="#475569">• Mobile Chrome Web NFC (NDEFReader)</text>
+        <text x="314" y="460" text-anchor="middle" font-size="9" fill="#475569">• WebSocket Client (Live Tap Feed &amp; Bell)</text>
+        <text x="314" y="476" text-anchor="middle" font-size="9" fill="#475569">• CSRF X-Requested-With + Credentials</text>
+
+        <rect x="210" y="514" width="208" height="58" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.2" />
+        <text x="314" y="535" text-anchor="middle" font-weight="700" fill="#991b1b">HTTP / WSS Transport Boundary</text>
+        <text x="314" y="553" text-anchor="middle" font-size="9" fill="#7f1d1d">TLS HTTPS REST/JSON + HttpOnly JWT</text>
+      </g>
+
+      <!-- COLUMN 3: APPLICATION & SERVICE TIER -->
+      <g font-size="10" fill="#1e293b">
+        <rect x="468" y="54" width="292" height="72" rx="7" fill="#ffffff" stroke="#dc2626" stroke-width="1.4" />
+        <text x="614" y="75" text-anchor="middle" font-weight="700" fill="#991b1b">Security Middleware &amp; RBAC Guard</text>
+        <text x="614" y="92" text-anchor="middle" font-size="9" fill="#475569">JWT Cookie Verify • JTI Revocation • Rate Limit</text>
+        <text x="614" y="108" text-anchor="middle" font-size="9" fill="#475569">require_roles([admin, staff, trainer, member, user])</text>
+
+        <rect x="468" y="140" width="140" height="114" rx="7" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+        <text x="538" y="160" text-anchor="middle" font-weight="700">Auth &amp; Identity</text>
+        <text x="538" y="178" text-anchor="middle" font-size="8.5" fill="#475569">Register ("user")</text>
+        <text x="538" y="193" text-anchor="middle" font-size="8.5" fill="#475569">Google OAuth Step 1</text>
+        <text x="538" y="208" text-anchor="middle" font-size="8.5" fill="#475569">Face 2FA Verify</text>
+        <text x="538" y="223" text-anchor="middle" font-size="8.5" fill="#475569">Role Lifecycle Sync</text>
+        <text x="538" y="238" text-anchor="middle" font-size="8.5" fill="#475569">Admin Reg Alerts</text>
+
+        <rect x="620" y="140" width="140" height="114" rx="7" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+        <text x="690" y="160" text-anchor="middle" font-weight="700">Payments &amp; Plans</text>
+        <text x="690" y="178" text-anchor="middle" font-size="8.5" fill="#475569">Checkout Session</text>
+        <text x="690" y="193" text-anchor="middle" font-size="8.5" fill="#475569">Xendit Webhook</text>
+        <text x="690" y="208" text-anchor="middle" font-size="8.5" fill="#475569">Manual POS Confirm</text>
+        <text x="690" y="223" text-anchor="middle" font-size="8.5" fill="#475569">user -&gt; member</text>
+        <text x="690" y="238" text-anchor="middle" font-size="8.5" fill="#475569">24h Day-Pass Expire</text>
+
+        <rect x="468" y="268" width="140" height="106" rx="7" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+        <text x="538" y="288" text-anchor="middle" font-weight="700">PT, Classes &amp; Progress</text>
+        <text x="538" y="306" text-anchor="middle" font-size="8.5" fill="#475569">PT Session Booking</text>
+        <text x="538" y="321" text-anchor="middle" font-size="8.5" fill="#475569">Active Member Gate</text>
+        <text x="538" y="336" text-anchor="middle" font-size="8.5" fill="#475569">Workout/Meal Sync</text>
+        <text x="538" y="351" text-anchor="middle" font-size="8.5" fill="#475569">Strength/Body/RHR</text>
+
+        <rect x="620" y="268" width="140" height="106" rx="7" fill="#ffffff" stroke="#64748b" stroke-width="1.2" />
+        <text x="690" y="288" text-anchor="middle" font-weight="700">Access &amp; Visits</text>
+        <text x="690" y="306" text-anchor="middle" font-size="8.5" fill="#475569">NFC Tap Engine</text>
+        <text x="690" y="321" text-anchor="middle" font-size="8.5" fill="#475569">PH EOD / 24h Check</text>
+        <text x="690" y="336" text-anchor="middle" font-size="8.5" fill="#475569">Open-Visit Lock</text>
+        <text x="690" y="351" text-anchor="middle" font-size="8.5" fill="#475569">WS Live Broadcast</text>
+
+        <rect x="468" y="388" width="292" height="90" rx="7" fill="#18181b" stroke="#18181b" />
+        <text x="614" y="408" text-anchor="middle" font-weight="700" fill="#ffffff">Cross-Cutting Infrastructure Services</text>
+        <text x="614" y="426" text-anchor="middle" font-size="9" fill="#fca5a5">System-Wide Audit Logger (audit.py) • Redaction</text>
+        <text x="614" y="442" text-anchor="middle" font-size="9" fill="#e4e4e7">Pagination &amp; In-Memory TTL Cache (limit + 1)</text>
+        <text x="614" y="458" text-anchor="middle" font-size="9" fill="#a1a1aa">60s Background Sweeper (Visit Checkout + Expiry)</text>
+
+        <rect x="468" y="492" width="292" height="80" rx="7" fill="#ffffff" stroke="#dc2626" stroke-width="1.2" />
+        <text x="614" y="512" text-anchor="middle" font-weight="700" fill="#991b1b">Embedded ML Churn &amp; Finance Engine</text>
+        <text x="614" y="530" text-anchor="middle" font-size="9" fill="#475569">XGBoost JSON Model + Feature Pipeline</text>
+        <text x="614" y="546" text-anchor="middle" font-size="9" fill="#475569">Churn Risk Scoring • Finance &amp; Retention KPIs</text>
+      </g>
+
+      <!-- COLUMN 4: DATA TIER (Moved down cleanly below the top External Express Bus y=126) -->
+      <g font-size="9.5" fill="#14532d">
+        <rect x="804" y="132" width="134" height="92" rx="7" fill="#ffffff" stroke="#16a34a" stroke-width="1.4" />
+        <text x="871" y="151" text-anchor="middle" font-weight="700">PostgreSQL 16 (Async)</text>
+        <text x="871" y="167" text-anchor="middle" font-size="8.5">SQLAlchemy 2.0 AsyncPG</text>
+        <text x="871" y="182" text-anchor="middle" font-size="8.5">Composite (ts, id) Indexes</text>
+        <text x="871" y="197" text-anchor="middle" font-size="8.5">Partial Unique Constraints</text>
+        <text x="871" y="212" text-anchor="middle" font-size="8.5">Startup Column Migrations</text>
+
+        <rect x="804" y="236" width="134" height="82" rx="7" fill="#ffffff" stroke="#22c55e" stroke-width="1.1" />
+        <text x="871" y="255" text-anchor="middle" font-weight="700">Identity &amp; Plans</text>
+        <text x="871" y="271" text-anchor="middle" font-size="8.5">users • user_biometrics</text>
+        <text x="871" y="286" text-anchor="middle" font-size="8.5">members • memberships</text>
+        <text x="871" y="301" text-anchor="middle" font-size="8.5">membership_plans</text>
+
+        <rect x="804" y="330" width="134" height="82" rx="7" fill="#ffffff" stroke="#22c55e" stroke-width="1.1" />
+        <text x="871" y="349" text-anchor="middle" font-weight="700">Training &amp; Logs</text>
+        <text x="871" y="365" text-anchor="middle" font-size="8.5">member_training_plans</text>
+        <text x="871" y="380" text-anchor="middle" font-size="8.5">client_progress_entries</text>
+        <text x="871" y="395" text-anchor="middle" font-size="8.5">pt_sessions • visits • taps</text>
+
+        <rect x="804" y="424" width="134" height="74" rx="7" fill="#ffffff" stroke="#16a34a" stroke-width="1.3" />
+        <text x="871" y="443" text-anchor="middle" font-weight="700">Security &amp; Alerts</text>
+        <text x="871" y="459" text-anchor="middle" font-size="8.5">audit_logs (Indexed)</text>
+        <text x="871" y="474" text-anchor="middle" font-size="8.5">notifications • rate_limit</text>
+        <text x="871" y="489" text-anchor="middle" font-size="8.5">expenses • predictions</text>
+
+        <rect x="804" y="510" width="134" height="62" rx="7" fill="#dcfce7" stroke="#16a34a" stroke-width="1.1" />
+        <text x="871" y="529" text-anchor="middle" font-weight="700">Local ML &amp; Cache</text>
+        <text x="871" y="545" text-anchor="middle" font-size="8.5">churn_model.json</text>
+        <text x="871" y="559" text-anchor="middle" font-size="8.5">ReadTTLCache (15s TTL)</text>
+      </g>
+
+      <!-- COLUMN 5: EXTERNAL APIS -->
+      <g font-size="9.5" fill="#1e3a8a">
+        <rect x="976" y="64" width="124" height="86" rx="7" fill="#ffffff" stroke="#2563eb" stroke-width="1.3" />
+        <text x="1038" y="85" text-anchor="middle" font-weight="700">Xendit Gateway</text>
+        <text x="1038" y="102" text-anchor="middle" font-size="8.5">GCash, Maya, Cards</text>
+        <text x="1038" y="117" text-anchor="middle" font-size="8.5">Hosted Invoices</text>
+        <text x="1038" y="132" text-anchor="middle" font-size="8.5">Signed Webhooks</text>
+
+        <rect x="976" y="176" width="124" height="80" rx="7" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" />
+        <text x="1038" y="197" text-anchor="middle" font-weight="700">OCR.space API</text>
+        <text x="1038" y="214" text-anchor="middle" font-size="8.5">PhilSys / Gov ID</text>
+        <text x="1038" y="229" text-anchor="middle" font-size="8.5">Text Extraction</text>
+
+        <rect x="976" y="282" width="124" height="80" rx="7" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" />
+        <text x="1038" y="303" text-anchor="middle" font-weight="700">Face++ API</text>
+        <text x="1038" y="320" text-anchor="middle" font-size="8.5">ID Photo vs Live</text>
+        <text x="1038" y="335" text-anchor="middle" font-size="8.5">Selfie Confidence</text>
+
+        <rect x="976" y="388" width="124" height="80" rx="7" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" />
+        <text x="1038" y="409" text-anchor="middle" font-weight="700">Google OAuth 2.0</text>
+        <text x="1038" y="426" text-anchor="middle" font-size="8.5">Identity Token Verify</text>
+        <text x="1038" y="441" text-anchor="middle" font-size="8.5">Step-1 Sign-In</text>
+
+        <rect x="976" y="492" width="124" height="80" rx="7" fill="#ffffff" stroke="#2563eb" stroke-width="1.2" />
+        <text x="1038" y="513" text-anchor="middle" font-weight="700">TextBee SMS</text>
+        <text x="1038" y="530" text-anchor="middle" font-size="8.5">Android SMS Bridge</text>
+        <text x="1038" y="545" text-anchor="middle" font-size="8.5">Churn &amp; Expiry Alerts</text>
+      </g>
+
+      <!-- CONNECTOR ARROWS -->
+      <!-- Actors -> Presentation -->
+      <line x1="166" y1="90" x2="208" y2="105" stroke="#1f2937" stroke-width="1.4" marker-end="url(#arr-dark)" />
+      <line x1="166" y1="184" x2="208" y2="210" stroke="#1f2937" stroke-width="1.4" marker-end="url(#arr-dark)" />
+      <line x1="166" y1="281" x2="208" y2="236" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr-red)" />
+      <line x1="166" y1="383" x2="208" y2="340" stroke="#1f2937" stroke-width="1.4" marker-end="url(#arr-dark)" />
+      <line x1="166" y1="485" x2="208" y2="452" stroke="#1f2937" stroke-width="1.4" marker-end="url(#arr-dark)" />
+
+      <!-- Client <-> Application Tier -->
+      <line x1="418" y1="108" x2="466" y2="90" stroke="#dc2626" stroke-width="1.6" marker-start="url(#arr-red)" marker-end="url(#arr-red)" />
+      <line x1="418" y1="227" x2="466" y2="305" stroke="#1f2937" stroke-width="1.4" marker-start="url(#arr-dark)" marker-end="url(#arr-dark)" />
+      <line x1="418" y1="339" x2="466" y2="195" stroke="#1f2937" stroke-width="1.4" marker-start="url(#arr-dark)" marker-end="url(#arr-dark)" />
+      <line x1="418" y1="451" x2="466" y2="335" stroke="#dc2626" stroke-width="1.5" marker-start="url(#arr-red)" marker-end="url(#arr-red)" />
+
+      <!-- Application <-> Data Tier (Direct horizontal corridors) -->
+      <line x1="760" y1="185" x2="802" y2="185" stroke="#16a34a" stroke-width="1.5" marker-start="url(#arr-dark)" marker-end="url(#arr-dark)" />
+      <line x1="760" y1="365" x2="802" y2="365" stroke="#16a34a" stroke-width="1.5" marker-start="url(#arr-dark)" marker-end="url(#arr-dark)" />
+      <line x1="760" y1="455" x2="802" y2="455" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arr-dark)" />
+      <line x1="760" y1="540" x2="802" y2="540" stroke="#16a34a" stroke-width="1.5" marker-start="url(#arr-dark)" marker-end="url(#arr-dark)" />
+
+      <!-- Application <-> External APIs (Clean Express Bus along y=64..116 & x=956 vertical trunk - ZERO overlap over Data Tier!) -->
+      <polyline points="760,92 952,92 974,92" fill="none" stroke="#2563eb" stroke-width="1.5" marker-start="url(#arr-blue)" marker-end="url(#arr-blue)" />
+      <polyline points="760,152 782,152 782,108 956,108 956,216 974,216" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-dasharray="4,2" marker-end="url(#arr-blue)" />
+      <polyline points="782,108 956,108 956,322 974,322" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-dasharray="4,2" marker-end="url(#arr-blue)" />
+      <polyline points="782,108 956,108 956,428 974,428" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-dasharray="4,2" marker-end="url(#arr-blue)" />
+      <polyline points="760,578 956,578 956,532 974,532" fill="none" stroke="#2563eb" stroke-width="1.4" marker-end="url(#arr-blue)" />
+    </svg>
+  </div>
+
+  <footer class="doc-footer">
+    <span>PULSEFIT / The DGym Management &amp; Intelligence Platform</span>
+    <span>Page 1 of 4 • System Architecture Diagram</span>
+  </footer>
+</section>
+
+<!-- ==================== PAGE 2: ARCHITECTURE EXPLANATION ==================== -->
+<section class="page">
+  <header class="doc-header">
+    <div>
+      <div class="doc-kicker">Section 1.2 • Architectural Analysis</div>
+      <h1 class="doc-title">How the PULSEFIT Multi-Tier &amp; Event-Driven Architecture Operates</h1>
+    </div>
+    <div class="doc-meta">
+      Design Pattern: 4-Tier Async + Event-Driven<br />
+      Database Governance: PostgreSQL + Composite Indexes
+    </div>
+  </header>
+
+  <div class="prose-grid">
+    <div class="prose-card">
+      <h2>1. Client Presentation Tier (Decoupled SPA)</h2>
+      <p>
+        Built on React 19, TypeScript, Vite, Tailwind CSS, and GSAP (<span class="mono">useGSAP</span>), the client tier enforces strict role segregation via <span class="mono">ProtectedRoute</span> and dynamically filters navigation items by authenticated role (<span class="mono">admin</span>, <span class="mono">staff</span>, <span class="mono">trainer</span>, <span class="mono">member</span>, and unsubscribed <span class="mono">user</span>).
+      </p>
+      <ul>
+        <li><strong>State Isolation:</strong> Trainers interact with the <em>Trainer Command Center</em> and open the <span class="mono">ClientProgressModal</span> to inspect active workout/meal blueprints, calculate training volume (<span class="mono">sets × reps × weight</span>), RPE/RIR, rest intervals, body measurements, and resting heart rate.</li>
+        <li><strong>Unsubscribed Guard:</strong> Users registered under <span class="mono">role="user"</span> cannot unlock <span class="mono">/dashboard/plan</span> or <span class="mono">/dashboard/book</span> until verified payment promotes their session.</li>
+      </ul>
+    </div>
+
+    <div class="prose-card">
+      <h2>2. Application &amp; Security Middleware Tier</h2>
+      <p>
+        FastAPI serves asynchronous REST routes under strict defense-in-depth middleware: HTTP-only JWT cookie extraction, database-backed JTI/session revocation (<span class="mono">RevokedToken</span>), fixed-window rate limiting (<span class="mono">RateLimitHit</span>), CSRF header validation (<span class="mono">X-Requested-With</span>), and automatic sensitive-secret log redaction.
+      </p>
+      <ul>
+        <li><strong>Role Lifecycle Sweeper:</strong> Runs on server startup and every 60 seconds (<span class="mono">main.py</span>) plus on-request guards to auto-checkout stale visits and expire lapsed memberships (including exact 24-hour 1-Day Passes), automatically demoting expired <span class="mono">member</span> accounts back to <span class="mono">user</span>.</li>
+        <li><strong>System-Wide Audit Trail:</strong> Every auth event, webhook callback, PT/class mutation, progress check-in, and member deletion writes an immutable record to <span class="mono">audit_logs</span> with actor role, origin IP, and user-agent.</li>
+      </ul>
+    </div>
+
+    <div class="prose-card">
+      <h2>3. High-Performance Data Tier &amp; Pagination</h2>
+      <p>
+        PostgreSQL 16 (via SQLAlchemy 2.0 AsyncPG) persists domain entities using deterministic composite B-tree indexes such as <span class="mono">(created_at, id)</span> on <span class="mono">audit_logs</span> and <span class="mono">users</span>, <span class="mono">(joined_at, id)</span> on <span class="mono">members</span>, and <span class="mono">(checked_in_at, id)</span> on <span class="mono">visits</span>.
+      </p>
+      <ul>
+        <li><strong>Zero <span class="mono">SELECT COUNT(*)</span> Bottlenecks:</strong> Paginated endpoints fetch <span class="mono">limit + 1</span> rows ordered deterministically by <span class="mono">ORDER BY timestamp DESC, id DESC</span> to compute <span class="mono">has_next</span> in constant O(1) slice time without full-table scans.</li>
+        <li><strong>In-Memory TTL Caching:</strong> <span class="mono">ReadTTLCache</span> caches unchanged page responses for 15 seconds without external Redis overhead and immediately invalidates matching prefixes upon writes.</li>
+      </ul>
+    </div>
+
+    <div class="prose-card">
+      <h2>4. Role Transition &amp; Partial Index Integrity</h2>
+      <p>
+        Data consistency under concurrent hardware and payment traffic is enforced directly inside PostgreSQL rather than application locks alone:
+      </p>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Stage / Event</th>
+            <th>User Role State</th>
+            <th>DB Constraint / Trigger</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Public / Google Register</td>
+            <td><span class="mono">user</span> (Restricted)</td>
+            <td>Admin notified (<span class="mono">registration</span>); excluded from active Members table</td>
+          </tr>
+          <tr>
+            <td>Xendit PAID / POS Payment</td>
+            <td><span class="mono">member</span> (Promoted)</td>
+            <td>Partial unique index on <span class="mono">payment_reference</span> prevents replay</td>
+          </tr>
+          <tr>
+            <td>RFID Gate Tap Check-In</td>
+            <td><span class="mono">member</span> (Active)</td>
+            <td>Partial unique index on open <span class="mono">visits</span> blocks double entry</td>
+          </tr>
+          <tr>
+            <td>24h Day Pass / Plan Expiry</td>
+            <td><span class="mono">user</span> (Demoted)</td>
+            <td>60s background sweeper + auth/gate check flips status to <span class="mono">expired</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="doc-footer">
+    <span>PULSEFIT / The DGym Management &amp; Intelligence Platform</span>
+    <span>Page 2 of 4 • Architectural Explanation &amp; Lifecycle Matrix</span>
+  </footer>
+</section>
+
+<!-- ==================== PAGE 3: SYSTEM INTEGRATION DIAGRAM ==================== -->
+<section class="page">
+  <header class="doc-header">
+    <div>
+      <div class="doc-kicker">Figure 2 • System Integration Diagram</div>
+      <h1 class="doc-title">Directional Module &amp; External Service Data Flows (<span class="mono">-&gt;</span> / <span class="mono">&lt;-&gt;</span> Protocols)</h1>
+    </div>
+    <div class="doc-meta">
+      Protocols: HTTPS REST/JSON • Signed HMAC Webhooks<br />
+      Hardware/Realtime: WSS • Web NFC • MediaDevices
+    </div>
+  </header>
+
+  <div class="diagram-frame">
+    <svg viewBox="0 0 1120 600" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+      <defs>
+        <marker id="i-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#111827" />
+        </marker>
+        <marker id="i-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626" />
+        </marker>
+        <marker id="i-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb" />
+        </marker>
+        <marker id="i-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#15803d" />
+        </marker>
+      </defs>
+
+      <!-- Hub Border -->
+      <rect x="330" y="22" width="446" height="556" rx="12" fill="#fffafa" stroke="#ef4444" stroke-width="1.6" stroke-dasharray="6,4" />
+      <text x="553" y="44" text-anchor="middle" font-size="11.5" font-weight="800" fill="#991b1b">PULSEFIT FASTAPI INTEGRATION ORCHESTRATOR</text>
+
+      <!-- LEFT COLUMN: FRONTEND & HARDWARE SOURCES -->
+      <rect x="20" y="42" width="214" height="92" rx="8" fill="#111827" stroke="#111827" />
+      <text x="127" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffffff">Web Browser Camera &amp; AI</text>
+      <text x="127" y="82" text-anchor="middle" font-size="9" fill="#d1d5db">WebRTC MediaDevices.getUserMedia</text>
+      <text x="127" y="98" text-anchor="middle" font-size="9" fill="#d1d5db">face-api.js Liveness + Base64 ID Frame</text>
+      <text x="127" y="114" text-anchor="middle" font-size="8.5" fill="#fca5a5">Registration &amp; Step-2 2FA Biometrics</text>
+
+      <rect x="20" y="164" width="214" height="92" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.4" />
+      <text x="127" y="186" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0f172a">Member &amp; Trainer Portals</text>
+      <text x="127" y="204" text-anchor="middle" font-size="9" fill="#475569">YourPlanPage -&gt; /api/progress/me/plan</text>
+      <text x="127" y="220" text-anchor="middle" font-size="9" fill="#475569">TrainerDashboard &lt;-&gt; ClientProgressModal</text>
+      <text x="127" y="236" text-anchor="middle" font-size="8.5" fill="#dc2626">Checkout Trigger &amp; PT/Class Bookings</text>
+
+      <rect x="20" y="286" width="214" height="92" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.4" />
+      <text x="127" y="308" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0f172a">Front-Desk / Mobile Web NFC</text>
+      <text x="127" y="326" text-anchor="middle" font-size="9" fill="#475569">Chrome NDEFReader (ISO14443-A UID)</text>
+      <text x="127" y="342" text-anchor="middle" font-size="9" fill="#475569">USB RFID Keyboard Wedge Hook</text>
+      <text x="127" y="358" text-anchor="middle" font-size="8.5" fill="#475569">Dual Auth: JWT or X-Scanner-API-Key</text>
+
+      <rect x="20" y="408" width="214" height="92" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="1.4" />
+      <text x="127" y="430" text-anchor="middle" font-size="10.5" font-weight="700" fill="#991b1b">Admin Portal &amp; Live Monitor</text>
+      <text x="127" y="448" text-anchor="middle" font-size="9" fill="#475569">NotificationBell (Live WS Subscriber)</text>
+      <text x="127" y="464" text-anchor="middle" font-size="9" fill="#475569">ManageAuditPage (/api/audit-logs)</text>
+      <text x="127" y="480" text-anchor="middle" font-size="8.5" fill="#475569">Pagination (limit+1) • Retention Console</text>
+
+      <!-- CENTER HUB: FASTAPI MODULES -->
+      <rect x="352" y="62" width="194" height="82" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.3" />
+      <text x="449" y="83" text-anchor="middle" font-size="10" font-weight="700">auth.py &amp; external_vision.py</text>
+      <text x="449" y="100" text-anchor="middle" font-size="8.5" fill="#475569">ID OCR + Selfie Score Validation</text>
+      <text x="449" y="115" text-anchor="middle" font-size="8.5" fill="#475569">Issues JWT Cookie &amp; Reg Notifs</text>
+      <text x="449" y="130" text-anchor="middle" font-size="8.5" fill="#dc2626">Initial Role: UserRole.USER</text>
+
+      <rect x="564" y="62" width="194" height="82" rx="7" fill="#ffffff" stroke="#2563eb" stroke-width="1.3" />
+      <text x="661" y="83" text-anchor="middle" font-size="10" font-weight="700" fill="#1e3a8a">payments.py &amp; activation.py</text>
+      <text x="661" y="100" text-anchor="middle" font-size="8.5" fill="#475569">Invoice Create &amp; Signed Webhook</text>
+      <text x="661" y="115" text-anchor="middle" font-size="8.5" fill="#475569">Auto-Promote: "user" -&gt; "member"</text>
+      <text x="661" y="130" text-anchor="middle" font-size="8.5" fill="#15803d">Admin Notification + Cache Bust</text>
+
+      <rect x="352" y="174" width="194" height="82" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.3" />
+      <text x="449" y="195" text-anchor="middle" font-size="10" font-weight="700">progress.py &amp; pt_sessions.py</text>
+      <text x="449" y="212" text-anchor="middle" font-size="8.5" fill="#475569">MemberTrainingPlan Sync</text>
+      <text x="449" y="227" text-anchor="middle" font-size="8.5" fill="#475569">Overload Volume, Body &amp; RHR Logs</text>
+      <text x="449" y="242" text-anchor="middle" font-size="8.5" fill="#dc2626">403 Guard on Unsubscribed "user"</text>
+
+      <rect x="564" y="174" width="194" height="82" rx="7" fill="#ffffff" stroke="#dc2626" stroke-width="1.3" />
+      <text x="661" y="195" text-anchor="middle" font-size="10" font-weight="700" fill="#991b1b">access_service.py &amp; WS Hub</text>
+      <text x="661" y="212" text-anchor="middle" font-size="8.5" fill="#475569">Verify Keycard UID &amp; Plan Expiry</text>
+      <text x="661" y="227" text-anchor="middle" font-size="8.5" fill="#475569">Record Visit Check-In / Check-Out</text>
+      <text x="661" y="242" text-anchor="middle" font-size="8.5" fill="#2563eb">Push Real-Time JSON via WSS</text>
+
+      <rect x="352" y="286" width="194" height="82" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.3" />
+      <text x="449" y="307" text-anchor="middle" font-size="10" font-weight="700">churn_pipeline.py &amp; churn_ml.py</text>
+      <text x="449" y="324" text-anchor="middle" font-size="8.5" fill="#475569">Aggregate 30d Visits &amp; Revenue</text>
+      <text x="449" y="339" text-anchor="middle" font-size="8.5" fill="#475569">In-Process XGBoost JSON Inference</text>
+      <text x="449" y="354" text-anchor="middle" font-size="8.5" fill="#15803d">Output Probability -&gt; retention.py</text>
+
+      <rect x="564" y="286" width="194" height="82" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.3" />
+      <text x="661" y="307" text-anchor="middle" font-size="10" font-weight="700">audit.py &amp; pagination.py</text>
+      <text x="661" y="324" text-anchor="middle" font-size="8.5" fill="#475569">Standardized Action + Role/Agent</text>
+      <text x="661" y="339" text-anchor="middle" font-size="8.5" fill="#475569">Deterministic limit+1 Slicing</text>
+      <text x="661" y="354" text-anchor="middle" font-size="8.5" fill="#475569">15s In-Memory ReadTTLCache</text>
+
+      <rect x="352" y="400" width="406" height="84" rx="8" fill="#14532d" stroke="#14532d" />
+      <text x="555" y="424" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">PostgreSQL 16 (SQLAlchemy 2.0 AsyncPG Engine)</text>
+      <text x="555" y="443" text-anchor="middle" font-size="9" fill="#bbf7d0">Composite (ts, id) Indexes • audit_logs • client_progress_entries • member_training_plans</text>
+      <text x="555" y="460" text-anchor="middle" font-size="9" fill="#86efac">users • members • member_memberships • visits • keycard_tap_logs • predictions</text>
+
+      <rect x="352" y="502" width="406" height="58" rx="8" fill="#18181b" stroke="#18181b" />
+      <text x="555" y="525" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff">60-Second Async Lifespan Background Workers</text>
+      <text x="555" y="542" text-anchor="middle" font-size="8.5" fill="#fca5a5">sweep_overdue_open_visits()  +  expire_elapsed_memberships() [24h Day Pass Auto-Demotion]</text>
+
+      <!-- RIGHT COLUMN: EXTERNAL INTEGRATION TARGETS -->
+      <rect x="886" y="42" width="214" height="88" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.3" />
+      <text x="993" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#1e3a8a">OCR.space &amp; Face++ Vision</text>
+      <text x="993" y="81" text-anchor="middle" font-size="8.5" fill="#1e40af">Protocol: HTTPS Multipart POST</text>
+      <text x="993" y="96" text-anchor="middle" font-size="8.5" fill="#374151">Extracts PhilSys text &amp; computes</text>
+      <text x="993" y="111" text-anchor="middle" font-size="8.5" fill="#374151">face similarity score</text>
+
+      <rect x="886" y="152" width="214" height="96" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.4" />
+      <text x="993" y="174" text-anchor="middle" font-size="10" font-weight="700" fill="#1e3a8a">Xendit Payment Gateway</text>
+      <text x="993" y="191" text-anchor="middle" font-size="8.5" fill="#1e40af">Protocol: REST Invoice &lt;-&gt; Webhook</text>
+      <text x="993" y="206" text-anchor="middle" font-size="8.5" fill="#dc2626">Signed x-callback-token (HMAC)</text>
+      <text x="993" y="221" text-anchor="middle" font-size="8.5" fill="#374151">Async PAID settlement triggers sync</text>
+
+      <rect x="886" y="270" width="214" height="88" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2" />
+      <text x="993" y="292" text-anchor="middle" font-size="10" font-weight="700" fill="#1e3a8a">Google OAuth 2.0 Service</text>
+      <text x="993" y="309" text-anchor="middle" font-size="8.5" fill="#1e40af">Protocol: HTTPS OAuth2 TokenInfo</text>
+      <text x="993" y="324" text-anchor="middle" font-size="8.5" fill="#374151">Federated user lookup &amp; auto</text>
+      <text x="993" y="339" text-anchor="middle" font-size="8.5" fill="#374151">UserRole.USER account creation</text>
+
+      <rect x="886" y="380" width="214" height="92" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2" />
+      <text x="993" y="402" text-anchor="middle" font-size="10" font-weight="700" fill="#1e3a8a">TextBee SMS Gateway</text>
+      <text x="993" y="419" text-anchor="middle" font-size="8.5" fill="#1e40af">Protocol: HTTPS REST API + API Key</text>
+      <text x="993" y="434" text-anchor="middle" font-size="8.5" fill="#374151">Dispatches retention &amp; renewal</text>
+      <text x="993" y="449" text-anchor="middle" font-size="8.5" fill="#374151">SMS reminders to PH mobile</text>
+
+      <rect x="886" y="492" width="214" height="80" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.2" />
+      <text x="993" y="513" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0f172a">Flow Legend</text>
+      <text x="900" y="532" font-size="8.5" fill="#111827">—&gt;  REST/JSON &amp; SQL Commands</text>
+      <text x="900" y="547" font-size="8.5" fill="#dc2626">&lt;-&gt; Real-Time WSS / Gate Tap</text>
+      <text x="900" y="562" font-size="8.5" fill="#2563eb">&lt;-&gt; Signed Webhook / External Cloud</text>
+
+      <!-- FLOW ARROWS WITH CLEAN ORTHOGONAL ROUTING (ZERO OVERLAP) -->
+      <!-- 1. Camera <-> auth.py -->
+      <line x1="234" y1="96" x2="350" y2="96" stroke="#111827" stroke-width="1.5" marker-start="url(#i-dark)" marker-end="url(#i-dark)" />
+      <text x="290" y="87" text-anchor="middle" font-size="8" font-weight="600" fill="#111827">HTTPS JSON</text>
+
+      <!-- 2. Member/Trainer Portals <-> progress.py & pt_sessions.py -->
+      <line x1="234" y1="210" x2="350" y2="210" stroke="#dc2626" stroke-width="1.5" marker-start="url(#i-red)" marker-end="url(#i-red)" />
+      <text x="290" y="201" text-anchor="middle" font-size="8" font-weight="600" fill="#dc2626">REST/JSON</text>
+
+      <!-- 3. NFC Scanner -> access_service.py via gap at y=271 -->
+      <polyline points="234,328 294,328 294,271 661,271 661,258" fill="none" stroke="#dc2626" stroke-width="1.5" marker-end="url(#i-red)" />
+      <text x="268" y="343" text-anchor="middle" font-size="8" font-weight="600" fill="#dc2626">POST /tap</text>
+
+      <!-- 4. Admin Portal <-> audit.py & WSS via clean gap at y=384 -->
+      <polyline points="234,446 312,446 312,384 661,384 661,370" fill="none" stroke="#dc2626" stroke-width="1.5" marker-start="url(#i-red)" marker-end="url(#i-red)" />
+      <text x="275" y="436" text-anchor="middle" font-size="8" font-weight="600" fill="#dc2626">WSS + limit+1</text>
+
+      <!-- 5. Internal FastAPI -> PostgreSQL (at y=368..400 gap) -->
+      <line x1="449" y1="368" x2="449" y2="398" stroke="#15803d" stroke-width="1.6" marker-start="url(#i-green)" marker-end="url(#i-green)" />
+      <line x1="661" y1="368" x2="661" y2="398" stroke="#15803d" stroke-width="1.6" marker-start="url(#i-green)" marker-end="url(#i-green)" />
+      <text x="555" y="388" text-anchor="middle" font-size="8" font-weight="700" fill="#15803d">Async ORM (tx + indexes)</text>
+
+      <!-- 6. FastAPI <-> External Services (Clean Express Channels at y=50 and x=812/832) -->
+      <polyline points="449,62 449,50 822,50 822,86 884,86" fill="none" stroke="#2563eb" stroke-width="1.4" marker-start="url(#i-blue)" marker-end="url(#i-blue)" />
+      <text x="852" y="79" text-anchor="middle" font-size="8" font-weight="600" fill="#2563eb">Multipart</text>
+
+      <polyline points="758,104 804,104 804,195 884,195" fill="none" stroke="#2563eb" stroke-width="1.6" marker-start="url(#i-blue)" marker-end="url(#i-blue)" />
+      <text x="844" y="186" text-anchor="middle" font-size="8" font-weight="600" fill="#2563eb">Webhook</text>
+
+      <polyline points="546,126 555,126 555,158 836,158 836,314 884,314" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-dasharray="4,2" marker-start="url(#i-blue)" marker-end="url(#i-blue)" />
+      <text x="860" y="305" text-anchor="middle" font-size="8" font-weight="600" fill="#2563eb">OAuth</text>
+
+      <polyline points="449,368 449,392 820,392 820,426 884,426" fill="none" stroke="#2563eb" stroke-width="1.4" marker-end="url(#i-blue)" />
+      <text x="852" y="418" text-anchor="middle" font-size="8" font-weight="600" fill="#2563eb">HTTPS SMS</text>
+    </svg>
+  </div>
+
+  <footer class="doc-footer">
+    <span>PULSEFIT / The DGym Management &amp; Intelligence Platform</span>
+    <span>Page 3 of 4 • System Integration Diagram</span>
+  </footer>
+</section>
+
+<!-- ==================== PAGE 4: INTEGRATION EXPLANATION ==================== -->
+<section class="page">
+  <header class="doc-header">
+    <div>
+      <div class="doc-kicker">Section 2.2 • Integration Methodology &amp; Design Rationale</div>
+      <h1 class="doc-title">How and Why Internal Modules &amp; External Gateways Integrate in PULSEFIT</h1>
+    </div>
+    <div class="doc-meta">
+      Paradigms: API REST • Event Webhooks • Embedded ML • Hardware APIs
+    </div>
+  </header>
+
+  <div class="prose-grid">
+    <div class="prose-card">
+      <h2>1. API-Based REST/JSON Integration &amp; Contract Validation</h2>
+      <p>
+        <strong>How:</strong> All SPA-to-backend traffic flows over typed HTTP/JSON wrappers (<span class="mono">frontend/src/services/api.ts</span>) matched 1:1 against strict Pydantic v2 contracts (<span class="mono">extra="forbid"</span>) in FastAPI. External biometric verification (<span class="mono">OCR.space</span> &amp; <span class="mono">Face++</span>) and federated sign-in (<span class="mono">Google OAuth 2.0</span>) use non-blocking <span class="mono">httpx.AsyncClient</span> calls with bounded timeouts.
+      </p>
+      <p style="margin-top:5px;">
+        <strong>Why:</strong> Schema enforcement at the gateway stops malformed payloads before reaching PostgreSQL transactions, while local Tesseract/face-api fallbacks prevent cloud API outages from blocking gym floor check-ins.
+      </p>
+    </div>
+
+    <div class="prose-card">
+      <h2>2. Event-Driven Payment Webhooks &amp; Real-Time WebSockets</h2>
+      <p>
+        <strong>How:</strong> Online plan payments integrate with Xendit via an asynchronous invoice + signed webhook pattern. Xendit pushes invoice <span class="mono">PAID</span> callbacks to <span class="mono">/api/payments/webhook/xendit</span> validated via constant-time <span class="mono">hmac.compare_digest</span> against <span class="mono">XENDIT_WEBHOOK_VERIFICATION_TOKEN</span>. In parallel, <span class="mono">live_feed_manager</span> broadcasts <span class="mono">admin_notification</span> and <span class="mono">keycard_tap</span> frames over WebSockets (<span class="mono">/api/access/ws/live-feed</span>).
+      </p>
+      <p style="margin-top:5px;">
+        <strong>Why:</strong> Webhooks guarantee eventual consistency even if the user closes the checkout browser tab before redirect return, while WebSockets deliver sub-second front-desk tap and registration alerts without polling overhead.
+      </p>
+    </div>
+
+    <div class="prose-card">
+      <h2>3. Embedded In-Process ML Churn Inference</h2>
+      <p>
+        <strong>How:</strong> Rather than hosting a separate Python/Flask prediction container, PULSEFIT serializes its trained XGBoost tree ensemble and feature scaler as auditable JSON files (<span class="mono">churn_model.json</span>, <span class="mono">scaler.json</span>). <span class="mono">churn_pipeline.py</span> extracts behavioral features from PostgreSQL visits, PT bookings, and revenue ledgers, computes churn probabilities directly in-process, and exposes actionable cohorts via <span class="mono">analytics.py</span> and <span class="mono">retention.py</span> (which optionally triggers SMS reminders via TextBee).
+      </p>
+      <p style="margin-top:5px;">
+        <strong>Why:</strong> Eliminating inter-service RPC reduces operational complexity, removes binary pickle deserialization security risks (Check 11), and cuts inference latency to single-digit milliseconds.
+      </p>
+    </div>
+
+    <div class="prose-card">
+      <h2>4. Hardware-Browser APIs &amp; Closed-Loop Training Feedback</h2>
+      <p>
+        <strong>How:</strong> Reception smartphones use Chrome's <span class="mono">NDEFReader</span> Web NFC API (and desktop stations use HID keyboard wedge capture) to read card UIDs and hit <span class="mono">/api/access/tap</span>, enforcing PH end-of-day multi-day rules and exact 24-hour expiration on Day Passes. Similarly, <span class="mono">MediaDevices</span> drives camera capture for ID OCR &amp; face liveness, while <span class="mono">YourPlanPage</span> syncs workout/meal blueprints to <span class="mono">member_training_plans</span> so coaches can track overload and body metrics in <span class="mono">ClientProgressModal</span>.
+      </p>
+      <p style="margin-top:5px;">
+        <strong>Why:</strong> Browser-native hardware integration eliminates proprietary Windows/Android driver lock-in and unites access control, biometric KYC, billing, and coaching progress into one audited PostgreSQL source of truth.
+      </p>
+    </div>
+
+    <div class="prose-card span-2">
+      <h2>Cross-Module Integration Summary Matrix</h2>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Integration Pair</th>
+            <th>Protocol / Mechanism</th>
+            <th>Security &amp; Fault Tolerance</th>
+            <th>Operational Benefit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SPA &lt;-&gt; FastAPI Routers</td>
+            <td>HTTPS REST/JSON + HttpOnly JWT + <span class="mono">limit+1</span> Cache</td>
+            <td>CSRF header check, RBAC guard, Rate limiting, JTI revocation</td>
+            <td>Stateless scaling, fast O(1) paginated tables</td>
+          </tr>
+          <tr>
+            <td>Xendit &lt;-&gt; <span class="mono">payments.py</span></td>
+            <td>REST Invoice + Signed Webhook (<span class="mono">PAID</span>)</td>
+            <td>HMAC token compare, price floor verification, unique ref index</td>
+            <td>Auto-promotes <span class="mono">user</span> -&gt; <span class="mono">member</span> + Admin alerts</td>
+          </tr>
+          <tr>
+            <td>Web NFC Scanner &lt;-&gt; <span class="mono">access_service.py</span></td>
+            <td><span class="mono">POST /api/access/tap</span> -&gt; WSS Live Feed</td>
+            <td>Staff JWT or <span class="mono">X-Scanner-API-Key</span>, 3s cooldown, open-visit index</td>
+            <td>Sub-50ms gate decision + instant trainer alert</td>
+          </tr>
+          <tr>
+            <td>FastAPI -&gt; PostgreSQL <span class="mono">audit_logs</span></td>
+            <td>Async ORM transactional logging</td>
+            <td>Secret/Bearer regex redaction, proxy-safe IP, composite index</td>
+            <td>Immutable traceability across all user roles</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="doc-footer">
+    <span>PULSEFIT / The DGym Management &amp; Intelligence Platform</span>
+    <span>Page 4 of 4 • Integration Methodology &amp; Summary Matrix</span>
+  </footer>
+</section>
+
+</body>
+</html>

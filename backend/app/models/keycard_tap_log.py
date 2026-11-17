@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -26,6 +26,9 @@ class TapDecision(str, enum.Enum):
 class KeycardTapLog(Base):
     """Immutable audit log of every smart keycard tap (granted & denied)."""
     __tablename__ = "keycard_tap_logs"
+    __table_args__ = (
+        Index("ix_tap_logs_tapped_id", "tapped_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 

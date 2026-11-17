@@ -5,6 +5,7 @@ import { SEO } from '@/components/ui/SEO'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { PaginationControls } from '@/components/ui/PaginationControls'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import { getInitials } from '@/utils/formatters'
@@ -129,7 +130,10 @@ export function ManageUsersPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
 
+  const USERS_PAGE_SIZE = 25
   const [users, setUsers] = useState<User[]>([])
+  const [skip, setSkip] = useState(0)
+  const [hasNext, setHasNext] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -166,9 +170,16 @@ export function ManageUsersPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.getUsers()
+      const page = await api.getUsersPage({
+        search: search.trim() || undefined,
+        role: roleFilter || undefined,
+        is_active: statusFilter === 'active' ? true : statusFilter === 'disabled' ? false : undefined,
+        skip,
+        limit: USERS_PAGE_SIZE,
+      })
       if (mountedRef.current) {
-        setUsers(data)
+        setUsers(page.items)
+        setHasNext(page.has_next)
       }
     } catch (err) {
       if (mountedRef.current) {
@@ -179,32 +190,16 @@ export function ManageUsersPage() {
         setLoading(false)
       }
     }
-  }, [])
+  }, [search, roleFilter, statusFilter, skip])
 
   useEffect(() => {
-    let active = true
-    api
-      .getUsers()
-      .then((data) => {
-        if (active) {
-          setUsers(data)
-          setError(null)
-        }
-      })
-      .catch((err: unknown) => {
-        if (active) {
-          setError(err instanceof Error ? err.message : 'Failed to load users.')
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setLoading(false)
-        }
-      })
+    const timer = window.setTimeout(() => {
+      void fetchUsers()
+    }, 200)
     return () => {
-      active = false
+      window.clearTimeout(timer)
     }
-  }, [])
+  }, [fetchUsers])
 
   const closeAddModal = useCallback(() => {
     if (submitting) return
@@ -364,7 +359,10 @@ export function ManageUsersPage() {
               aria-label="Search users by name, email, phone, or role"
               placeholder="Search users by name, email, or phone..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setSkip(0)
+              }}
               className="w-full pl-10 pr-4 py-2.5 bg-surface border border-white/10 rounded-lg text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-red/40 transition-colors"
             />
           </div>
@@ -372,7 +370,10 @@ export function ManageUsersPage() {
           <select
             aria-label="Filter users by role"
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => {
+              setRoleFilter(e.target.value)
+              setSkip(0)
+            }}
             className="px-4 py-2.5 bg-surface border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors"
           >
             <option value="" className="bg-surface-2">
@@ -398,7 +399,10 @@ export function ManageUsersPage() {
           <select
             aria-label="Filter users by account status"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as StatusFilter)
+              setSkip(0)
+            }}
             className="px-4 py-2.5 bg-surface border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors"
           >
             <option value="" className="bg-surface-2">
@@ -562,6 +566,18 @@ export function ManageUsersPage() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="px-4 pb-4">
+            <PaginationControls
+              skip={skip}
+              limit={USERS_PAGE_SIZE}
+              itemCount={filteredUsers.length}
+              hasNext={hasNext}
+              loading={loading}
+              onPrev={() => setSkip((prev) => Math.max(0, prev - USERS_PAGE_SIZE))}
+              onNext={() => setSkip((prev) => prev + USERS_PAGE_SIZE)}
+              itemLabel="users"
+            />
           </div>
         </div>
       </div>

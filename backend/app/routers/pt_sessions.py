@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,6 +11,7 @@ from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.pt_session import PTSession, PTSessionStatus
+from app.services.audit import record_audit_log
 from app.services.membership_activation import expire_elapsed_memberships
 from app.schemas.training_and_visits import (
     PTSessionCreate,
@@ -173,6 +174,7 @@ async def list_available_trainers(
 @router.post("/book", response_model=PTSessionResponse, status_code=status.HTTP_201_CREATED)
 async def book_pt_session(
     payload: PTSessionBookCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -208,6 +210,17 @@ async def book_pt_session(
         notes=payload.notes,
     )
     db.add(pt)
+    await db.flush()
+    await record_audit_log(
+        db,
+        action="booking.pt.created",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=pt.id,
+        request=request,
+        details=f"Member {member.member_code} requested PT with Coach #{payload.trainer_id}.",
+    )
     await db.commit()
     await db.refresh(pt)
 
@@ -245,6 +258,7 @@ async def list_my_bookings(
 @router.patch("/{session_id}/cancel", response_model=PTSessionResponse)
 async def cancel_my_booking(
     session_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -265,6 +279,16 @@ async def cancel_my_booking(
         raise HTTPException(status_code=400, detail=f"Cannot cancel a {session.status.value} session.")
 
     session.status = PTSessionStatus.CANCELLED
+    await record_audit_log(
+        db,
+        action="booking.pt.cancelled",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=session.id,
+        request=request,
+        details=f"Cancelled PT session #{session.id}.",
+    )
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
     return _format_pt_session(loaded)
@@ -276,6 +300,7 @@ async def cancel_my_booking(
 async def approve_pt_booking(
     session_id: int,
     payload: PTSessionApprove,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -299,6 +324,16 @@ async def approve_pt_booking(
     if payload.coach_notes:
         session.coach_notes = payload.coach_notes
     session.rejection_reason = None
+    await record_audit_log(
+        db,
+        action="booking.pt.approved",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=session.id,
+        request=request,
+        details=f"Approved PT booking #{session.id}.",
+    )
 
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
@@ -310,6 +345,7 @@ async def approve_pt_booking(
 async def reject_pt_booking(
     session_id: int,
     payload: PTSessionReject,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -330,6 +366,16 @@ async def reject_pt_booking(
         )
     session.status = PTSessionStatus.REJECTED
     session.rejection_reason = payload.reason or "Trainer is unavailable at the requested time slot."
+    await record_audit_log(
+        db,
+        action="booking.pt.rejected",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=session.id,
+        request=request,
+        details=f"Rejected PT booking #{session.id}.",
+    )
 
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
@@ -342,6 +388,7 @@ async def reject_pt_booking(
 @router.post("", response_model=PTSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_pt_session(
     payload: PTSessionCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -352,6 +399,17 @@ async def create_pt_session(
 
     pt = PTSession(**payload.model_dump())
     db.add(pt)
+    await db.flush()
+    await record_audit_log(
+        db,
+        action="booking.pt.created",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=pt.id,
+        request=request,
+        details=f"Scheduled PT session #{pt.id} for Member #{payload.member_id}.",
+    )
     await db.commit()
     await db.refresh(pt)
 
@@ -432,6 +490,7 @@ async def get_pt_session(
 async def update_pt_session(
     session_id: int,
     payload: PTSessionUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -447,6 +506,16 @@ async def update_pt_session(
     for key, val in update_data.items():
         setattr(session, key, val)
 
+    await record_audit_log(
+        db,
+        action="booking.pt.updated",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=session.id,
+        request=request,
+        details=f"Updated PT session #{session.id} ({', '.join(sorted(update_data.keys()))}).",
+    )
     await db.commit()
     loaded = await _load_pt_session(session_id, db)
     return _format_pt_session(loaded)
@@ -455,6 +524,7 @@ async def update_pt_session(
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_pt_session(
     session_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
@@ -463,4 +533,14 @@ async def delete_pt_session(
     if not session:
         raise HTTPException(status_code=404, detail="PT session not found.")
     await db.delete(session)
+    await record_audit_log(
+        db,
+        action="booking.pt.deleted",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="pt_session",
+        target_id=session_id,
+        request=request,
+        details=f"Deleted PT session #{session_id}.",
+    )
     await db.commit()

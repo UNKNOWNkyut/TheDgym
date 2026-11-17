@@ -23,6 +23,7 @@ class Visit(Base):
     """Records a member gym visit / check-in event."""
     __tablename__ = "visits"
     __table_args__ = (
+        Index("ix_visits_checked_in_id", "checked_in_at", "id"),
         Index("ix_visits_member_checked_in", "member_id", "checked_in_at"),
         Index(
             "uq_visits_member_active_open",

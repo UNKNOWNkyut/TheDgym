@@ -6,6 +6,7 @@ import { api } from '@/services/api'
 import { SEO } from '@/components/ui/SEO'
 import { formatPhTime, isTodayPh, parseUtcDate } from '@/utils/dateTime'
 import { SearchableSelect, type SelectOption } from '@/components/ui/SearchableSelect'
+import { PaginationControls } from '@/components/ui/PaginationControls'
 import { LiveKeycardMonitor } from '@/components/manage/LiveKeycardMonitor'
 import type { Visit, VisitType, Member, KeycardTapLog } from '@/types/auth'
 
@@ -196,25 +197,33 @@ function VisitRow({ visit, onCheckOut }: { visit: Visit; onCheckOut: (id: number
 
 // Main Page
 
+const LOGS_PAGE_SIZE = 25
+
 export function ManageVisitsPage() {
   const [visits, setVisits] = useState<Visit[]>([])
+  const [visitsSkip, setVisitsSkip] = useState(0)
+  const [visitsHasNext, setVisitsHasNext] = useState(false)
   const [tapLogs, setTapLogs] = useState<KeycardTapLog[]>([])
+  const [tapSkip, setTapSkip] = useState(0)
+  const [tapHasNext, setTapHasNext] = useState(false)
   const [activeLogTab, setActiveLogTab] = useState<'visits' | 'tap_audit'>('visits')
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const loadData = async (silent = false) => {
+  const loadData = async (silent = false, nextVisitsSkip = visitsSkip, nextTapSkip = tapSkip) => {
     if (!silent) setLoading(true)
     try {
-      const [visitsData, membersData, tapLogsData] = await Promise.all([
-        api.getVisits({ limit: 100 }),
+      const [visitsPage, membersData, tapLogsPage] = await Promise.all([
+        api.getVisitsPage({ skip: nextVisitsSkip, limit: LOGS_PAGE_SIZE }),
         api.getMembers({ limit: 200 }),
-        api.getKeycardTapLogs({ limit: 80 }),
+        api.getKeycardTapLogsPage({ skip: nextTapSkip, limit: LOGS_PAGE_SIZE }),
       ])
-      setVisits(visitsData)
+      setVisits(visitsPage.items)
+      setVisitsHasNext(visitsPage.has_next)
       setMembers(membersData)
-      setTapLogs(tapLogsData)
+      setTapLogs(tapLogsPage.items)
+      setTapHasNext(tapLogsPage.has_next)
     } catch {
       /* silent */
     } finally {
@@ -223,8 +232,9 @@ export function ManageVisitsPage() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    void loadData(false, visitsSkip, tapSkip)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitsSkip, tapSkip])
 
   useGSAP(() => {
     if (!loading) {
@@ -242,8 +252,9 @@ export function ManageVisitsPage() {
   const handleCheckOut = async (visitId: number) => {
     try {
       await api.checkOutVisit(visitId)
-      const data = await api.getVisits({ limit: 100 })
-      setVisits(data)
+      const page = await api.getVisitsPage({ skip: visitsSkip, limit: LOGS_PAGE_SIZE })
+      setVisits(page.items)
+      setVisitsHasNext(page.has_next)
     } catch {
       /* silent */
     }
@@ -410,6 +421,34 @@ export function ManageVisitsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {!loading && activeLogTab === 'visits' && (
+          <div className="px-4 pb-4">
+            <PaginationControls
+              skip={visitsSkip}
+              limit={LOGS_PAGE_SIZE}
+              itemCount={visits.length}
+              hasNext={visitsHasNext}
+              loading={loading}
+              onPrev={() => setVisitsSkip((prev) => Math.max(0, prev - LOGS_PAGE_SIZE))}
+              onNext={() => setVisitsSkip((prev) => prev + LOGS_PAGE_SIZE)}
+              itemLabel="visits"
+            />
+          </div>
+        )}
+        {!loading && activeLogTab === 'tap_audit' && (
+          <div className="px-4 pb-4">
+            <PaginationControls
+              skip={tapSkip}
+              limit={LOGS_PAGE_SIZE}
+              itemCount={tapLogs.length}
+              hasNext={tapHasNext}
+              loading={loading}
+              onPrev={() => setTapSkip((prev) => Math.max(0, prev - LOGS_PAGE_SIZE))}
+              onNext={() => setTapSkip((prev) => prev + LOGS_PAGE_SIZE)}
+              itemLabel="tap logs"
+            />
           </div>
         )}
       </div>

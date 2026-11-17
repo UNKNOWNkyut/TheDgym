@@ -116,3 +116,38 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
                         text(f"ALTER TABLE user_biometrics ADD COLUMN {col_name} {col_ddl}")
                     )
                     logger.info("[MIGRATION] Added column user_biometrics.%s", col_name)
+
+        audit_cols = await conn.run_sync(_get_existing_columns, "audit_logs")
+        if audit_cols:
+            if "actor_role" not in audit_cols:
+                await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN actor_role VARCHAR(32) NULL"))
+                logger.info("[MIGRATION] Added column audit_logs.actor_role")
+            if "user_agent" not in audit_cols:
+                await conn.execute(text("ALTER TABLE audit_logs ADD COLUMN user_agent VARCHAR(255) NULL"))
+                logger.info("[MIGRATION] Added column audit_logs.user_agent")
+
+        composite_indexes = (
+            ("audit_logs", "ix_audit_logs_created_id", "created_at, id"),
+            ("audit_logs", "ix_audit_logs_outcome_created_id", "outcome, created_at, id"),
+            ("audit_logs", "ix_audit_logs_actor_role", "actor_role"),
+            ("members", "ix_members_joined_id", "joined_at, id"),
+            ("members", "ix_members_status_joined_id", "status, joined_at, id"),
+            ("users", "ix_users_created_id", "created_at, id"),
+            ("users", "ix_users_role_created_id", "role, created_at, id"),
+            ("visits", "ix_visits_checked_in_id", "checked_in_at, id"),
+            ("keycard_tap_logs", "ix_tap_logs_tapped_id", "tapped_at, id"),
+        )
+        index_cache: dict[str, set[str]] = {}
+        for table_name, index_name, cols_sql in composite_indexes:
+            cols_present = await conn.run_sync(_get_existing_columns, table_name)
+            if not cols_present:
+                continue
+            existing_idx = index_cache.setdefault(
+                table_name, await conn.run_sync(_get_existing_indexes, table_name)
+            )
+            if index_name not in existing_idx:
+                await conn.execute(
+                    text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({cols_sql})")
+                )
+                existing_idx.add(index_name)
+                logger.info("[MIGRATION] Created index %s on %s", index_name, table_name)

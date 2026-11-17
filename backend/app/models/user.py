@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Enum, Index, Integer, String
 
 from app.database import Base
 
@@ -15,6 +15,10 @@ class UserRole(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index("ix_users_created_id", "created_at", "id"),
+        Index("ix_users_role_created_id", "role", "created_at", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     email = Column(String(255), unique=True, index=True, nullable=False)

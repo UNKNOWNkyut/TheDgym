@@ -127,6 +127,11 @@ async def _activate_membership_from_xendit(
     mapped_pm: PaymentMethod,
     payment_ref: str,
     notes: str,
+    action_code: str = "payment.webhook.paid",
+    actor: Optional[User] = None,
+    actor_email: Optional[str] = "xendit_webhook",
+    actor_role: Optional[str] = "system",
+    request: Optional[Request] = None,
 ) -> tuple[MemberMembership, bool]:
     """
     Idempotently record and activate a paid Xendit membership within one atomic transaction.
@@ -185,6 +190,18 @@ async def _activate_membership_from_xendit(
         paid_amount=paid_amount,
         payment_method=mapped_pm,
         is_new_member_activation=(not had_active_before),
+    )
+    await record_audit_log(
+        db,
+        action=action_code,
+        outcome="SUCCESS",
+        actor=actor,
+        actor_email=actor_email if actor is None else None,
+        actor_role=actor_role if actor is None else None,
+        target_type="membership",
+        target_id=str(new_ms.id),
+        request=request,
+        details=f"Activated {plan.name} for Member #{member.id} ({payment_ref}, PHP {paid_amount}).",
     )
     await db.commit()
     await db.refresh(new_ms)
@@ -342,6 +359,17 @@ async def xendit_webhook(
     if configured_token:
         if not x_callback_token or not hmac.compare_digest(x_callback_token, configured_token):
             logger.warning("Xendit webhook rejected: invalid callback token.")
+            await record_audit_log(
+                db,
+                action="payment.webhook.rejected",
+                outcome="DENIED",
+                actor_email="xendit_webhook",
+                actor_role="system",
+                target_type="payment_webhook",
+                request=request,
+                details="Rejected Xendit webhook callback: invalid callback token.",
+                commit=True,
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid callback token.")
     elif settings.ENVIRONMENT != "development":
         logger.error("Xendit webhook rejected: XENDIT_WEBHOOK_VERIFICATION_TOKEN is not configured.")
@@ -399,6 +427,10 @@ async def xendit_webhook(
         mapped_pm=mapped_pm,
         payment_ref=payment_ref,
         notes=f"Paid online via Xendit ({raw_channel}). Invoice ID: {data.get('id')}",
+        action_code="payment.webhook.paid",
+        actor_email="xendit_webhook",
+        actor_role="system",
+        request=request,
     )
     if already_processed:
         return {"status": "already_processed", "membership_id": membership.id}
@@ -421,6 +453,7 @@ async def xendit_webhook(
 )
 async def verify_checkout_status(
     invoice_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -496,6 +529,9 @@ async def verify_checkout_status(
                 mapped_pm=mapped_pm,
                 payment_ref=payment_ref,
                 notes=f"Paid online via Xendit verify check ({raw_channel}).",
+                action_code="payment.verify.paid",
+                actor=current_user,
+                request=request,
             )
 
     return {

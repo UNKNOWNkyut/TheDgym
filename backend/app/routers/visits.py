@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import List, Optional, Union
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,13 @@ from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.visit import Visit
 from app.schemas.training_and_visits import VisitCreate, VisitCheckOut, VisitResponse
+from app.services.audit import record_audit_log
+from app.services.pagination import (
+    PaginatedPage,
+    make_cache_key,
+    read_page_cache,
+    slice_limit_plus_one,
+)
 from app.services.visit_sweeper import notify_admins_on_checkin, sweep_overdue_open_visits, to_ph_time
 
 router = APIRouter(prefix="/api/visits", tags=["Visits"])
@@ -101,6 +108,7 @@ def _format_visit(v: Visit, member_override: Optional[Member] = None) -> dict:
 @router.post("", response_model=VisitResponse, status_code=status.HTTP_201_CREATED)
 async def check_in_member(
     payload: VisitCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -156,7 +164,18 @@ async def check_in_member(
         method_label="Manual Check-In",
         checkin_utc=visit.checked_in_at or now,
     )
+    await record_audit_log(
+        db,
+        action="visit.checked_in",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="visit",
+        target_id=visit.id,
+        request=request,
+        details=f"Manual check-in for {member_label}.",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("visits:")
     await db.refresh(visit, attribute_names=["id", "checked_in_at", "checked_out_at", "created_at"])
 
     return _format_visit(visit, member_override=member)
@@ -166,6 +185,7 @@ async def check_in_member(
 async def check_out_member(
     visit_id: int,
     payload: VisitCheckOut,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
@@ -177,30 +197,56 @@ async def check_out_member(
         raise HTTPException(status_code=404, detail="Visit not found.")
 
     visit.checked_out_at = payload.checked_out_at or datetime.now(timezone.utc)
+    await record_audit_log(
+        db,
+        action="visit.checked_out",
+        outcome="SUCCESS",
+        actor=current_user,
+        target_type="visit",
+        target_id=visit.id,
+        request=request,
+        details=f"Checked out visit #{visit.id} (member_id={visit.member_id}).",
+    )
     await db.commit()
+    read_page_cache.invalidate_prefix("visits:")
     await db.refresh(visit, attribute_names=["checked_out_at"])
 
     return _format_visit(visit)
 
 
-@router.get("", response_model=List[VisitResponse])
+@router.get("", response_model=Union[PaginatedPage[VisitResponse], List[VisitResponse]])
 async def list_visits(
     member_id: Optional[int] = Query(None),
     date_from: Optional[str] = Query(None, description="ISO date string e.g. 2024-01-01"),
     date_to: Optional[str] = Query(None, description="ISO date string e.g. 2024-12-31"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    paginated: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
-    """List all gym visits with optional filters."""
+    """List gym visits with deterministic `(checked_in_at, id)` sorting and `limit + 1` pagination."""
     await sweep_overdue_open_visits(db)
+
+    cache_key = make_cache_key(
+        "visits",
+        member_id=member_id,
+        date_from=date_from,
+        date_to=date_to,
+        skip=skip,
+        limit=limit,
+        paginated=paginated,
+    )
+    cached = read_page_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     stmt = (
         select(Visit)
         .options(selectinload(Visit.member))
-        .order_by(desc(Visit.checked_in_at))
+        .order_by(desc(Visit.checked_in_at), desc(Visit.id))
         .offset(skip)
-        .limit(limit)
+        .limit(limit + 1)
     )
 
     if member_id is not None:
@@ -222,7 +268,23 @@ async def list_visits(
 
     result = await db.execute(stmt)
     visits = result.scalars().all()
-    return [_format_visit(v) for v in visits]
+    page = slice_limit_plus_one(
+        [_format_visit(v) for v in visits],
+        skip=skip,
+        limit=limit,
+    )
+    response_payload: Union[PaginatedPage[VisitResponse], List[VisitResponse]] = (
+        PaginatedPage[VisitResponse](
+            items=page.items,
+            skip=skip,
+            limit=limit,
+            has_next=page.has_next,
+            next_skip=page.next_skip,
+        )
+        if paginated
+        else page.items
+    )
+    return read_page_cache.set(cache_key, response_payload)
 
 
 @router.get("/member/{member_id}", response_model=List[VisitResponse])

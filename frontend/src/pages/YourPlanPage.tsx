@@ -16,6 +16,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 import { SEO } from '@/components/ui/SEO';
 import { QuarterRing } from '@/components/ui/quarter-ring';
 import { ExerciseLibrarySection } from '@/components/plan/ExerciseLibrarySection';
@@ -285,6 +286,32 @@ function YourPlanWorkspace({
       localStorage.setItem(planStorageKey, JSON.stringify(newPlan));
     } catch (err) {
       console.error('Failed to save user plan', err);
+    }
+    if (isVerifiedMember) {
+      const splitSummary = weeklyWorkoutSplit.map((d) => ({
+        day: d.dayName,
+        focus: d.focusTitle,
+        exercises: (dailyRoutines[d.dayNumber] || []).length,
+      }));
+      const mealPreview = MEAL_BLUEPRINT.map((m) => ({
+        badge: m.badge,
+        title: m.title,
+        calories: m.calories,
+      }));
+      void api
+        .syncMyTrainingPlan({
+          goal_focus: `${draft.goal} (${draft.frequency}x/wk • ${draft.experience})`,
+          workout_plan_summary: `${weeklyWorkoutSplit
+            .filter((d) => !d.isRest)
+            .map((d) => `${d.dayName}: ${d.focusTitle}`)
+            .join(' | ')}`,
+          workout_split_json: JSON.stringify(splitSummary),
+          meal_plan_summary: `${calculatedMetrics.targetCalories} kcal/day • ${calculatedMetrics.proteinGrams}g protein (${MEAL_BLUEPRINT.length} meals/day)`,
+          meal_plan_json: JSON.stringify(mealPreview),
+        })
+        .catch(() => {
+          /* non-blocking sync */
+        });
     }
     return newPlan;
   };
