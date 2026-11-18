@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
@@ -30,6 +31,9 @@ export function RegisterPage() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [acceptedLegal, setAcceptedLegal] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [showLoading, setShowLoading] = useState(false)
@@ -68,6 +72,10 @@ export function RegisterPage() {
       setValidationError('Passwords do not match.')
       return
     }
+    if (!acceptedLegal) {
+      setValidationError('Please read and agree to the Privacy Policy and Terms & Conditions.')
+      return
+    }
 
     setStep('plan')
   }
@@ -75,6 +83,12 @@ export function RegisterPage() {
   const handleCompleteRegistration = async (withPlan: boolean) => {
     setValidationError(null)
     clearError()
+
+    if (!acceptedLegal) {
+      setValidationError('Please read and agree to the Privacy Policy and Terms & Conditions.')
+      setStep('account')
+      return
+    }
 
     if (!idScanData || !livenessData || typeof livenessData.idMatchScore !== 'number') {
       setValidationError('Please complete Valid ID and live face verification first.')
@@ -356,25 +370,91 @@ export function RegisterPage() {
                 onChange={(e) => setPhone(e.target.value)}
               />
 
-              <Input
-                label="Password"
-                type="password"
-                name="password"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="register-password" className="text-sm font-medium text-white/70">
+                  Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="register-password"
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    placeholder="At least 8 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-red transition-colors cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
 
-              <Input
-                label="Confirm Password"
-                type="password"
-                name="confirmPassword"
-                placeholder="Repeat password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="register-confirm-password" className="text-sm font-medium text-white/70">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Input
+                    id="register-confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    name="confirmPassword"
+                    placeholder="Repeat password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-red transition-colors cursor-pointer"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <label
+                htmlFor="register-legal-consent"
+                className="flex items-start gap-2.5 pt-1 text-xs text-white/60 leading-relaxed cursor-pointer select-none"
+              >
+                <input
+                  id="register-legal-consent"
+                  type="checkbox"
+                  checked={acceptedLegal}
+                  onChange={(e) => setAcceptedLegal(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border border-white/20 bg-surface-2 accent-red cursor-pointer shrink-0"
+                  required
+                />
+                <span>
+                  I have read and agree to the{' '}
+                  <Link
+                    to="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white hover:text-red underline underline-offset-2 transition-colors"
+                  >
+                    Privacy Policy
+                  </Link>{' '}
+                  and{' '}
+                  <Link
+                    to="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-white hover:text-red underline underline-offset-2 transition-colors"
+                  >
+                    Terms &amp; Conditions
+                  </Link>
+                </span>
+              </label>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-4">
                 <Button
@@ -393,22 +473,12 @@ export function RegisterPage() {
                 <Button
                   type="submit"
                   size="lg"
+                  disabled={!acceptedLegal}
                   className="flex-1"
                 >
                   Next Step →
                 </Button>
               </div>
-
-              <p className="text-center text-[11px] text-white/35 mt-4 leading-relaxed">
-                By creating an account, you agree to our separate{' '}
-                <Link to="/terms" target="_blank" className="text-white/60 hover:text-white underline transition-colors">
-                  Terms of Use
-                </Link>{' '}
-                and{' '}
-                <Link to="/privacy" target="_blank" className="text-white/60 hover:text-white underline transition-colors">
-                  Privacy Policy
-                </Link>.
-              </p>
 
               <p className="text-center text-xs text-white/40 mt-5">
                 Already have an account?{' '}
