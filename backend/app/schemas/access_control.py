@@ -154,7 +154,7 @@ class PairingSessionStatus(BaseModel):
     member_code: Optional[str] = None
     member_name: Optional[str] = None
     card_label: Optional[str] = None
-    expires_at: Optional[datetime] = None
+    expires_at: Optional[UtcDatetime] = None
 
 
 class AccessControlSettings(BaseModel):

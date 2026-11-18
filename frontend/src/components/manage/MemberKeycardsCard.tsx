@@ -16,8 +16,13 @@ import {
 } from 'lucide-react'
 import { api } from '@/services/api'
 import { useAuth } from '@/context/AuthContext'
-import { useRfidScanner, playAccessChime } from '@/hooks/useRfidScanner'
-import type { MemberKeycard, KeycardStatus } from '@/types/auth'
+import {
+  useRfidScanner,
+  getWebNfcConstructor,
+  playAccessChime,
+  type NDEFReadingEvent,
+} from '@/hooks/useRfidScanner'
+import type { MemberKeycard, KeycardStatus, PairingSessionStatus } from '@/types/auth'
 
 gsap.registerPlugin()
 
@@ -58,11 +63,21 @@ export function MemberKeycardsCard({
   const [actionId, setActionId] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [phonePairingReady, setPhonePairingReady] = useState(false)
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null)
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(90)
+  const [pairingExpired, setPairingExpired] = useState(false)
+  const [pairingAttempt, setPairingAttempt] = useState(0)
   const [detectedPhoneUid, setDetectedPhoneUid] = useState<string | null>(null)
   const [pairedSuccessMsg, setPairedSuccessMsg] = useState<string | null>(null)
+  const [webNfcSupported] = useState<boolean>(() => Boolean(getWebNfcConstructor()))
+  const [isLocalNfcScanning, setIsLocalNfcScanning] = useState(false)
+  const [localNfcBusy, setLocalNfcBusy] = useState(false)
+  const [localNfcError, setLocalNfcError] = useState<string | null>(null)
 
   const modalCardRef = useRef<HTMLDivElement>(null)
   const pairedByPhoneRef = useRef(false)
+  const nfcAbortRef = useRef<AbortController | null>(null)
+  const localPairingLockRef = useRef(false)
 
   const loadKeycards = useCallback(async () => {
     setLoading(true)
@@ -102,7 +117,143 @@ export function MemberKeycardsCard({
     },
   })
 
-  // Smart Pairing Mode (Edge Case #4): Live WebSocket + Fallback Poll so PC Modal always auto-closes!
+  const stopLocalNfcScan = useCallback(() => {
+    nfcAbortRef.current?.abort()
+    nfcAbortRef.current = null
+    setIsLocalNfcScanning(false)
+  }, [])
+
+  const completePairedSuccess = useCallback(
+    (displayUid: string, sourceLabel: string) => {
+      if (pairedByPhoneRef.current) return
+      pairedByPhoneRef.current = true
+      stopLocalNfcScan()
+      setErrorMessage(null)
+      setLocalNfcError(null)
+      setDetectedPhoneUid(displayUid)
+      playAccessChime('granted', false)
+      loadKeycards()
+
+      window.setTimeout(() => {
+        setPairedSuccessMsg(
+          `Smart Keycard (${displayUid}) paired to ${memberName} ${sourceLabel}!`,
+        )
+        setCardUidInput('')
+        setShowManualFallback(false)
+        setShowPairModal(false)
+      }, 750)
+    },
+    [loadKeycards, memberName, stopLocalNfcScan],
+  )
+
+  const pairDirectlyFromPhoneNfc = useCallback(
+    async (rawUid: string) => {
+      if (localPairingLockRef.current || pairedByPhoneRef.current) return
+      localPairingLockRef.current = true
+      setLocalNfcBusy(true)
+      setErrorMessage(null)
+      setLocalNfcError(null)
+      try {
+        const created = await api.pairMemberKeycard(memberId, {
+          card_uid: rawUid,
+          card_label: DEFAULT_CARD_LABEL,
+        })
+        completePairedSuccess(
+          `${rawUid} (${created.card_uid_masked})`,
+          'directly via Phone NFC',
+        )
+      } catch (err) {
+        playAccessChime('denied', false)
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Failed to pair smart keycard.',
+        )
+      } finally {
+        localPairingLockRef.current = false
+        setLocalNfcBusy(false)
+      }
+    },
+    [completePairedSuccess, memberId],
+  )
+
+  const startLocalNfcScan = useCallback(async () => {
+    const NDEFReaderCtor = getWebNfcConstructor()
+    if (!NDEFReaderCtor) return
+
+    setLocalNfcError(null)
+    try {
+      nfcAbortRef.current?.abort()
+      const controller = new AbortController()
+      nfcAbortRef.current = controller
+
+      const ndef = new NDEFReaderCtor()
+      await ndef.scan({ signal: controller.signal })
+
+      ndef.onreading = (event: NDEFReadingEvent) => {
+        const uid = (event.serialNumber || '').trim().toUpperCase()
+        if (!uid) {
+          setLocalNfcError(
+            'Card detected, but UID could not be read. Hold card flat against back of phone.',
+          )
+          return
+        }
+        void pairDirectlyFromPhoneNfc(uid)
+      }
+
+      ndef.onreadingerror = () => {
+        setLocalNfcError(
+          'NFC read interrupted — hold NFC card steady at back of phone.',
+        )
+      }
+
+      setIsLocalNfcScanning(true)
+    } catch (err) {
+      setIsLocalNfcScanning(false)
+      setLocalNfcError(
+        err instanceof Error
+          ? err.message
+          : 'Tap "Scan on This Phone" below to allow Chrome NFC reading.',
+      )
+    }
+  }, [pairDirectlyFromPhoneNfc])
+
+  const openPairModal = useCallback(() => {
+    setErrorMessage(null)
+    setPairedSuccessMsg(null)
+    setDetectedPhoneUid(null)
+    setCardUidInput('')
+    setShowManualFallback(false)
+    setPairingExpired(false)
+    setPairingExpiresAt(null)
+    setRemainingSeconds(90)
+    setLocalNfcError(null)
+    setShowPairModal(true)
+    if (webNfcSupported) {
+      void startLocalNfcScan()
+    }
+  }, [startLocalNfcScan, webNfcSupported])
+
+  const handleExplicitCancelModal = useCallback(() => {
+    if (submitting || localNfcBusy || detectedPhoneUid) return
+    stopLocalNfcScan()
+    setShowPairModal(false)
+    if (!pairedByPhoneRef.current) {
+      api.cancelPairingSession(memberId).catch(() => {})
+    }
+  }, [detectedPhoneUid, localNfcBusy, memberId, stopLocalNfcScan, submitting])
+
+  const handleRestartPairing = useCallback(() => {
+    setErrorMessage(null)
+    setPairingExpired(false)
+    setPhonePairingReady(false)
+    setPairingExpiresAt(null)
+    setRemainingSeconds(90)
+    setPairingAttempt((n) => n + 1)
+    if (webNfcSupported) {
+      void startLocalNfcScan()
+    }
+  }, [startLocalNfcScan, webNfcSupported])
+
+  // Smart Pairing Mode: DB-backed session + Live WebSocket + Fallback Poll (preserves session on route navigation!)
   useEffect(() => {
     if (!showPairModal || !canManageCards) {
       return
@@ -112,34 +263,26 @@ export function MemberKeycardsCard({
     let unmounted = false
     let ws: WebSocket | null = null
     let pollTimer: number | undefined
-    let closeTimer: number | undefined
     const modalOpenedAtMs = Date.now()
 
-    const handlePhonePairedSuccess = (displayUid: string) => {
-      if (pairedByPhoneRef.current || unmounted) return
-      pairedByPhoneRef.current = true
-      setErrorMessage(null)
-      setDetectedPhoneUid(displayUid)
-      playAccessChime('granted', false)
-      loadKeycards()
-
-      closeTimer = window.setTimeout(() => {
-        if (unmounted) return
-        setPairedSuccessMsg(
-          `Smart Keycard (${displayUid}) paired to ${memberName} via Phone NFC Scanner!`,
-        )
-        setCardUidInput('')
-        setShowManualFallback(false)
-        setShowPairModal(false)
-      }, 750)
+    const handleRemotePaired = (displayUid: string) => {
+      if (unmounted) return
+      completePairedSuccess(displayUid, 'via Phone NFC Scanner')
     }
 
     api
       .startPairingSession(memberId, DEFAULT_CARD_LABEL)
-      .then(() => {
-        if (!unmounted) setPhonePairingReady(true)
+      .then((status: PairingSessionStatus) => {
+        if (unmounted) return
+        setPhonePairingReady(true)
+        setPairingExpired(false)
+        setPairingExpiresAt(
+          status.expires_at ?? new Date(Date.now() + 90_000).toISOString(),
+        )
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!unmounted) setPhonePairingReady(false)
+      })
 
     // 1. Instant Real-Time WebSocket Listener
     try {
@@ -154,7 +297,7 @@ export function MemberKeycardsCard({
             const uidLabel = packet.data.card_uid
               ? `${packet.data.card_uid} (${packet.data.card_uid_masked})`
               : packet.data.card_uid_masked
-            handlePhonePairedSuccess(uidLabel)
+            handleRemotePaired(uidLabel)
           } else if (
             packet?.event === 'pairing_conflict' &&
             packet?.data?.member_id === memberId
@@ -182,7 +325,7 @@ export function MemberKeycardsCard({
         if (latestActive) {
           const issuedMs = new Date(latestActive.issued_at).getTime()
           if (issuedMs >= modalOpenedAtMs - 1500) {
-            handlePhonePairedSuccess(latestActive.card_uid_masked)
+            handleRemotePaired(latestActive.card_uid_masked)
           }
         }
       } catch {
@@ -193,15 +336,42 @@ export function MemberKeycardsCard({
     return () => {
       unmounted = true
       if (pollTimer) window.clearInterval(pollTimer)
-      if (closeTimer) window.clearTimeout(closeTimer)
       ws?.close()
+      stopLocalNfcScan()
       setPhonePairingReady(false)
-      setDetectedPhoneUid(null)
-      if (!pairedByPhoneRef.current) {
-        api.cancelPairingSession().catch(() => {})
+    }
+  }, [
+    showPairModal,
+    pairingAttempt,
+    memberId,
+    canManageCards,
+    completePairedSuccess,
+    stopLocalNfcScan,
+  ])
+
+  // Live 90-second countdown synchronized to server expires_at
+  useEffect(() => {
+    if (!showPairModal || !pairingExpiresAt || detectedPhoneUid) {
+      return
+    }
+
+    const updateRemaining = () => {
+      const secs = Math.max(
+        0,
+        Math.ceil((new Date(pairingExpiresAt).getTime() - Date.now()) / 1000),
+      )
+      setRemainingSeconds(secs)
+      if (secs <= 0) {
+        setPairingExpired(true)
+        setPhonePairingReady(false)
+        stopLocalNfcScan()
       }
     }
-  }, [showPairModal, memberId, memberName, canManageCards, loadKeycards])
+
+    updateRemaining()
+    const timer = window.setInterval(updateRemaining, 500)
+    return () => window.clearInterval(timer)
+  }, [showPairModal, pairingExpiresAt, detectedPhoneUid, stopLocalNfcScan])
 
   const handlePairSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -273,14 +443,7 @@ export function MemberKeycardsCard({
         {canManageCards && (
           <button
             type="button"
-            onClick={() => {
-              setErrorMessage(null)
-              setPairedSuccessMsg(null)
-              setDetectedPhoneUid(null)
-              setCardUidInput('')
-              setShowManualFallback(false)
-              setShowPairModal(true)
-            }}
+            onClick={openPairModal}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red hover:bg-red/85 text-white text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -317,12 +480,7 @@ export function MemberKeycardsCard({
           {canManageCards && (
             <button
               type="button"
-              onClick={() => {
-                setErrorMessage(null)
-                setDetectedPhoneUid(null)
-                setShowManualFallback(false)
-                setShowPairModal(true)
-              }}
+              onClick={openPairModal}
               className="text-xs font-mono text-red hover:underline cursor-pointer"
             >
               Tap to assign card →
@@ -422,7 +580,7 @@ export function MemberKeycardsCard({
         createPortal(
           <div
             className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
-            onClick={() => !submitting && !detectedPhoneUid && setShowPairModal(false)}
+            onClick={handleExplicitCancelModal}
           >
             <div
               ref={modalCardRef}
@@ -443,13 +601,29 @@ export function MemberKeycardsCard({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPairModal(false)}
-                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {!detectedPhoneUid && (phonePairingReady || pairingExpired) && (
+                    <span
+                      className={`text-[11px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                        pairingExpired
+                          ? 'border-red/40 bg-red/10 text-red'
+                          : remainingSeconds <= 15
+                          ? 'border-amber-400/40 bg-amber-500/10 text-amber-300'
+                          : 'border-white/15 bg-white/5 text-white/70'
+                      }`}
+                    >
+                      {pairingExpired ? 'Expired' : `${remainingSeconds}s`}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    aria-label="Close modal"
+                    onClick={handleExplicitCancelModal}
+                    className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {detectedPhoneUid ? (
@@ -468,21 +642,68 @@ export function MemberKeycardsCard({
               ) : (
                 <div className="space-y-4">
                   {/* Primary Automatic Phone NFC Pairing Zone */}
-                  <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] flex flex-col items-center text-center space-y-3">
-                    <div className="w-12 h-12 rounded-full border border-emerald-400/35 bg-emerald-500/15 flex items-center justify-center text-emerald-400">
-                      <Smartphone className="w-6 h-6 animate-pulse" />
+                  {pairingExpired ? (
+                    <div className="p-5 rounded-2xl border border-red/35 bg-red/[0.08] flex flex-col items-center text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full border border-red/40 bg-red/15 flex items-center justify-center text-red">
+                        <RotateCcw className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-mono font-bold uppercase tracking-widest text-red">
+                          Pairing Session Expired
+                        </p>
+                        <p className="text-xs text-white/65 leading-relaxed max-w-xs">
+                          The 90-second pairing window timed out before a card tap was received.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRestartPairing}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red hover:bg-red/85 text-white text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restart Pairing</span>
+                      </button>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-mono font-bold uppercase tracking-widest text-emerald-400">
-                        {phonePairingReady
-                          ? 'Waiting for Card Tap on Phone...'
-                          : 'Activating Phone Pairing Mode...'}
-                      </p>
-                      <p className="text-xs text-white/65 leading-relaxed max-w-xs">
-                        Tap the card on the Scanner now.
-                      </p>
+                  ) : (
+                    <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] flex flex-col items-center text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full border border-emerald-400/35 bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+                        <Smartphone className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-mono font-bold uppercase tracking-widest text-emerald-400">
+                          {localNfcBusy
+                            ? 'Pairing NFC Keycard...'
+                            : isLocalNfcScanning
+                            ? 'Tap NFC Card on Back of Phone'
+                            : phonePairingReady
+                            ? 'Waiting for Card Tap on Phone...'
+                            : 'Activating Phone Pairing Mode...'}
+                        </p>
+                        <p className="text-xs text-white/65 leading-relaxed max-w-xs">
+                          {isLocalNfcScanning
+                            ? 'Hold the blank NFC card against the back of this phone, or tap on /manage/scanner.'
+                            : webNfcSupported
+                            ? 'Tap the card on /manage/scanner, or scan directly using this phone.'
+                            : 'Tap the card on the /manage/scanner Phone or USB reader now.'}
+                        </p>
+                      </div>
+                      {webNfcSupported && !isLocalNfcScanning && (
+                        <button
+                          type="button"
+                          onClick={() => void startLocalNfcScan()}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red hover:bg-red/85 text-white text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+                        >
+                          <Smartphone className="w-3.5 h-3.5" />
+                          <span>Scan NFC Card on This Phone</span>
+                        </button>
+                      )}
+                      {localNfcError && (
+                        <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2 w-full">
+                          {localNfcError}
+                        </p>
+                      )}
                     </div>
-                  </div>
+                  )}
 
                   {errorMessage && (
                     <p className="text-xs text-red bg-red/10 border border-red/25 rounded-xl p-3">
@@ -534,9 +755,9 @@ export function MemberKeycardsCard({
                   <div className="flex items-center justify-end pt-1">
                     <button
                       type="button"
-                      onClick={() => setShowPairModal(false)}
-                      disabled={submitting}
-                      className="px-4 py-2 rounded-xl border border-white/10 text-xs font-mono text-white/60 hover:text-white transition-colors cursor-pointer"
+                      onClick={handleExplicitCancelModal}
+                      disabled={submitting || localNfcBusy}
+                      className="px-4 py-2 rounded-xl border border-white/10 text-xs font-mono text-white/60 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
                     >
                       Cancel
                     </button>

@@ -45,9 +45,12 @@ from app.schemas.access_control import (
 from app.services.access_service import (
     PAIRING_MODE_TTL_SECS,
     bind_card_to_member,
+    cancel_db_pairing_session,
+    get_active_pairing_status,
     live_feed_manager,
     process_card_tap,
     runtime_state,
+    start_db_pairing_session,
 )
 from app.services.audit import record_audit_log
 from app.services.pagination import (
@@ -109,9 +112,10 @@ async def authenticate_tap_caller(
 
 @router.get("/access/pairing-session", response_model=PairingSessionStatus)
 async def get_pairing_session_status(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
 ):
-    return runtime_state.to_pairing_status()
+    return await get_active_pairing_status(db)
 
 
 @router.post("/access/pairing-session", response_model=PairingSessionStatus)
@@ -124,26 +128,25 @@ async def start_pairing_session(
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
 
-    now = datetime.now(timezone.utc)
-    runtime_state.pairing_member_id = member.id
-    runtime_state.pairing_member_code = member.member_code
-    runtime_state.pairing_member_name = member.full_name
-    runtime_state.pairing_card_label = payload.card_label
-    runtime_state.pairing_actor_id = current_user.id
-    runtime_state.pairing_expires_at = now + timedelta(seconds=PAIRING_MODE_TTL_SECS)
-
-    status_obj = runtime_state.to_pairing_status(now)
+    status_obj = await start_db_pairing_session(
+        db,
+        member=member,
+        card_label=payload.card_label,
+        actor_user_id=current_user.id,
+    )
     await live_feed_manager.broadcast_event("pairing_mode_changed", status_obj.model_dump(mode="json"))
     return status_obj
 
 
 @router.delete("/access/pairing-session", response_model=PairingSessionStatus)
 async def cancel_pairing_session(
+    member_id: Optional[int] = Query(default=None, ge=1),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
-    runtime_state.clear_pairing()
-    status_obj = runtime_state.to_pairing_status()
-    await live_feed_manager.broadcast_event("pairing_mode_changed", status_obj.model_dump(mode="json"))
+    status_obj, changed = await cancel_db_pairing_session(db, member_id=member_id)
+    if changed or member_id is None:
+        await live_feed_manager.broadcast_event("pairing_mode_changed", status_obj.model_dump(mode="json"))
     return status_obj
 
 
@@ -236,18 +239,20 @@ async def websocket_access_live_feed(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    async def _load_ws_user(db: AsyncSession) -> Optional[User]:
+    async def _load_ws_context(db: AsyncSession) -> Tuple[Optional[User], PairingSessionStatus]:
         try:
-            return await resolve_authenticated_user(db, raw_token)
+            loaded_user = await resolve_authenticated_user(db, raw_token)
         except HTTPException:
-            return None
+            return None, PairingSessionStatus(active=False)
+        pairing_status = await get_active_pairing_status(db)
+        return loaded_user, pairing_status
 
     override_db = websocket.app.dependency_overrides.get(get_db)
     if override_db is not None:
         gen = override_db()
         db = await anext(gen)
         try:
-            user = await _load_ws_user(db)
+            user, initial_pairing = await _load_ws_context(db)
         finally:
             try:
                 await gen.aclose()
@@ -255,7 +260,7 @@ async def websocket_access_live_feed(
                 pass
     else:
         async with AsyncSessionLocal() as db:
-            user = await _load_ws_user(db)
+            user, initial_pairing = await _load_ws_context(db)
 
     if not user or user.role not in (
         UserRole.ADMIN,
@@ -271,7 +276,7 @@ async def websocket_access_live_feed(
             {
                 "event": "connected",
                 "status": "scanner_ready",
-                "pairing": runtime_state.to_pairing_status().model_dump(mode="json"),
+                "pairing": initial_pairing.model_dump(mode="json"),
             }
         )
         while True:
@@ -427,13 +432,6 @@ async def pair_member_keycard(
         now=now,
     )
 
-    if runtime_state.pairing_member_id == member_id:
-        runtime_state.clear_pairing()
-        await live_feed_manager.broadcast_event(
-            "pairing_mode_changed",
-            runtime_state.to_pairing_status(now).model_dump(mode="json"),
-        )
-
     await record_audit_log(
         db,
         action="KEYCARD_PAIRED",
@@ -445,6 +443,13 @@ async def pair_member_keycard(
     )
     await db.commit()
     await db.refresh(card_record)
+
+    cancelled_status, cancelled = await cancel_db_pairing_session(db, member_id=member_id, now=now)
+    if cancelled:
+        await live_feed_manager.broadcast_event(
+            "pairing_mode_changed",
+            cancelled_status.model_dump(mode="json"),
+        )
     return card_record
 
 

@@ -21,29 +21,17 @@ import {
 import { api, ApiError } from '@/services/api'
 import { SEO } from '@/components/ui/SEO'
 import { formatPhTime } from '@/utils/dateTime'
-import { playAccessChime } from '@/hooks/useRfidScanner'
+import {
+  getWebNfcConstructor,
+  playAccessChime,
+  type NDEFReadingEvent,
+} from '@/hooks/useRfidScanner'
 import type {
   TapVerificationResult,
   PairingSessionStatus,
 } from '@/types/auth'
 
 gsap.registerPlugin()
-
-interface NDEFReadingEvent extends Event {
-  serialNumber?: string
-}
-
-interface NDEFReaderInstance {
-  scan: (options?: { signal?: AbortSignal }) => Promise<void>
-  onreading: ((this: NDEFReaderInstance, ev: NDEFReadingEvent) => void) | null
-  onreadingerror: ((this: NDEFReaderInstance, ev: Event) => void) | null
-}
-
-function getWebNfcConstructor(): (new () => NDEFReaderInstance) | null {
-  if (typeof window === 'undefined') return null
-  const win = window as unknown as { NDEFReader?: new () => NDEFReaderInstance }
-  return win.NDEFReader ?? null
-}
 
 function formatTapBadge(decision: string): string {
   switch (decision) {
@@ -298,14 +286,25 @@ export function MobileScannerPage() {
     await releaseWakeLock()
   }
 
-  // Load Pairing Mode + Live WebSocket Sync
+  // Load Pairing Mode + Live WebSocket Sync + Lightweight Polling Fallback
   useEffect(() => {
-    api.getPairingSession().then(setPairingSession).catch(() => {})
-
     let ws: WebSocket | null = null
     let pingTimer: number | undefined
     let reconnectTimer: number | undefined
+    let pairingPollTimer: number | undefined
     let unmounted = false
+
+    const syncPairingSession = () => {
+      api
+        .getPairingSession()
+        .then((status) => {
+          if (!unmounted) setPairingSession(status)
+        })
+        .catch(() => {})
+    }
+
+    syncPairingSession()
+    pairingPollTimer = window.setInterval(syncPairingSession, 3500)
 
     const connectWs = () => {
       if (unmounted) return
@@ -350,8 +349,11 @@ export function MobileScannerPage() {
     connectWs()
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && isScanningRef.current) {
-        acquireWakeLock()
+      if (document.visibilityState === 'visible') {
+        syncPairingSession()
+        if (isScanningRef.current) {
+          acquireWakeLock()
+        }
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -359,6 +361,7 @@ export function MobileScannerPage() {
     return () => {
       unmounted = true
       document.removeEventListener('visibilitychange', handleVisibility)
+      if (pairingPollTimer) window.clearInterval(pairingPollTimer)
       if (pingTimer) window.clearInterval(pingTimer)
       if (reconnectTimer) window.clearTimeout(reconnectTimer)
       ws?.close()

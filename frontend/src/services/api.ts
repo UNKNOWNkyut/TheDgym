@@ -912,8 +912,9 @@ export const api = {
     })
   },
 
-  async cancelPairingSession(): Promise<PairingSessionStatus> {
-    return request<PairingSessionStatus>('/api/access/pairing-session', {
+  async cancelPairingSession(memberId?: number): Promise<PairingSessionStatus> {
+    const query = buildQuery(memberId !== undefined ? { member_id: memberId } : undefined)
+    return request<PairingSessionStatus>(`/api/access/pairing-session${query}`, {
       method: 'DELETE',
     })
   },

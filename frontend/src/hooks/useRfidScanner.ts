@@ -111,3 +111,19 @@ export function useRfidScanner({ enabled = true, onScan }: UseRfidScannerOptions
     }
   }, [enabled])
 }
+
+export interface NDEFReadingEvent extends Event {
+  serialNumber?: string
+}
+
+export interface NDEFReaderInstance {
+  scan: (options?: { signal?: AbortSignal }) => Promise<void>
+  onreading: ((this: NDEFReaderInstance, ev: NDEFReadingEvent) => void) | null
+  onreadingerror: ((this: NDEFReaderInstance, ev: Event) => void) | null
+}
+
+export function getWebNfcConstructor(): (new () => NDEFReaderInstance) | null {
+  if (typeof window === 'undefined') return null
+  const win = window as unknown as { NDEFReader?: new () => NDEFReaderInstance }
+  return win.NDEFReader ?? null
+}

@@ -21,6 +21,7 @@ from app.models.member_keycard import (
     MemberKeycard,
     KeycardStatus,
 )
+from app.models.pairing_session import PairingSession
 from app.models.access_scanner import (
     AccessScanner,
     ScannerTapMode,
@@ -67,6 +68,7 @@ __all__ = [
     "EntryMethod",
     "MemberKeycard",
     "KeycardStatus",
+    "PairingSession",
     "AccessScanner",
     "ScannerTapMode",
     "KeycardTapLog",

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import HTTPException, Request, WebSocket, status
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -28,6 +28,7 @@ from app.models.member_keycard import (
 )
 from app.models.member_membership import MemberMembership, MembershipStatus
 from app.models.notification import Notification
+from app.models.pairing_session import PairingSession
 from app.models.pt_session import PTSession, PTSessionStatus
 from app.models.user import User, UserRole
 from app.models.visit import EntryMethod, Visit, VisitType
@@ -86,6 +87,103 @@ class AccessRuntimeState:
 
 
 runtime_state = AccessRuntimeState()
+
+
+def _sync_runtime_state(row: Optional[PairingSession]) -> None:
+    if row is None:
+        runtime_state.clear_pairing()
+        return
+    runtime_state.pairing_member_id = row.member_id
+    runtime_state.pairing_member_code = row.member_code
+    runtime_state.pairing_member_name = row.member_name
+    runtime_state.pairing_card_label = row.card_label
+    runtime_state.pairing_actor_id = row.created_by
+    runtime_state.pairing_expires_at = _ensure_utc(row.expires_at)
+
+
+def _pairing_status_from_row(row: Optional[PairingSession]) -> PairingSessionStatus:
+    if row is None:
+        return PairingSessionStatus(active=False)
+    return PairingSessionStatus(
+        active=True,
+        member_id=row.member_id,
+        member_code=row.member_code,
+        member_name=row.member_name,
+        card_label=row.card_label,
+        expires_at=_ensure_utc(row.expires_at),
+    )
+
+
+async def _get_active_pairing_row(
+    db: AsyncSession,
+    now: datetime,
+) -> Optional[PairingSession]:
+    stmt = select(PairingSession).order_by(PairingSession.id.desc()).limit(1)
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        _sync_runtime_state(None)
+        return None
+    if _ensure_utc(row.expires_at) <= now:
+        await db.execute(delete(PairingSession))
+        await db.commit()
+        _sync_runtime_state(None)
+        return None
+    _sync_runtime_state(row)
+    return row
+
+
+async def get_active_pairing_status(
+    db: AsyncSession,
+    now: Optional[datetime] = None,
+) -> PairingSessionStatus:
+    """Return the active DB-backed pairing session, purging expired entries automatically."""
+    ref = now or datetime.now(timezone.utc)
+    row = await _get_active_pairing_row(db, ref)
+    return _pairing_status_from_row(row)
+
+
+async def start_db_pairing_session(
+    db: AsyncSession,
+    *,
+    member: Member,
+    card_label: str,
+    actor_user_id: Optional[int],
+    now: Optional[datetime] = None,
+) -> PairingSessionStatus:
+    """Persist a fresh 90-second pairing session in the database."""
+    ref = now or datetime.now(timezone.utc)
+    await db.execute(delete(PairingSession))
+    row = PairingSession(
+        member_id=member.id,
+        member_code=member.member_code,
+        member_name=member.full_name,
+        card_label=card_label,
+        created_by=actor_user_id,
+        expires_at=ref + timedelta(seconds=PAIRING_MODE_TTL_SECS),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    _sync_runtime_state(row)
+    return _pairing_status_from_row(row)
+
+
+async def cancel_db_pairing_session(
+    db: AsyncSession,
+    *,
+    member_id: Optional[int] = None,
+    now: Optional[datetime] = None,
+) -> Tuple[PairingSessionStatus, bool]:
+    """Cancel the active pairing session (scoped to member_id when provided)."""
+    stmt = delete(PairingSession)
+    if member_id is not None:
+        stmt = stmt.where(PairingSession.member_id == member_id)
+    result = await db.execute(stmt)
+    deleted = int(result.rowcount or 0) > 0
+    if deleted:
+        await db.commit()
+    current = await get_active_pairing_status(db, now=now)
+    return current, deleted
 
 
 # Real-Time WebSocket Connection Manager
@@ -401,12 +499,15 @@ async def _handle_pairing_tap(ctx: _TapContext) -> Optional[TapVerificationRespo
     """
     db, now, uid_masked = ctx.db, ctx.now, ctx.uid_masked
 
-    runtime_state.clear_if_expired(now)
-    if runtime_state.pairing_member_id is None:
+    pairing_row = await _get_active_pairing_row(db, now)
+    if pairing_row is None:
         return None
 
-    target_member = await db.get(Member, runtime_state.pairing_member_id)
+    target_member = await db.get(Member, pairing_row.member_id)
     if not target_member:
+        await db.execute(delete(PairingSession).where(PairingSession.member_id == pairing_row.member_id))
+        await db.commit()
+        _sync_runtime_state(None)
         return None
 
     try:
@@ -414,8 +515,8 @@ async def _handle_pairing_tap(ctx: _TapContext) -> Optional[TapVerificationRespo
             db,
             member=target_member,
             raw_uid=ctx.raw_uid,
-            card_label=runtime_state.pairing_card_label,
-            actor_user_id=runtime_state.pairing_actor_id or (ctx.actor_user.id if ctx.actor_user else None),
+            card_label=pairing_row.card_label,
+            actor_user_id=pairing_row.created_by or (ctx.actor_user.id if ctx.actor_user else None),
             now=now,
         )
     except HTTPException as conflict_exc:
@@ -453,14 +554,15 @@ async def _handle_pairing_tap(ctx: _TapContext) -> Optional[TapVerificationRespo
             tapped_at=now,
         )
     )
+    await db.execute(delete(PairingSession))
     await db.commit()
     await db.refresh(paired_card)
 
     # Turn off Pairing Mode immediately after successful bind
-    runtime_state.clear_pairing()
+    _sync_runtime_state(None)
     await live_feed_manager.broadcast_event(
         "pairing_mode_changed",
-        runtime_state.to_pairing_status(now).model_dump(mode="json"),
+        PairingSessionStatus(active=False).model_dump(mode="json"),
     )
     await live_feed_manager.broadcast_event(
         "keycard_paired",
