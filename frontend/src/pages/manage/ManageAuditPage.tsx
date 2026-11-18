@@ -27,8 +27,6 @@ function getRoleBadgeVariant(role: string | null) {
   switch ((role || '').toLowerCase()) {
     case 'admin':
       return 'danger' as const
-    case 'staff':
-      return 'info' as const
     case 'trainer':
       return 'warning' as const
     case 'system':
@@ -191,7 +189,6 @@ export function ManageAuditPage() {
         >
           <option value="" className="bg-surface-2">All Actor Roles</option>
           <option value="admin" className="bg-surface-2">Admin</option>
-          <option value="staff" className="bg-surface-2">Staff</option>
           <option value="trainer" className="bg-surface-2">Trainer</option>
           <option value="member" className="bg-surface-2">Member</option>
           <option value="user" className="bg-surface-2">User</option>

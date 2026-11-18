@@ -148,9 +148,8 @@ export function YourPlanPage() {
   const routinesStorageKey = `dgym_user_routines_${userKey}`;
 
   // Membership status check
-  const isStaff = user?.role === 'staff';
   const isVerifiedMember =
-    isStaff || Boolean(user?.has_active_membership) || user?.membership_status === 'active';
+    Boolean(user?.has_active_membership) || user?.membership_status === 'active';
 
   return (
     <YourPlanWorkspace

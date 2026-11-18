@@ -15,13 +15,6 @@ INITIAL_USERS = [
         "role": UserRole.ADMIN,
     },
     {
-        "email": "staff@thedgym.com",
-        "password": "staff12345",
-        "full_name": "DGym Staff",
-        "phone": "+63 969 483 9896",
-        "role": UserRole.STAFF,
-    },
-    {
         "email": "trainer@thedgym.com",
         "password": "trainer12345",
         "full_name": "Coach Ivan",

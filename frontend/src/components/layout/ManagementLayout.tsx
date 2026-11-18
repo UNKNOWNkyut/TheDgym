@@ -56,7 +56,7 @@ const NAV_ITEMS: NavConfig[] = [
   {
     label: 'Phone NFC Scanner',
     href: '/manage/scanner',
-    roles: ['admin', 'staff'],
+    roles: ['admin'],
     icon: <NavIcon d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />,
   },
   {
@@ -127,8 +127,6 @@ function getRoleBadgeVariant(role: string) {
   switch (role) {
     case 'admin':
       return 'danger' as const
-    case 'staff':
-      return 'info' as const
     case 'trainer':
       return 'warning' as const
     default:
@@ -162,13 +160,11 @@ export function ManagementLayout() {
   const portalSubtitle =
     user?.role === 'admin'
       ? 'Admin Portal'
-      : user?.role === 'staff'
-        ? 'Staff Portal'
-        : user?.role === 'trainer'
-          ? 'Coach Portal'
-          : user?.role === 'user'
-            ? 'User Portal'
-            : 'Member Portal'
+      : user?.role === 'trainer'
+        ? 'Coach Portal'
+        : user?.role === 'user'
+          ? 'User Portal'
+          : 'Member Portal'
 
   return (
     <div className="h-screen w-screen bg-background flex overflow-hidden">

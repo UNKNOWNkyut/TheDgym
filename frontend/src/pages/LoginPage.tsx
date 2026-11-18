@@ -32,13 +32,11 @@ function resolvePostLoginDestination(loggedInUser: User, redirectTarget: string 
   const defaultDest =
     loggedInUser.role === 'admin'
       ? '/manage'
-      : loggedInUser.role === 'staff'
-        ? '/manage/scanner'
-        : loggedInUser.role === 'trainer'
+      : loggedInUser.role === 'trainer'
+        ? '/dashboard'
+        : loggedInUser.has_active_membership
           ? '/dashboard'
-          : loggedInUser.has_active_membership
-            ? '/dashboard'
-            : '/'
+          : '/'
 
   if (
     !redirectTarget ||
@@ -49,13 +47,6 @@ function resolvePostLoginDestination(loggedInUser: User, redirectTarget: string 
     return defaultDest
   }
   if ((loggedInUser.role === 'member' || loggedInUser.role === 'user') && redirectTarget.startsWith('/manage')) {
-    return defaultDest
-  }
-  if (
-    loggedInUser.role === 'staff' &&
-    redirectTarget.startsWith('/manage') &&
-    !redirectTarget.startsWith('/manage/scanner')
-  ) {
     return defaultDest
   }
   return redirectTarget

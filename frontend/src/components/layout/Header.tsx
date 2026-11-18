@@ -13,7 +13,6 @@ const SOCIAL_ITEMS: StaggeredMenuSocialItem[] = [
 
 const ROLE_PROFILE_TARGETS: Record<UserRole, { link: string; ariaLabel: string }> = {
   admin: { link: '/manage', ariaLabel: 'Go to Management Hub' },
-  staff: { link: '/manage/scanner', ariaLabel: 'Go to Staff Scanner' },
   trainer: { link: '/dashboard', ariaLabel: 'Go to Trainer Dashboard' },
   member: { link: '/dashboard', ariaLabel: 'Go to Profile Dashboard' },
   user: { link: '/dashboard', ariaLabel: 'Go to Profile Dashboard' },

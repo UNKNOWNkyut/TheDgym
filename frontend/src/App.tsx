@@ -329,7 +329,7 @@ function App() {
               <Route
                 path="/manage/scanner"
                 element={
-                  <ProtectedRoute allowedRoles={['admin', 'staff']}>
+                  <ProtectedRoute allowedRoles={['admin']}>
                     <MobileScannerPage />
                   </ProtectedRoute>
                 }

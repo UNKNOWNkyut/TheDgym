@@ -47,7 +47,7 @@ export function MemberKeycardsCard({
   memberName,
 }: MemberKeycardsCardProps) {
   const { user } = useAuth()
-  const canManageCards = user?.role === 'admin' || user?.role === 'staff'
+  const canManageCards = user?.role === 'admin'
 
   const [keycards, setKeycards] = useState<MemberKeycard[]>([])
   const [loading, setLoading] = useState(true)

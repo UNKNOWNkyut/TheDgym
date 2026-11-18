@@ -36,7 +36,6 @@ type MemberPortalProps = {
 
 const ROLE_DASHBOARD_REDIRECTS: Partial<Record<UserRole, string>> = {
   admin: '/manage',
-  staff: '/manage/scanner',
 };
 
 const ACTIVE_PT_STATUSES = new Set<PTSessionStatus>(['pending', 'confirmed', 'scheduled']);

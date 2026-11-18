@@ -222,7 +222,13 @@ async def create_user_by_admin(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-    """Create a user with a specific role (Admin, Staff, Trainer, Member). Requires Admin role."""
+    """Create a user with a specific role (Admin, Trainer, Member, User). Requires Admin role."""
+    if user_in.role == UserRole.STAFF:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Staff role is disabled; Administrators handle front-desk operations.",
+        )
+
     stmt = select(User).where(User.email == user_in.email.lower().strip())
     result = await db.execute(stmt)
     if result.scalar_one_or_none():

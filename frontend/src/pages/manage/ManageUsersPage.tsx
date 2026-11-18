@@ -35,15 +35,13 @@ const INITIAL_CREATE_FORM: CreateUserFormState = {
   password: '',
   full_name: '',
   phone: '',
-  role: 'staff',
+  role: 'trainer',
 }
 
 function getRoleBadgeVariant(role: string) {
   switch (role) {
     case 'admin':
       return 'danger' as const
-    case 'staff':
-      return 'info' as const
     case 'trainer':
       return 'warning' as const
     case 'member':
@@ -299,7 +297,7 @@ export function ManageUsersPage() {
               Users &amp; Roles
             </h1>
             <p className="text-sm text-white/55 mt-1">
-              Registered administrators, front-desk staff, fitness coaches, and member logins.
+              Registered administrators, fitness coaches, and member logins.
             </p>
           </div>
           {currentUser?.role === 'admin' && (
@@ -331,7 +329,7 @@ export function ManageUsersPage() {
           </div>
           <div className="rounded-xl border border-white/10 bg-surface p-4">
             <p className="text-[11px] uppercase tracking-widest text-white/45 font-mono">
-              Staff &amp; Coaches
+              Admins &amp; Coaches
             </p>
             <p className="text-2xl font-bold text-white mt-1">{teamCount}</p>
           </div>
@@ -381,9 +379,6 @@ export function ManageUsersPage() {
             </option>
             <option value="admin" className="bg-surface-2">
               Admin
-            </option>
-            <option value="staff" className="bg-surface-2">
-              Staff
             </option>
             <option value="trainer" className="bg-surface-2">
               Trainer
@@ -651,7 +646,7 @@ export function ManageUsersPage() {
                 name="email"
                 type="email"
                 autoComplete="off"
-                placeholder="staff@example.com"
+                placeholder="trainer@thedgym.com"
                 error={fieldErrors.email}
                 value={form.email}
                 onChange={(e) => handleFieldChange('email', e.target.value)}
@@ -696,9 +691,6 @@ export function ManageUsersPage() {
                   onChange={(e) => handleFieldChange('role', e.target.value as UserRole)}
                   className="w-full px-3 py-2.5 bg-surface-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors"
                 >
-                  <option value="staff" className="bg-surface-2">
-                    Staff (Front Desk)
-                  </option>
                   <option value="trainer" className="bg-surface-2">
                     Trainer (Coaching)
                   </option>
