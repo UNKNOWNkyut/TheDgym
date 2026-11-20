@@ -557,6 +557,106 @@ async def run_suite() -> None:
 
             print("[PASS] 6. External OCR.space & Face++ REST integrations verified end-to-end")
 
+            # 7. Pre-Step-4 Anti-Duplicate Identity Gate (/verify-registration-identity + /register guard)
+            async with SessionLocal() as rl_reset_sess:
+                await reset_rate_limit_state(rl_reset_sess)
+
+            vec_fresh = [math.cos(2.3 + i * 0.29) * 0.22 for i in range(128)]
+
+            r_gate_ok = await ac.post(
+                "/api/auth/verify-registration-identity",
+                headers=csrf_headers,
+                json={
+                    "email": "fresh.athlete@example.com",
+                    "face_descriptor": vec_fresh,
+                    "liveness_passed": True,
+                    "id_type": "school_id",
+                    "id_number": "24-31051",
+                    "id_ocr_name": "HARVY A. COLLANTES",
+                    "id_face_match_score": 0.24,
+                },
+            )
+            assert r_gate_ok.status_code == 200, r_gate_ok.text
+            assert r_gate_ok.json()["verified"] is True
+
+            # Duplicate email blocked (409)
+            r_dup_email = await ac.post(
+                "/api/auth/verify-registration-identity",
+                headers=csrf_headers,
+                json={
+                    "email": "alice@example.com",
+                    "face_descriptor": vec_fresh,
+                    "liveness_passed": True,
+                    "id_type": "school_id",
+                    "id_number": "24-31051",
+                    "id_face_match_score": 0.24,
+                },
+            )
+            assert r_dup_email.status_code == 409
+
+            # Duplicate ID number hash blocked even with stripped punctuation (409)
+            r_dup_id_gate = await ac.post(
+                "/api/auth/verify-registration-identity",
+                headers=csrf_headers,
+                json={
+                    "email": "fresh2@example.com",
+                    "face_descriptor": vec_fresh,
+                    "liveness_passed": True,
+                    "id_type": "philsys",
+                    "id_number": "1234567890123456",
+                    "id_face_match_score": 0.24,
+                },
+            )
+            assert r_dup_id_gate.status_code == 409
+
+            r_dup_id_reg = await ac.post(
+                "/api/auth/register",
+                headers=csrf_headers,
+                json={
+                    "email": "fresh2@example.com",
+                    "password": "Password123!",
+                    "full_name": "Fresh Two",
+                    "face_descriptor": vec_fresh,
+                    "liveness_passed": True,
+                    "id_type": "philsys",
+                    "id_number": "1234567890123456",
+                    "id_face_match_score": 0.24,
+                },
+            )
+            assert r_dup_id_reg.status_code == 409
+
+            # Duplicate face embedding blocked across both /verify-registration-identity and /register (409)
+            r_dup_face_gate = await ac.post(
+                "/api/auth/verify-registration-identity",
+                headers=csrf_headers,
+                json={
+                    "email": "fresh3@example.com",
+                    "face_descriptor": vec_alice_near,
+                    "liveness_passed": True,
+                    "id_type": "philsys",
+                    "id_number": "9999-8888-7777-6666",
+                    "id_face_match_score": 0.24,
+                },
+            )
+            assert r_dup_face_gate.status_code == 409
+
+            r_dup_face_reg = await ac.post(
+                "/api/auth/register",
+                headers=csrf_headers,
+                json={
+                    "email": "fresh3@example.com",
+                    "password": "Password123!",
+                    "full_name": "Fresh Three",
+                    "face_descriptor": vec_alice_near,
+                    "liveness_passed": True,
+                    "id_type": "philsys",
+                    "id_number": "9999-8888-7777-6666",
+                    "id_face_match_score": 0.24,
+                },
+            )
+            assert r_dup_face_reg.status_code == 409
+            print("[PASS] 7. Anti-duplicate identity gate verified (email, ID hash, face embedding)")
+
     finally:
         (
             settings.OCR_SPACE_API_KEY,

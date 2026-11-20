@@ -4,6 +4,7 @@ import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { api } from '@/services/api'
 import { SEO } from '@/components/ui/SEO'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -13,19 +14,22 @@ import { PUBLIC_PLANS } from '@/constants/plans'
 import { IdScannerStep, type IdScanCompletedData } from '@/components/auth/IdScannerStep'
 import { FaceLivenessStep, type FaceLivenessResult } from '@/components/auth/FaceLivenessStep'
 
-type RegisterStep = 'id_scan' | 'face_liveness' | 'account' | 'plan'
+type RegisterStep = 'account' | 'id_scan' | 'face_liveness' | 'plan'
 
 const REGISTER_STEPS: { id: RegisterStep; label: string }[] = [
-  { id: 'id_scan', label: '1. Valid ID' },
-  { id: 'face_liveness', label: '2. Face Scan' },
-  { id: 'account', label: '3. Account' },
+  { id: 'account', label: '1. Account' },
+  { id: 'id_scan', label: '2. Valid ID' },
+  { id: 'face_liveness', label: '3. Face Scan' },
   { id: 'plan', label: '4. Plan' },
 ]
 
 export function RegisterPage() {
-  const [step, setStep] = useState<RegisterStep>('id_scan')
+  const [step, setStep] = useState<RegisterStep>('account')
   const [idScanData, setIdScanData] = useState<IdScanCompletedData | null>(null)
   const [livenessData, setLivenessData] = useState<FaceLivenessResult | null>(null)
+  const [identityVerified, setIdentityVerified] = useState(false)
+  const [verifyingIdentity, setVerifyingIdentity] = useState(false)
+  const [identityGateError, setIdentityGateError] = useState<string | null>(null)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -77,7 +81,48 @@ export function RegisterPage() {
       return
     }
 
-    setStep('plan')
+    setIdentityVerified(false)
+    setIdentityGateError(null)
+    setStep('id_scan')
+  }
+
+  const handleFaceGateVerified = async (result: FaceLivenessResult) => {
+    if (!idScanData || typeof result.idMatchScore !== 'number') {
+      setIdentityGateError('Please scan your valid ID before live face verification.')
+      return
+    }
+
+    setVerifyingIdentity(true)
+    setIdentityGateError(null)
+    setValidationError(null)
+    clearError()
+
+    try {
+      await api.verifyRegistrationIdentity({
+        email: email.trim(),
+        face_descriptor: result.descriptor,
+        liveness_passed: result.livenessPassed,
+        id_type: idScanData.idType,
+        id_number: idScanData.idNumber || undefined,
+        id_ocr_name: idScanData.idOcrName || idScanData.fullName || undefined,
+        id_face_match_score: result.idMatchScore,
+        id_image_base64: idScanData.idImageBase64,
+        live_image_base64: result.liveImageBase64,
+      })
+      setLivenessData(result)
+      setIdentityVerified(true)
+      setStep('plan')
+    } catch (err) {
+      setIdentityVerified(false)
+      setIdentityGateError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to verify your identity against existing records. Please try again.',
+      )
+      throw err
+    } finally {
+      setVerifyingIdentity(false)
+    }
   }
 
   const handleCompleteRegistration = async (withPlan: boolean) => {
@@ -90,8 +135,13 @@ export function RegisterPage() {
       return
     }
 
-    if (!idScanData || !livenessData || typeof livenessData.idMatchScore !== 'number') {
-      setValidationError('Please complete Valid ID and live face verification first.')
+    if (
+      !idScanData ||
+      !livenessData ||
+      !identityVerified ||
+      typeof livenessData.idMatchScore !== 'number'
+    ) {
+      setValidationError('Please complete Valid ID, live face scan, and duplicate identity checks first.')
       setStep(idScanData ? 'face_liveness' : 'id_scan')
       return
     }
@@ -112,7 +162,7 @@ export function RegisterPage() {
           liveness_passed: livenessData.livenessPassed,
           id_type: idScanData.idType,
           id_number: idScanData.idNumber || undefined,
-          id_ocr_name: idScanData.idOcrName || undefined,
+          id_ocr_name: idScanData.idOcrName || idScanData.fullName || undefined,
           id_face_match_score: livenessData.idMatchScore,
           id_image_base64: idScanData.idImageBase64,
           live_image_base64: livenessData.liveImageBase64,
@@ -152,7 +202,7 @@ export function RegisterPage() {
           alt="The DGym"
           className="mb-10 h-auto w-40 object-contain"
         />
-        <QuarterRing className="h-16 w-16 text-red-500" />
+        <QuarterRing className="h-16 w-16 text-white" />
         <p className="mt-6 text-sm uppercase tracking-[0.3em] text-white/60">
           Creating Your Account
         </p>
@@ -181,13 +231,24 @@ export function RegisterPage() {
               />
             </Link>
 
+            {step === 'account' && (
+              <>
+                <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
+                  Create Account
+                </h1>
+                <p className="text-xs uppercase tracking-widest text-white/40 mt-1">
+                  Join The DGym Rosario Batangas
+                </p>
+              </>
+            )}
+
             {step === 'id_scan' && (
               <>
                 <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
                   Scan Valid ID
                 </h1>
                 <p className="text-xs uppercase tracking-widest text-white/40 mt-1 max-w-md mx-auto">
-                  Auto-fill your details &amp; extract your reference face photo
+                  Verify your ID document &amp; extract your reference face photo
                 </p>
               </>
             )}
@@ -198,18 +259,7 @@ export function RegisterPage() {
                   Live Face Verification
                 </h1>
                 <p className="text-xs uppercase tracking-widest text-white/40 mt-1 max-w-md mx-auto">
-                  Match your live selfie against your ID &amp; complete liveness check
-                </p>
-              </>
-            )}
-
-            {step === 'account' && (
-              <>
-                <h1 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight text-white">
-                  Create Account
-                </h1>
-                <p className="text-xs uppercase tracking-widest text-white/40 mt-1">
-                  Join The DGym Rosario Batangas
+                  Match your live selfie against your ID &amp; verify unique identity
                 </p>
               </>
             )}
@@ -266,81 +316,9 @@ export function RegisterPage() {
             </div>
           )}
 
-          {/* STEP 1: Valid ID Scanner + OCR Auto-Fill */}
-          {step === 'id_scan' && (
-            <div className="space-y-4">
-              <IdScannerStep
-                title="Philippine Valid ID"
-                subtitle="Scan or upload PhilSys National ID, Driver's License, School ID, UMID, or Passport"
-                initialFullName={fullName}
-                initialIdType={idScanData?.idType}
-                confirmLabel="Continue to Live Face Scan →"
-                onConfirm={(data) => {
-                  setValidationError(null)
-                  clearError()
-                  setIdScanData(data)
-                  setFullName(data.fullName)
-                  setLivenessData(null)
-                  setStep('face_liveness')
-                }}
-              />
-              <p className="text-center text-xs text-white/40 pt-2">
-                Already have an account?{' '}
-                <Link
-                  to="/login"
-                  className="text-white hover:text-red font-medium underline underline-offset-2 transition-colors duration-150"
-                >
-                  Sign in
-                </Link>
-              </p>
-            </div>
-          )}
-
-          {/* STEP 2: Live Selfie + Liveness + ID Face Match */}
-          {step === 'face_liveness' && idScanData && (
-            <FaceLivenessStep
-              mode="enroll_match"
-              title="Match Face to Valid ID"
-              subtitle="Align your face in the frame and blink or turn your head slightly to verify liveness"
-              referenceIdDescriptor={idScanData.idDescriptor}
-              onBack={() => {
-                setValidationError(null)
-                clearError()
-                setStep('id_scan')
-              }}
-              backLabel="← Rescan Valid ID"
-              onVerified={(result) => {
-                setValidationError(null)
-                clearError()
-                setLivenessData(result)
-                setStep('account')
-              }}
-            />
-          )}
-
-          {/* STEP 3: Account Information */}
+          {/* STEP 1: Account Information */}
           {step === 'account' && (
             <form onSubmit={handleAccountNext} className="space-y-4">
-              {idScanData && livenessData && (
-                <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-green-500/25 bg-green-500/10 text-xs">
-                  <div className="text-green-300">
-                    <span className="font-semibold">ID &amp; Live Face Verified</span>
-                    {typeof livenessData.idMatchScore === 'number' && (
-                      <span className="text-green-300/75 ml-2 font-mono">
-                        ({Math.round(livenessData.idMatchScore * 100)}% match)
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setStep('id_scan')}
-                    className="text-[11px] uppercase tracking-wider text-white/60 hover:text-white underline underline-offset-2 cursor-pointer"
-                  >
-                    Rescan
-                  </button>
-                </div>
-              )}
-
               <Input
                 label="Full Name"
                 type="text"
@@ -456,29 +434,14 @@ export function RegisterPage() {
                 </span>
               </label>
 
-              <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="lg"
-                  onClick={() => {
-                    setValidationError(null)
-                    clearError()
-                    setStep('face_liveness')
-                  }}
-                  className="sm:w-1/3"
-                >
-                  ← Back
-                </Button>
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={!acceptedLegal}
-                  className="flex-1"
-                >
-                  Next Step →
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                size="lg"
+                disabled={!acceptedLegal}
+                className="w-full mt-4"
+              >
+                Continue to Valid ID →
+              </Button>
 
               <p className="text-center text-xs text-white/40 mt-5">
                 Already have an account?{' '}
@@ -492,8 +455,77 @@ export function RegisterPage() {
             </form>
           )}
 
-          {/* STEP 4: Training Plan Selection */}
-          {step === 'plan' && (
+          {/* STEP 2: Valid ID Scanner + Quality/Type/OCR Verification */}
+          {step === 'id_scan' && (
+            <div className="space-y-4">
+              <IdScannerStep
+                stepBadge="Step 2 • Valid ID & OCR Scan"
+                title="Philippine Valid ID"
+                subtitle="Scan or upload PhilSys National ID, Driver's License, School ID, UMID, or Passport"
+                initialFullName={fullName}
+                expectedFullName={fullName}
+                initialIdType={idScanData?.idType}
+                confirmLabel="Continue to Face Scan →"
+                onBack={() => {
+                  setValidationError(null)
+                  clearError()
+                  setStep('account')
+                }}
+                onConfirm={(data) => {
+                  setValidationError(null)
+                  clearError()
+                  setIdScanData(data)
+                  setLivenessData(null)
+                  setIdentityVerified(false)
+                  setIdentityGateError(null)
+                  setStep('face_liveness')
+                }}
+              />
+            </div>
+          )}
+
+          {/* STEP 3: Live Selfie + Liveness + ID Match + Anti-Duplicate Gate */}
+          {step === 'face_liveness' && idScanData && (
+            <div className="space-y-4">
+              <FaceLivenessStep
+                mode="enroll_match"
+                stepBadge="Step 3 • Live Face & Anti-Duplicate Check"
+                title="Match Face to Valid ID"
+                subtitle="Align your face in the frame and blink or turn your head slightly to verify liveness"
+                referenceIdDescriptor={idScanData.idDescriptor}
+                submitting={verifyingIdentity}
+                serverError={identityGateError}
+                onBack={() => {
+                  setIdentityGateError(null)
+                  setValidationError(null)
+                  clearError()
+                  setStep('id_scan')
+                }}
+                backLabel="← Rescan Valid ID"
+                onVerified={handleFaceGateVerified}
+              />
+
+              {identityGateError && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentityGateError(null)
+                      setValidationError(null)
+                      clearError()
+                      setStep('account')
+                    }}
+                    className="text-xs text-white/50 hover:text-white underline underline-offset-2 transition-colors cursor-pointer"
+                  >
+                    ← Back to Account Details
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STEP 4: Training Plan Selection (strictly gated until Steps 1–3 & identity check pass) */}
+          {step === 'plan' && idScanData && livenessData && identityVerified && (
             <div className="space-y-6">
               {/* Plan Options Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
@@ -574,7 +606,7 @@ export function RegisterPage() {
                   onClick={() => handleCompleteRegistration(false)}
                   className="w-full py-3.5 px-4 rounded-xl border border-white/20 hover:border-white/40 bg-transparent hover:bg-white/[0.04] text-white/70 hover:text-white font-semibold text-xs uppercase tracking-widest transition-all duration-200 cursor-pointer"
                 >
-                  Skip & Register
+                  Skip &amp; Register
                 </button>
 
                 <div className="text-center pt-2">
@@ -582,11 +614,11 @@ export function RegisterPage() {
                     type="button"
                     onClick={() => {
                       setValidationError(null)
-                      setStep('account')
+                      setStep('face_liveness')
                     }}
                     className="text-xs text-white/40 hover:text-white transition-colors"
                   >
-                    ← Back to account details
+                    ← Back to face scan
                   </button>
                 </div>
               </div>

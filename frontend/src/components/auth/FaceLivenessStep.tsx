@@ -22,16 +22,33 @@ export interface FaceLivenessResult {
   liveImageBase64?: string
 }
 
+export interface VerificationChecklistItem {
+  label: string
+  status: 'pending' | 'active' | 'done'
+}
+
 interface FaceLivenessStepProps {
   mode: 'verify' | 'enroll_match'
+  stepBadge?: string
   title: string
   subtitle: string
   referenceIdDescriptor?: number[]
   submitting?: boolean
   serverError?: string | null
+  verificationChecklist?: readonly VerificationChecklistItem[]
   onVerified: (result: FaceLivenessResult) => void | Promise<void>
   onBack?: () => void
   backLabel?: string
+}
+
+function renderChecklistIcon(status: VerificationChecklistItem['status']) {
+  if (status === 'done') {
+    return <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
+  }
+  if (status === 'active') {
+    return <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0 ml-0.5" />
+  }
+  return <span className="w-2.5 h-2.5 rounded-full bg-white/20 shrink-0 ml-0.5" />
 }
 
 function stopStream(stream: MediaStream | null) {
@@ -43,11 +60,13 @@ function stopStream(stream: MediaStream | null) {
 
 export function FaceLivenessStep({
   mode,
+  stepBadge,
   title,
   subtitle,
   referenceIdDescriptor,
   submitting = false,
   serverError = null,
+  verificationChecklist,
   onVerified,
   onBack,
   backLabel = '← Back',
@@ -66,6 +85,7 @@ export function FaceLivenessStep({
   const [modelsReady, setModelsReady] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
   const [livenessConfirmed, setLivenessConfirmed] = useState(false)
+  const [capturingMatch, setCapturingMatch] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
   const [statusHint, setStatusHint] = useState('Look straight into the camera...')
 
@@ -131,45 +151,52 @@ export function FaceLivenessStep({
     if (!video || completedRef.current) return
 
     completedRef.current = true
+    setCapturingMatch(true)
     setStatusHint('Capturing biometric signature...')
 
-    const captured = await captureLiveFaceDescriptor(video)
-    if (!captured) {
-      completedRef.current = false
-      setLivenessConfirmed(false)
-      setLocalError('Face moved out of frame during capture. Please try again.')
-      return
-    }
-
-    if (mode === 'enroll_match') {
-      if (!referenceIdDescriptor?.length) {
-        completedRef.current = false
-        setLocalError('ID face reference is missing. Please re-scan your valid ID.')
-        return
-      }
-      const matchDistance = euclideanDistance(captured.descriptor, referenceIdDescriptor)
-      if (matchDistance > ID_SELFIE_MATCH_LIMIT) {
+    try {
+      const captured = await captureLiveFaceDescriptor(video)
+      if (!captured) {
         completedRef.current = false
         setLivenessConfirmed(false)
-        setLocalError(
-          `Selfie did not match the face on your valid ID (distance ${matchDistance.toFixed(2)}). Use brighter lighting and retry.`,
-        )
+        setLocalError('Face moved out of frame during capture. Please try again.')
         return
       }
+
+      if (mode === 'enroll_match') {
+        if (!referenceIdDescriptor?.length) {
+          completedRef.current = false
+          setLocalError('ID face reference is missing. Please re-scan your valid ID.')
+          return
+        }
+        const matchDistance = euclideanDistance(captured.descriptor, referenceIdDescriptor)
+        if (matchDistance > ID_SELFIE_MATCH_LIMIT) {
+          completedRef.current = false
+          setLivenessConfirmed(false)
+          setLocalError(
+            `Selfie did not match the face on your valid ID (distance ${matchDistance.toFixed(2)}). Use brighter lighting and retry.`,
+          )
+          return
+        }
+        await onVerified({
+          descriptor: captured.descriptor,
+          livenessPassed: true,
+          idMatchScore: Number(matchDistance.toFixed(4)),
+          liveImageBase64: captured.snapshotDataUrl,
+        })
+        return
+      }
+
       await onVerified({
         descriptor: captured.descriptor,
         livenessPassed: true,
-        idMatchScore: Number(matchDistance.toFixed(4)),
         liveImageBase64: captured.snapshotDataUrl,
       })
-      return
+    } catch {
+      completedRef.current = false
+    } finally {
+      setCapturingMatch(false)
     }
-
-    await onVerified({
-      descriptor: captured.descriptor,
-      livenessPassed: true,
-      liveImageBase64: captured.snapshotDataUrl,
-    })
   }, [mode, onVerified, referenceIdDescriptor])
 
   useEffect(() => {
@@ -222,12 +249,35 @@ export function FaceLivenessStep({
   }, [cameraReady, modelsReady, submitting, finalizeLiveCapture])
 
   const activeError = serverError || localError
+  const isVerifying = submitting || capturingMatch
+  const resolvedBadge =
+    stepBadge || (mode === 'enroll_match' ? 'Step 2 • Live Selfie & Liveness' : 'Step 2 • Face Verification')
+
+  const defaultEnrollChecklist: VerificationChecklistItem[] = [
+    {
+      label: '1. Verifying liveness & ID-to-selfie match',
+      status: submitting ? 'done' : 'active',
+    },
+    {
+      label: '2. Checking for duplicate account, ID & face identity',
+      status: submitting ? 'active' : 'pending',
+    },
+  ]
+
+  const defaultVerifyChecklist: VerificationChecklistItem[] = [
+    { label: '1. Verifying live face descriptor & liveness', status: 'active' },
+  ]
+
+  const activeChecklist =
+    verificationChecklist ??
+    (mode === 'enroll_match' ? defaultEnrollChecklist : defaultVerifyChecklist)
 
   const handleRetry = () => {
     completedRef.current = false
     baselineEarRef.current = null
     sawEyeCloseRef.current = false
     setLivenessConfirmed(false)
+    setCapturingMatch(false)
     setLocalError(null)
     if (!cameraReady || !modelsReady) {
       setCameraReady(false)
@@ -242,7 +292,7 @@ export function FaceLivenessStep({
     <div ref={containerRef} className="space-y-5">
       <div className="space-y-1">
         <p className="text-[11px] uppercase tracking-widest text-red font-mono font-semibold">
-          {mode === 'enroll_match' ? 'Step 2 • Live Selfie & Liveness' : 'Step 2 • Face Verification'}
+          {resolvedBadge}
         </p>
         <h2 className="font-display text-xl font-bold uppercase tracking-tight text-white">
           {title}
@@ -284,15 +334,43 @@ export function FaceLivenessStep({
           </div>
         )}
 
-        {(submitting || (!localError && (!cameraReady || !modelsReady))) && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center">
-            <QuarterRing className="w-10 h-10 text-red" />
-            <p className="text-xs font-mono uppercase tracking-widest text-white/80">
-              {submitting ? 'Verifying Biometric Signature...' : 'Initializing Face Scanner...'}
+        {(isVerifying || (!localError && (!cameraReady || !modelsReady))) && (
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center">
+            <QuarterRing className="w-10 h-10 text-white" />
+            <p className="text-xs font-mono uppercase tracking-widest text-white">
+              {isVerifying ? 'Verifying Biometric Identity...' : 'Initializing Face Scanner...'}
             </p>
           </div>
         )}
       </div>
+
+      {/* White / Monochrome Skeleton Loading UI during post-capture verification */}
+      {isVerifying && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="p-4 rounded-xl border border-white/15 bg-surface-2/80 space-y-4"
+        >
+          <div className="space-y-2">
+            {activeChecklist.map((item) => (
+              <div
+                key={item.label}
+                className={`flex items-center gap-2.5 text-xs font-mono ${
+                  item.status === 'pending' ? 'text-white/40' : 'text-white'
+                }`}
+              >
+                {renderChecklistIcon(item.status)}
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2.5 pt-2 border-t border-white/10">
+            <div className="h-3 w-32 rounded bg-white/15 animate-pulse" />
+            <div className="h-9 w-full rounded-lg bg-white/10 animate-pulse" />
+          </div>
+        </div>
+      )}
 
       {/* Real-time Liveness Checklist */}
       <div className="grid grid-cols-2 gap-2.5 text-xs">
@@ -340,13 +418,13 @@ export function FaceLivenessStep({
       {/* Actions */}
       <div className="flex items-center justify-between gap-3 pt-2">
         {onBack ? (
-          <Button type="button" variant="ghost" size="md" disabled={submitting} onClick={onBack}>
+          <Button type="button" variant="ghost" size="md" disabled={isVerifying} onClick={onBack}>
             {backLabel}
           </Button>
         ) : (
           <span />
         )}
-        <Button type="button" variant="secondary" size="sm" disabled={submitting} onClick={handleRetry}>
+        <Button type="button" variant="secondary" size="sm" disabled={isVerifying} onClick={handleRetry}>
           <RefreshCw className="w-3.5 h-3.5" />
           Retry Face Scan
         </Button>

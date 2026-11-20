@@ -49,6 +49,8 @@ import type {
   PTSessionBookCreate,
   PTSessionCreate,
   RegisterCredentials,
+  RegistrationIdentityVerifyPayload,
+  RegistrationIdentityVerifyResponse,
   RetentionStrategy,
   TapVerificationResult,
   TokenResponse,
@@ -284,6 +286,15 @@ export const api = {
     })
     setSessionHint()
     return data
+  },
+
+  async verifyRegistrationIdentity(
+    payload: RegistrationIdentityVerifyPayload,
+  ): Promise<RegistrationIdentityVerifyResponse> {
+    return request<RegistrationIdentityVerifyResponse>('/api/auth/verify-registration-identity', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
   },
 
   async register(credentials: RegisterCredentials): Promise<TokenResponse> {

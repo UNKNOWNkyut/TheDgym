@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -44,6 +45,8 @@ from app.schemas.auth import (
     LoginUserPreview,
     OcrScanRequest,
     OcrScanResponse,
+    RegistrationIdentityVerifyRequest,
+    RegistrationIdentityVerifyResponse,
     TokenResponse,
     UserLogin,
     UserRegister,
@@ -61,6 +64,9 @@ from app.services.biometrics import (
     ID_SELFIE_MATCH_THRESHOLD,
     build_biometric_record,
     euclidean_distance,
+    is_same_face_descriptor,
+    mask_and_hash_id_number,
+    normalize_id_type,
     parse_stored_descriptor,
     validate_descriptor,
 )
@@ -346,6 +352,85 @@ async def _verify_enrollment_images_facepp(
     return safe_live_data_url, "facepp"
 
 
+async def _find_duplicate_identity(
+    db: AsyncSession,
+    *,
+    email: str | None,
+    id_number: str | None,
+    face_descriptor: list[float],
+    exclude_user_id: int | None = None,
+) -> tuple[str, str] | None:
+    """Check whether email, hashed ID number, or enrolled face embedding already exists."""
+    if email:
+        normalized_email = email.lower().strip()
+        email_stmt = select(User.id).where(User.email == normalized_email)
+        if exclude_user_id is not None:
+            email_stmt = email_stmt.where(User.id != exclude_user_id)
+        if (await db.execute(email_stmt.limit(1))).scalar_one_or_none() is not None:
+            return ("duplicate_email", "An account with this email address is already registered.")
+
+    if id_number:
+        _, id_hash = mask_and_hash_id_number(id_number)
+        if id_hash:
+            id_stmt = select(UserBiometric.id).where(UserBiometric.id_number_hash == id_hash)
+            if exclude_user_id is not None:
+                id_stmt = id_stmt.where(UserBiometric.user_id != exclude_user_id)
+            if (await db.execute(id_stmt.limit(1))).scalar_one_or_none() is not None:
+                return ("duplicate_id", "An account with this ID number is already registered.")
+
+    face_stmt = select(UserBiometric.face_descriptor_json).where(UserBiometric.is_enrolled.is_(True))
+    if exclude_user_id is not None:
+        face_stmt = face_stmt.where(UserBiometric.user_id != exclude_user_id)
+    stored_jsons = (await db.execute(face_stmt)).scalars().all()
+    for raw_json in stored_jsons:
+        try:
+            stored_vec = parse_stored_descriptor(raw_json)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            continue
+        if is_same_face_descriptor(face_descriptor, stored_vec):
+            return ("duplicate_face", "An account with this face identity is already registered.")
+
+    return None
+
+
+async def _enforce_no_duplicate_identity(
+    db: AsyncSession,
+    *,
+    request: Request,
+    email: str | None,
+    id_number: str | None,
+    face_descriptor: list[float],
+    exclude_user_id: int | None = None,
+    actor: User | None = None,
+) -> None:
+    duplicate = await _find_duplicate_identity(
+        db,
+        email=email,
+        id_number=id_number,
+        face_descriptor=face_descriptor,
+        exclude_user_id=exclude_user_id,
+    )
+    if duplicate is None:
+        return
+    reason, message = duplicate
+    await record_audit_log(
+        db,
+        action="AUTH_REGISTER_DUPLICATE_IDENTITY",
+        outcome="FAILURE",
+        actor=actor,
+        actor_email=(email.lower().strip() if email else None),
+        target_type="user" if actor else None,
+        target_id=actor.id if actor else None,
+        request=request,
+        details=f"Blocked duplicate identity ({reason}).",
+    )
+    await db.commit()
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=message,
+    )
+
+
 async def _issue_auth_response(user: User, response: Response, db: AsyncSession) -> TokenResponse:
     # Generate JWT
     access_token = create_access_token(
@@ -364,6 +449,44 @@ async def _issue_auth_response(user: User, response: Response, db: AsyncSession)
 
     user_resp = await _build_user_response(user, db)
     return TokenResponse(token_type="cookie", user=user_resp)
+
+
+@router.post(
+    "/verify-registration-identity",
+    response_model=RegistrationIdentityVerifyResponse,
+    dependencies=[Depends(rate_limit_auth)],
+)
+async def verify_registration_identity(
+    payload: RegistrationIdentityVerifyRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Validate enrollment biometrics and block duplicate email, ID hash, or face before Step 4."""
+    try:
+        normalize_id_type(payload.id_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    validated_descriptor = _validate_enrollment_biometrics(
+        liveness_passed=payload.liveness_passed,
+        face_descriptor=payload.face_descriptor,
+        id_face_match_score=payload.id_face_match_score,
+    )
+    await _verify_enrollment_images_facepp(
+        id_image_base64=payload.id_image_base64,
+        live_image_base64=payload.live_image_base64,
+    )
+    await _enforce_no_duplicate_identity(
+        db,
+        request=request,
+        email=payload.email,
+        id_number=payload.id_number,
+        face_descriptor=validated_descriptor,
+    )
+    return RegistrationIdentityVerifyResponse(
+        verified=True,
+        message="Identity verified and cleared for registration.",
+    )
 
 
 @router.post(
@@ -410,6 +533,14 @@ async def register(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email address already exists.",
         )
+
+    await _enforce_no_duplicate_identity(
+        db,
+        request=request,
+        email=None,
+        id_number=user_in.id_number,
+        face_descriptor=validated_descriptor,
+    )
 
     # Create new user (starts as registered "user" until a plan payment promotes them to "member")
     clean_phone = user_in.phone.strip() if user_in.phone else None
@@ -887,6 +1018,16 @@ async def enroll_face_first_login(
             status_code=status.HTTP_409_CONFLICT,
             detail="Face biometric is already enrolled for this account. Please sign in again.",
         )
+
+    await _enforce_no_duplicate_identity(
+        db,
+        request=request,
+        email=None,
+        id_number=payload.id_number,
+        face_descriptor=validated_descriptor,
+        exclude_user_id=user.id,
+        actor=user,
+    )
 
     try:
         new_bio = build_biometric_record(

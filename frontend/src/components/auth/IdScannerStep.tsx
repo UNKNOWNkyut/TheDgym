@@ -8,9 +8,18 @@ import { QuarterRing } from '@/components/ui/quarter-ring'
 import { api } from '@/services/api'
 import type { SupportedIdType } from '@/types/auth'
 import { describeCameraError, extractIdFaceDescriptor, toCompressedJpegDataUrl } from '@/utils/faceBiometrics'
-import { ID_TYPE_OPTIONS, parsePhilippineIdText, scanPhilippineId } from '@/utils/phIdOcr'
+import {
+  ID_TYPE_OPTIONS,
+  assessIdImageQuality,
+  compareAccountAndIdNames,
+  parsePhilippineIdText,
+  scanPhilippineId,
+  validateSelectedIdType,
+} from '@/utils/phIdOcr'
 
 gsap.registerPlugin()
+
+type VerifyStage = 'idle' | 'quality' | 'ocr' | 'face' | 'done'
 
 export interface IdScanCompletedData {
   idType: SupportedIdType
@@ -22,13 +31,33 @@ export interface IdScanCompletedData {
 }
 
 interface IdScannerStepProps {
+  stepBadge?: string
   title?: string
   subtitle?: string
   initialFullName?: string
+  expectedFullName?: string
   initialIdType?: SupportedIdType
   onConfirm: (data: IdScanCompletedData) => void
   onBack?: () => void
   confirmLabel?: string
+}
+
+function renderStageIndicator(idx: number, currentIdx: number) {
+  if (idx < currentIdx) {
+    return <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
+  }
+  if (idx === currentIdx) {
+    return <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0 ml-0.5" />
+  }
+  return <span className="w-2.5 h-2.5 rounded-full bg-white/20 shrink-0 ml-0.5" />
+}
+
+const VERIFY_STAGE_ORDER: Record<VerifyStage, number> = {
+  idle: -1,
+  quality: 0,
+  ocr: 1,
+  face: 2,
+  done: 3,
 }
 
 function stopMediaStream(stream: MediaStream | null) {
@@ -39,9 +68,11 @@ function stopMediaStream(stream: MediaStream | null) {
 }
 
 export function IdScannerStep({
+  stepBadge = 'Step 1 • Valid ID & OCR Scan',
   title = 'Scan Valid ID',
   subtitle = 'Philippine National ID (PhilSys), Driver’s License, School ID, or any valid government ID.',
   initialFullName = '',
+  expectedFullName,
   initialIdType = 'philsys',
   onConfirm,
   onBack,
@@ -57,6 +88,7 @@ export function IdScannerStep({
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [verifyStage, setVerifyStage] = useState<VerifyStage>('idle')
   const [scanError, setScanError] = useState<string | null>(null)
 
   const [idType, setIdType] = useState<SupportedIdType>(initialIdType)
@@ -66,6 +98,7 @@ export function IdScannerStep({
   const [idDescriptor, setIdDescriptor] = useState<number[] | null>(null)
   const [idImageBase64, setIdImageBase64] = useState<string | null>(null)
   const [ocrStatusMsg, setOcrStatusMsg] = useState<string | null>(null)
+  const [nameMismatchWarning, setNameMismatchWarning] = useState<string | null>(null)
   const [needsReview, setNeedsReview] = useState(false)
 
   useGSAP(
@@ -125,9 +158,12 @@ export function IdScannerStep({
 
   const processIdCanvas = async (canvas: HTMLCanvasElement) => {
     setScanning(true)
+    setVerifyStage('quality')
     setScanError(null)
     setOcrStatusMsg(null)
+    setNameMismatchWarning(null)
     setIdDescriptor(null)
+
     const compressedJpeg = toCompressedJpegDataUrl(canvas, 1024, 0.85)
     setPreviewDataUrl(compressedJpeg)
     setIdImageBase64(compressedJpeg)
@@ -136,15 +172,40 @@ export function IdScannerStep({
     streamRef.current = null
 
     try {
-      const [faceResult, cloudOcr] = await Promise.all([
-        extractIdFaceDescriptor(canvas),
-        api.ocrScanId(compressedJpeg).catch(() => ({
-          provider: 'tesseract_local',
-          raw_text: '',
-          used_external_api: false,
-        })),
-      ])
+      const quality = assessIdImageQuality(canvas)
+      if (!quality.ok) {
+        setScanError(quality.reason || 'ID photo is not clear enough. Please retake.')
+        return
+      }
 
+      setVerifyStage('ocr')
+      const facePromise = extractIdFaceDescriptor(canvas)
+      const cloudOcr = await api.ocrScanId(compressedJpeg).catch(() => ({
+        provider: 'tesseract_local',
+        raw_text: '',
+        used_external_api: false,
+      }))
+
+      const ocrResult =
+        cloudOcr.used_external_api && cloudOcr.raw_text
+          ? parsePhilippineIdText(cloudOcr.raw_text, 88, idType)
+          : await scanPhilippineId(canvas, idType)
+
+      const typeValidation = validateSelectedIdType(
+        ocrResult.rawText,
+        idType,
+        ocrResult.idNumber,
+      )
+      if (!typeValidation.matched) {
+        await facePromise.catch(() => null)
+        setScanError(
+          typeValidation.reason || 'Scanned document does not match the selected ID Type.',
+        )
+        return
+      }
+
+      setVerifyStage('face')
+      const faceResult = await facePromise
       if (!faceResult) {
         setScanError(
           'No clear face was detected on your ID photo. Retake in bright lighting and avoid glare over the photo.',
@@ -152,21 +213,19 @@ export function IdScannerStep({
         return
       }
 
-      const ocrResult =
-        cloudOcr.used_external_api && cloudOcr.raw_text
-          ? parsePhilippineIdText(cloudOcr.raw_text, 88, idType)
-          : await scanPhilippineId(canvas, idType)
-
       setIdDescriptor(faceResult.descriptor)
-      setIdType(ocrResult.detectedType)
       setIdOcrName(ocrResult.fullName)
-      if (ocrResult.fullName) {
-        setFullName(ocrResult.fullName)
-      }
-      if (ocrResult.idNumber) {
-        setIdNumber(ocrResult.idNumber)
-      }
+      setFullName(ocrResult.fullName || expectedFullName || initialFullName || '')
+      setIdNumber(ocrResult.idNumber || '')
       setNeedsReview(ocrResult.needsReview)
+
+      if (expectedFullName && ocrResult.fullName) {
+        const nameMatch = compareAccountAndIdNames(expectedFullName, ocrResult.fullName)
+        if (!nameMatch.matched && nameMatch.warning) {
+          setNameMismatchWarning(nameMatch.warning)
+        }
+      }
+
       const sourceLabel = cloudOcr.used_external_api
         ? 'OCR.space Cloud API'
         : `${ocrResult.confidence}% local OCR`
@@ -175,6 +234,7 @@ export function IdScannerStep({
           ? `ID photo verified (${sourceLabel}). Please confirm or edit your name below.`
           : `Auto-filled from ID (${sourceLabel}). Confirm details before continuing.`,
       )
+      setVerifyStage('done')
     } catch (err) {
       setScanError(
         err instanceof Error
@@ -234,6 +294,8 @@ export function IdScannerStep({
     setIdImageBase64(null)
     setScanError(null)
     setOcrStatusMsg(null)
+    setNameMismatchWarning(null)
+    setVerifyStage('idle')
   }
 
   const handleConfirm = () => {
@@ -259,7 +321,7 @@ export function IdScannerStep({
     <div ref={containerRef} className="space-y-5">
       <div className="space-y-1">
         <p className="text-[11px] uppercase tracking-widest text-red font-mono font-semibold">
-          Step 1 • Valid ID & OCR Scan
+          {stepBadge}
         </p>
         <h2 className="font-display text-xl font-bold uppercase tracking-tight text-white">
           {title}
@@ -341,10 +403,10 @@ export function IdScannerStep({
         )}
 
         {scanning && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
-            <QuarterRing className="w-10 h-10 text-red" />
-            <p className="text-xs font-mono uppercase tracking-widest text-white/80">
-              Scanning ID & Face Photo...
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center">
+            <QuarterRing className="w-10 h-10 text-white" />
+            <p className="text-xs font-mono uppercase tracking-widest text-white">
+              Verifying ID Document...
             </p>
           </div>
         )}
@@ -412,6 +474,46 @@ export function IdScannerStep({
         </div>
       )}
 
+      {/* White / Monochrome Skeleton Loading & Verification Checklist */}
+      {scanning && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="p-4 rounded-xl border border-white/15 bg-surface-2/80 space-y-4"
+        >
+          <div className="space-y-2">
+            {(
+              [
+                { id: 'quality', label: '1. Checking image clarity & lighting' },
+                { id: 'ocr', label: '2. Matching ID type & extracting OCR text' },
+                { id: 'face', label: '3. Detecting reference face photo on ID' },
+              ] as const
+            ).map((item, idx) => {
+              const currentIdx = VERIFY_STAGE_ORDER[verifyStage]
+              const isDoneOrCurrent = idx <= currentIdx
+              return (
+                <div
+                  key={item.id}
+                  className={`flex items-center gap-2.5 text-xs font-mono ${
+                    isDoneOrCurrent ? 'text-white' : 'text-white/40'
+                  }`}
+                >
+                  {renderStageIndicator(idx, currentIdx)}
+                  <span>{item.label}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="space-y-2.5 pt-2 border-t border-white/10">
+            <div className="h-3 w-28 rounded bg-white/15 animate-pulse" />
+            <div className="h-10 w-full rounded-lg bg-white/10 animate-pulse" />
+            <div className="h-3 w-36 rounded bg-white/15 animate-pulse" />
+            <div className="h-10 w-full rounded-lg bg-white/10 animate-pulse" />
+          </div>
+        </div>
+      )}
+
       {/* Status / Errors */}
       {scanError && (
         <div
@@ -420,6 +522,16 @@ export function IdScannerStep({
         >
           <AlertCircle className="w-4 h-4 text-red shrink-0 mt-0.5" />
           <span>{scanError}</span>
+        </div>
+      )}
+
+      {nameMismatchWarning && idDescriptor && (
+        <div
+          role="alert"
+          className="p-3.5 rounded-xl border border-amber-400/35 bg-amber-400/10 text-xs text-amber-200 flex items-start gap-2.5"
+        >
+          <AlertCircle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+          <span>{nameMismatchWarning}</span>
         </div>
       )}
 

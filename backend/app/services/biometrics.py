@@ -12,6 +12,8 @@ DESCRIPTOR_VERSION = "faceapi-128-v1"
 
 # Strict server-side Euclidean distance threshold for 128-d FaceNet/face-api descriptors.
 FACE_LOGIN_MATCH_THRESHOLD = 0.55
+# Cosine similarity floor for duplicate face identity rejection during registration.
+DUPLICATE_FACE_COSINE_THRESHOLD = 0.92
 # Slightly looser threshold for printed/aged physical ID card photos vs live selfie.
 ID_SELFIE_MATCH_THRESHOLD = 0.62
 
@@ -56,6 +58,31 @@ def euclidean_distance(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
     if len(vec_a) != DESCRIPTOR_LENGTH or len(vec_b) != DESCRIPTOR_LENGTH:
         raise ValueError("Descriptor length mismatch.")
     return math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(vec_a, vec_b)))
+
+
+def cosine_similarity(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
+    """Compute cosine similarity between two 128-d face descriptors."""
+    if len(vec_a) != DESCRIPTOR_LENGTH or len(vec_b) != DESCRIPTOR_LENGTH:
+        raise ValueError("Descriptor length mismatch.")
+    dot = 0.0
+    norm_a_sq = 0.0
+    norm_b_sq = 0.0
+    for a, b in zip(vec_a, vec_b):
+        fa = float(a)
+        fb = float(b)
+        dot += fa * fb
+        norm_a_sq += fa * fa
+        norm_b_sq += fb * fb
+    denom = math.sqrt(norm_a_sq) * math.sqrt(norm_b_sq)
+    return (dot / denom) if denom > 0.0 else 0.0
+
+
+def is_same_face_descriptor(vec_a: Sequence[float], vec_b: Sequence[float]) -> bool:
+    """Return True if two descriptors satisfy either Euclidean or cosine identity match thresholds."""
+    return (
+        euclidean_distance(vec_a, vec_b) <= FACE_LOGIN_MATCH_THRESHOLD
+        or cosine_similarity(vec_a, vec_b) >= DUPLICATE_FACE_COSINE_THRESHOLD
+    )
 
 
 def parse_stored_descriptor(raw_json: str) -> List[float]:

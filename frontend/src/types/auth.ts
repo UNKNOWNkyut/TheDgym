@@ -48,6 +48,23 @@ export interface RegisterCredentials {
   live_image_base64?: string
 }
 
+export interface RegistrationIdentityVerifyPayload {
+  email: string
+  face_descriptor: number[]
+  liveness_passed: boolean
+  id_type: SupportedIdType
+  id_number?: string
+  id_ocr_name?: string
+  id_face_match_score: number
+  id_image_base64?: string
+  live_image_base64?: string
+}
+
+export interface RegistrationIdentityVerifyResponse {
+  verified: boolean
+  message: string
+}
+
 export interface TokenResponse {
   token_type: string
   user: User

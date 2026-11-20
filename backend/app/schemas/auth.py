@@ -23,6 +23,25 @@ class UserRegister(BaseModel):
     live_image_base64: Optional[str] = Field(None, max_length=2_200_000)
 
 
+class RegistrationIdentityVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    face_descriptor: List[float] = Field(..., min_length=128, max_length=128)
+    liveness_passed: bool = Field(...)
+    id_type: str = Field(..., min_length=2, max_length=50)
+    id_number: Optional[str] = Field(None, max_length=64)
+    id_ocr_name: Optional[str] = Field(None, max_length=150)
+    id_face_match_score: float = Field(..., ge=0.0, le=2.0)
+    id_image_base64: Optional[str] = Field(None, max_length=2_200_000)
+    live_image_base64: Optional[str] = Field(None, max_length=2_200_000)
+
+
+class RegistrationIdentityVerifyResponse(BaseModel):
+    verified: bool = True
+    message: str = "Identity verified and cleared for registration."
+
+
 class UserLogin(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
