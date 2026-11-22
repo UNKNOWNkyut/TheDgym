@@ -143,7 +143,7 @@ class MembershipUpdate(BaseModel):
 
 class MembershipResponse(BaseModel):
     id: int
-    member_id: int
+    member_id: Optional[int] = None
     plan_id: int
     plan_name: Optional[str] = None
     start_date: datetime

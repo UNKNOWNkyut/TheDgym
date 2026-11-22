@@ -49,7 +49,6 @@ from app.services.access_service import (
     get_active_pairing_status,
     live_feed_manager,
     process_card_tap,
-    runtime_state,
     start_db_pairing_session,
 )
 from app.services.audit import record_audit_log

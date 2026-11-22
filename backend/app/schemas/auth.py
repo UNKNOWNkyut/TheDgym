@@ -72,6 +72,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=32)
     is_active: Optional[bool] = None
     role: Optional[UserRole] = None
+    plan_id: Optional[int] = Field(None, ge=1)
 
 
 class UserResponse(BaseModel):

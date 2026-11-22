@@ -50,7 +50,7 @@ const NAV_ITEMS: NavConfig[] = [
   {
     label: 'Visits',
     href: '/manage/visits',
-    roles: ['admin', 'trainer'],
+    roles: ['admin'],
     icon: <NavIcon d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />,
   },
   {

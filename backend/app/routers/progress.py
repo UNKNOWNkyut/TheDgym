@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_user, require_roles
+from app.core.security import ensure_utc as _ensure_utc
 from app.database import get_db
 from app.models.member import Member
 from app.models.member_membership import MemberMembership, MembershipStatus
@@ -24,10 +25,6 @@ from app.schemas.progress import (
 from app.services.audit import record_audit_log
 
 router = APIRouter(prefix="/api/progress", tags=["Client Progress & Plans"])
-
-
-def _ensure_utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def _assert_member_view_access(current_user: User, member: Member) -> None:

@@ -21,6 +21,7 @@ from app.core.rate_limit import (
     rate_limit_sensitive,
 )
 from app.core.security import (
+    as_utc as _as_utc,
     create_access_token,
     create_face_challenge_token,
     decode_face_challenge_token,
@@ -94,12 +95,6 @@ def _split_full_name(
     first = (parts[0] if parts else default_first)[:100]
     last = (" ".join(parts[1:]) if len(parts) > 1 else default_last)[:100]
     return first, last
-
-
-def _as_utc(dt: datetime | None) -> datetime | None:
-    if dt is None:
-        return None
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
 async def _build_user_response(user: User, db: AsyncSession) -> UserResponse:

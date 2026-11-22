@@ -6,7 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_user, require_roles
+from app.core.deps import require_roles
+from app.core.security import ensure_utc as _ensure_utc
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
@@ -23,10 +24,6 @@ from app.services.pagination import (
 from app.services.visit_sweeper import notify_admins_on_checkin, sweep_overdue_open_visits, to_ph_time
 
 router = APIRouter(prefix="/api/visits", tags=["Visits"])
-
-
-def _ensure_utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def _require_active_membership(member: Member, now: datetime) -> MemberMembership:
@@ -110,7 +107,7 @@ async def check_in_member(
     payload: VisitCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """Record a gym check-in for a member."""
     await sweep_overdue_open_visits(db)
@@ -187,7 +184,7 @@ async def check_out_member(
     payload: VisitCheckOut,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """Mark a visit as checked out."""
     stmt = select(Visit).where(Visit.id == visit_id).options(selectinload(Visit.member))
@@ -223,7 +220,7 @@ async def list_visits(
     limit: int = Query(50, ge=1, le=200),
     paginated: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.TRAINER])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF])),
 ):
     """List gym visits with deterministic `(checked_in_at, id)` sorting and `limit + 1` pagination."""
     await sweep_overdue_open_visits(db)
@@ -293,7 +290,7 @@ async def get_member_visits(
     skip: int = Query(0, ge=0),
     limit: int = Query(30, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.STAFF, UserRole.MEMBER])),
 ):
     """Get all visits for a specific member (with BOLA/ownership check for MEMBER role)."""
     member = await db.get(Member, member_id)

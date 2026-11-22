@@ -67,15 +67,6 @@ def _expense_to_response(expense: Expense) -> ExpenseResponse:
     )
 
 
-def _period_bounds(year: int, month: Optional[int]):
-    """Creates the starting and ending dates used by finance filters."""
-    return period_bounds(year, month)
-
-
-def _revenue_period_clause(start_date: date, end_date: date, start_dt: datetime, end_dt: datetime):
-    return revenue_period_clause(start_dt, end_dt)
-
-
 async def _get_category_or_404(db: AsyncSession, category_id: int) -> ExpenseCategory:
     stmt = select(ExpenseCategory).where(ExpenseCategory.id == category_id)
     category = (await db.execute(stmt)).scalar_one_or_none()
@@ -227,7 +218,7 @@ async def list_expenses(
     if category_id is not None:
         stmt = stmt.where(Expense.category_id == category_id)
     if year is not None:
-        start_date, end_date, _, _ = _period_bounds(year, month)
+        start_date, end_date, _, _ = period_bounds(year, month)
         stmt = stmt.where(Expense.expense_date >= start_date, Expense.expense_date <= end_date)
     if search:
         search_term = f"%{search.strip()}%"
@@ -352,21 +343,21 @@ async def get_finance_summary(
             expenses_by_category=[],
         )
 
-    start_date, end_date, start_dt, end_dt = _period_bounds(year, month)
+    start_date, end_date, start_dt, end_dt = period_bounds(year, month)
 
     # For full-year view of current year, sum up through the current Manila month
     if month is None and year == manila_now.year:
         start_date = date(year, 1, 1)
         end_date = date(year, manila_now.month, monthrange(year, manila_now.month)[1])
-        _, _, start_dt, _ = _period_bounds(year, 1)
-        _, _, _, end_dt = _period_bounds(year, manila_now.month)
+        _, _, start_dt, _ = period_bounds(year, 1)
+        _, _, _, end_dt = period_bounds(year, manila_now.month)
 
     # MEMBERSHIP REVENUE
     revenue_result = await db.execute(
         select(func.coalesce(func.sum(MemberMembership.paid_amount), 0)).where(
             MemberMembership.status != MembershipStatus.CANCELLED,
             MemberMembership.paid_amount.is_not(None),
-            _revenue_period_clause(start_date, end_date, start_dt, end_dt),
+            revenue_period_clause(start_dt, end_dt),
         )
     )
     membership_revenue = Decimal(revenue_result.scalar_one() or 0)
@@ -445,15 +436,15 @@ async def get_annual_finance_breakdown(
     max_month = manila_now.month if year == manila_now.year else 12
     range_start_date = date(year, 1, 1)
     range_end_date = date(year, max_month, monthrange(year, max_month)[1])
-    _, _, range_start_dt, _ = _period_bounds(year, 1)
-    _, _, _, range_end_dt = _period_bounds(year, max_month)
+    _, _, range_start_dt, _ = period_bounds(year, 1)
+    _, _, _, range_end_dt = period_bounds(year, max_month)
 
     # Revenue (single pass across completed months instead of 12 sequential queries)
     rev_cols = [
         func.coalesce(
             func.sum(
                 case(
-                    (_revenue_period_clause(*_period_bounds(year, m)), MemberMembership.paid_amount),
+                    (revenue_period_clause(*period_bounds(year, m)[2:]), MemberMembership.paid_amount),
                     else_=0,
                 )
             ),
@@ -466,7 +457,7 @@ async def get_annual_finance_breakdown(
             select(*rev_cols).where(
                 MemberMembership.status != MembershipStatus.CANCELLED,
                 MemberMembership.paid_amount.is_not(None),
-                _revenue_period_clause(range_start_date, range_end_date, range_start_dt, range_end_dt),
+                revenue_period_clause(range_start_dt, range_end_dt),
             )
         )
     ).one()

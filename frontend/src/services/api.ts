@@ -374,11 +374,18 @@ export const api = {
       phone?: string
       role?: UserRole
       is_active?: boolean
+      plan_id?: number
     },
   ): Promise<User> {
     return request<User>(`/api/users/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    })
+  },
+
+  async deleteUser(userId: number): Promise<void> {
+    return request<void>(`/api/users/${userId}`, {
+      method: 'DELETE',
     })
   },
 

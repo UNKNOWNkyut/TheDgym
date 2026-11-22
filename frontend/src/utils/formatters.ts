@@ -17,3 +17,20 @@ export function getInitials(name: string): string {
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('')
 }
+
+export function extractErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback
+}
+
+const scheduleDateTimeFormatter = new Intl.DateTimeFormat('en-PH', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+export function formatScheduleDateTime(iso: string): string {
+  const timestamp = Date.parse(iso)
+  if (!Number.isFinite(timestamp)) return 'Schedule pending'
+  return scheduleDateTimeFormatter.format(new Date(timestamp))
+}

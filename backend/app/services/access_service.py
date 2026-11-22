@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.security import ensure_utc as _ensure_utc
 from app.models.access_scanner import AccessScanner, ScannerTapMode
 from app.models.class_session import ClassEnrollment, ClassSession, ClassStatus
 from app.models.keycard_tap_log import KeycardTapLog, TapDecision
@@ -50,55 +51,13 @@ PAIRING_MODE_TTL_SECS = 90
 
 # Smart Pairing Session State
 
-class AccessRuntimeState:
-    def __init__(self) -> None:
-        self.pairing_member_id: Optional[int] = None
-        self.pairing_member_code: Optional[str] = None
-        self.pairing_member_name: Optional[str] = None
-        self.pairing_card_label: str = "Primary PVC Keycard"
-        self.pairing_actor_id: Optional[int] = None
-        self.pairing_expires_at: Optional[datetime] = None
 
-    def clear_if_expired(self, now: datetime) -> None:
-        if self.pairing_expires_at and now >= self.pairing_expires_at:
-            self.clear_pairing()
-
+class _PairingRuntimeShim:
     def clear_pairing(self) -> None:
-        self.pairing_member_id = None
-        self.pairing_member_code = None
-        self.pairing_member_name = None
-        self.pairing_card_label = "Primary PVC Keycard"
-        self.pairing_actor_id = None
-        self.pairing_expires_at = None
-
-    def to_pairing_status(self, now: Optional[datetime] = None) -> PairingSessionStatus:
-        ref = now or datetime.now(timezone.utc)
-        self.clear_if_expired(ref)
-        if not self.pairing_member_id:
-            return PairingSessionStatus(active=False)
-        return PairingSessionStatus(
-            active=True,
-            member_id=self.pairing_member_id,
-            member_code=self.pairing_member_code,
-            member_name=self.pairing_member_name,
-            card_label=self.pairing_card_label,
-            expires_at=self.pairing_expires_at,
-        )
+        return None
 
 
-runtime_state = AccessRuntimeState()
-
-
-def _sync_runtime_state(row: Optional[PairingSession]) -> None:
-    if row is None:
-        runtime_state.clear_pairing()
-        return
-    runtime_state.pairing_member_id = row.member_id
-    runtime_state.pairing_member_code = row.member_code
-    runtime_state.pairing_member_name = row.member_name
-    runtime_state.pairing_card_label = row.card_label
-    runtime_state.pairing_actor_id = row.created_by
-    runtime_state.pairing_expires_at = _ensure_utc(row.expires_at)
+runtime_state = _PairingRuntimeShim()
 
 
 def _pairing_status_from_row(row: Optional[PairingSession]) -> PairingSessionStatus:
@@ -121,14 +80,11 @@ async def _get_active_pairing_row(
     stmt = select(PairingSession).order_by(PairingSession.id.desc()).limit(1)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
-        _sync_runtime_state(None)
         return None
     if _ensure_utc(row.expires_at) <= now:
         await db.execute(delete(PairingSession))
         await db.commit()
-        _sync_runtime_state(None)
         return None
-    _sync_runtime_state(row)
     return row
 
 
@@ -164,7 +120,6 @@ async def start_db_pairing_session(
     db.add(row)
     await db.commit()
     await db.refresh(row)
-    _sync_runtime_state(row)
     return _pairing_status_from_row(row)
 
 
@@ -224,12 +179,6 @@ class AccessFeedConnectionManager:
 
 
 live_feed_manager = AccessFeedConnectionManager()
-
-
-def _ensure_utc(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
 
 
 def _membership_effective_end_utc(
@@ -507,7 +456,6 @@ async def _handle_pairing_tap(ctx: _TapContext) -> Optional[TapVerificationRespo
     if not target_member:
         await db.execute(delete(PairingSession).where(PairingSession.member_id == pairing_row.member_id))
         await db.commit()
-        _sync_runtime_state(None)
         return None
 
     try:
@@ -559,7 +507,6 @@ async def _handle_pairing_tap(ctx: _TapContext) -> Optional[TapVerificationRespo
     await db.refresh(paired_card)
 
     # Turn off Pairing Mode immediately after successful bind
-    _sync_runtime_state(None)
     await live_feed_manager.broadcast_event(
         "pairing_mode_changed",
         PairingSessionStatus(active=False).model_dump(mode="json"),

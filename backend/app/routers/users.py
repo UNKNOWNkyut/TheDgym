@@ -1,23 +1,42 @@
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+import logging
 from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import desc, or_, select
+from sqlalchemy import delete, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_roles
 from app.core.rate_limit import rate_limit_sensitive
 from app.core.security import hash_password, persist_user_session_revocation, revoke_user_sessions
 from app.database import get_db
+from app.init_members import generate_member_code
 from app.models.audit_log import AuditLog
+from app.models.member import Member, MemberStatus
+from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
+from app.models.membership_plan import MembershipPlan
+from app.models.notification import Notification
 from app.models.user import User, UserRole
+from app.models.user_biometric import UserBiometric
+from app.models.user_profile import UserProfile
 from app.schemas.auth import AuditLogResponse, UserCreateAdmin, UserResponse, UserUpdate
 from app.services.audit import record_audit_log
-from app.services.membership_activation import expire_elapsed_memberships
+from app.services.membership_activation import (
+    activate_member_and_notify_on_payment,
+    broadcast_admin_member_notification,
+    detach_and_delete_member,
+    expire_elapsed_memberships,
+    has_other_active_membership,
+    is_day_pass_plan,
+)
 from app.services.pagination import (
     PaginatedPage,
     make_cache_key,
     read_page_cache,
     slice_limit_plus_one,
 )
+
+logger = logging.getLogger("dgym.users")
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 audit_router = APIRouter(prefix="/api/audit-logs", tags=["Audit Logs"])
@@ -264,6 +283,91 @@ async def create_user_by_admin(
     return UserResponse.model_validate(new_user)
 
 
+async def _find_member_by_email(db: AsyncSession, email: str) -> Optional[Member]:
+    normalized = email.lower().strip()
+    return (
+        await db.execute(select(Member).where(func.lower(Member.email) == normalized))
+    ).scalar_one_or_none()
+
+
+async def _promote_user_with_plan(
+    db: AsyncSession,
+    *,
+    user: User,
+    plan_id: Optional[int],
+    actor: User,
+) -> bool:
+    """Assign a selected non-Day-Pass membership plan when promoting USER -> MEMBER."""
+    if plan_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please select a membership plan before promoting a user to Member.",
+        )
+
+    plan = (
+        await db.execute(select(MembershipPlan).where(MembershipPlan.id == plan_id))
+    ).scalar_one_or_none()
+    if not plan or not plan.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected membership plan does not exist or is inactive.",
+        )
+    if is_day_pass_plan(plan):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Daily Pass cannot be used to promote a user to Member.",
+        )
+
+    member = await _find_member_by_email(db, user.email)
+    if not member:
+        name_parts = user.full_name.strip().split(" ", 1)
+        first_name = name_parts[0] if name_parts else "Member"
+        last_name = name_parts[1] if len(name_parts) > 1 and name_parts[1].strip() else first_name
+        member = Member(
+            member_code=await generate_member_code(db),
+            first_name=first_name,
+            last_name=last_name,
+            email=user.email.lower().strip(),
+            phone=user.phone,
+            status=MemberStatus.ACTIVE,
+            is_active=True,
+        )
+        db.add(member)
+        await db.flush()
+
+    now = datetime.now(timezone.utc)
+    paid = Decimal(str(plan.price_php))
+    new_ms = MemberMembership(
+        member_id=member.id,
+        plan_id=plan.id,
+        start_date=now,
+        end_date=now + timedelta(days=plan.duration_days),
+        status=MembershipStatus.ACTIVE,
+        paid_amount=paid,
+        payment_method=PaymentMethod.CASH,
+        created_by_user_id=actor.id,
+        payer_name_snapshot=member.full_name,
+        plan_name_snapshot=plan.name,
+        notes=f"Assigned during role promotion ({plan.name}).",
+    )
+    db.add(new_ms)
+    await db.flush()
+
+    had_active_before = await has_other_active_membership(
+        db, member_id=member.id, exclude_membership_id=new_ms.id
+    )
+    user.role = UserRole.MEMBER
+    return await activate_member_and_notify_on_payment(
+        db,
+        membership=new_ms,
+        member=member,
+        plan=plan,
+        paid_amount=paid,
+        payment_method=PaymentMethod.CASH,
+        is_new_member_activation=(not had_active_before),
+    )
+
+
 @router.patch(
     "/{user_id}",
     response_model=UserResponse,
@@ -297,6 +401,7 @@ async def update_user(
             )
 
     should_revoke_sessions = False
+    previous_role = user.role
     if user_update.full_name is not None:
         trimmed_name = user_update.full_name.strip()
         if len(trimmed_name) < 2:
@@ -311,10 +416,27 @@ async def update_user(
         if user.is_active and not user_update.is_active:
             should_revoke_sessions = True
         user.is_active = user_update.is_active
+
+    admin_notified = False
+    promoted_member: Optional[Member] = None
     if user_update.role is not None:
         if user.role != user_update.role:
             should_revoke_sessions = True
-        user.role = user_update.role
+        if previous_role == UserRole.USER and user_update.role == UserRole.MEMBER:
+            admin_notified = await _promote_user_with_plan(
+                db, user=user, plan_id=user_update.plan_id, actor=current_user
+            )
+            if admin_notified:
+                promoted_member = await _find_member_by_email(db, user.email)
+        else:
+            user.role = user_update.role
+            if user_update.role != previous_role and user_update.role in (
+                UserRole.TRAINER,
+                UserRole.ADMIN,
+            ):
+                linked_member = await _find_member_by_email(db, user.email)
+                if linked_member is not None:
+                    await detach_and_delete_member(db, linked_member)
 
     if should_revoke_sessions:
         await persist_user_session_revocation(db, user.id)
@@ -330,7 +452,12 @@ async def update_user(
         details=f"Updated user '{user.email}' (role={user.role.value}, is_active={user.is_active}).",
     )
     await db.commit()
-    read_page_cache.invalidate_prefix("users:")
+    read_page_cache.invalidate_prefix("users:", "members:", "visits:", "tap_logs:")
+    if admin_notified and promoted_member is not None:
+        try:
+            await broadcast_admin_member_notification(promoted_member)
+        except Exception as exc:
+            logger.warning("Non-fatal WS admin broadcast error after promotion: %s", exc)
     await db.refresh(user)
     return UserResponse.model_validate(user)
 
@@ -346,7 +473,7 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-    """Delete a user account. Admin only."""
+    """Delete a user account while preserving paid financial history. Admin only."""
     if current_user.id == user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -359,6 +486,14 @@ async def delete_user(
 
     deleted_email = user.email
     revoke_user_sessions(user.id)
+
+    linked_member = await _find_member_by_email(db, user.email)
+    if linked_member is not None:
+        await detach_and_delete_member(db, linked_member)
+
+    await db.execute(delete(UserBiometric).where(UserBiometric.user_id == user.id))
+    await db.execute(delete(UserProfile).where(UserProfile.user_id == user.id))
+    await db.execute(delete(Notification).where(Notification.user_id == user.id))
     await db.delete(user)
 
     await record_audit_log(
@@ -372,5 +507,5 @@ async def delete_user(
         details=f"Deleted user account '{deleted_email}'.",
     )
     await db.commit()
-    read_page_cache.invalidate_prefix("users:")
+    read_page_cache.invalidate_prefix("users:", "members:", "visits:", "tap_logs:")
 

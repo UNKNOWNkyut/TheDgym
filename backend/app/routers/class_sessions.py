@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_current_user, require_roles
+from app.core.security import ensure_utc as _ensure_utc
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
@@ -27,10 +28,6 @@ class SelfEnrollCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     notes: Optional[str] = Field(None, max_length=500)
-
-
-def _ensure_utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def _format_session(

@@ -39,8 +39,8 @@ class MemberMembership(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
 
-    # FK references
-    member_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True)
+    # FK references (SET NULL preserves paid ledger history if a member/user is deleted)
+    member_id = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True, index=True)
     plan_id = Column(Integer, ForeignKey("membership_plans.id", ondelete="RESTRICT"), nullable=False, index=True)
 
     # Period
@@ -65,6 +65,10 @@ class MemberMembership(Base):
 
     # Staff who created/assigned this membership
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Decoupled ledger snapshots retained after account deletion
+    payer_name_snapshot = Column(String(255), nullable=True)
+    plan_name_snapshot = Column(String(100), nullable=True)
 
     # Notes
     notes = Column(Text, nullable=True)

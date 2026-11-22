@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Calendar,
   Check,
-  CheckCircle2,
   Clock,
   Dumbbell,
   Flame,
@@ -15,11 +14,13 @@ import {
   X,
 } from 'lucide-react';
 import { ClientProgressModal } from '@/components/dashboard/ClientProgressModal';
+import { TrainerInsightsColumn } from '@/components/dashboard/TrainerInsightsColumn';
+import { TrainerSessionNoteModal } from '@/components/dashboard/TrainerSessionNoteModal';
 import { useAuth } from '@/context/AuthContext';
 import { CLASS_TYPE_LABELS } from '@/constants/coaches';
 import { GYM_INFO } from '@/constants/gymInfo';
 import { api } from '@/services/api';
-import { getInitials } from '@/utils/formatters';
+import { extractErrorMessage, formatScheduleDateTime as formatDateTimeLabel } from '@/utils/formatters';
 import type {
   AtRiskMemberItem,
   ClassSession,
@@ -60,23 +61,6 @@ const PT_STATUS_STYLE: Record<PTSessionStatus, { label: string; className: strin
     className: 'bg-red/10 text-red-300 border-red/20',
   },
 };
-
-const dateTimeFormatter = new Intl.DateTimeFormat('en-PH', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-function formatDateTimeLabel(iso: string): string {
-  const ts = Date.parse(iso);
-  if (!Number.isFinite(ts)) return 'Schedule pending';
-  return dateTimeFormatter.format(new Date(ts));
-}
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
 
 function sortTrainerAgendaSessions(sessions: PTSession[]): PTSession[] {
   return sessions
@@ -128,35 +112,6 @@ function formatCompletedPtHours(sessions: PTSession[]): string {
   return `${hours.toFixed(1)} hrs`;
 }
 
-function formatCoachNoteRecord(params: {
-  exercise: string;
-  weightKg: string;
-  reps: string;
-  rpe: string;
-  notes: string;
-}): string {
-  const exerciseTrim = params.exercise.trim();
-  const weightTrim = params.weightKg.trim();
-  const repsTrim = params.reps.trim();
-  const rpeTrim = params.rpe.trim();
-  const notesTrim = params.notes.trim();
-
-  const metrics: string[] = [];
-  if (weightTrim) metrics.push(`${weightTrim}kg`);
-  if (repsTrim) metrics.push(`${repsTrim} reps`);
-  if (rpeTrim) metrics.push(`RPE ${rpeTrim}`);
-
-  const lines: string[] = [];
-  if (exerciseTrim) {
-    lines.push(metrics.length ? `${exerciseTrim} (${metrics.join(' • ')})` : exerciseTrim);
-  }
-  if (notesTrim) {
-    lines.push(notesTrim);
-  }
-
-  return lines.join(' — ').slice(0, 1000);
-}
-
 const NEUTRAL_ACTION_BTN =
   'px-2.5 py-1.5 rounded-lg text-xs font-mono border bg-zinc-900 border-zinc-800 text-zinc-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
 
@@ -184,15 +139,7 @@ export function TrainerDashboard() {
   } | null>(null);
 
   // Coach Session Note Logger Modal state (persists to PTSession.coach_notes via PATCH)
-  const [isLoggerOpen, setIsLoggerOpen] = useState(false);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
-  const [exerciseName, setExerciseName] = useState('');
-  const [exerciseWeight, setExerciseWeight] = useState('');
-  const [exerciseReps, setExerciseReps] = useState('');
-  const [exerciseRpe, setExerciseRpe] = useState('');
-  const [coachFreeNotes, setCoachFreeNotes] = useState('');
-  const [isSavingLog, setIsSavingLog] = useState(false);
-  const [loggerError, setLoggerError] = useState<string | null>(null);
+  const [loggerTargetSessionId, setLoggerTargetSessionId] = useState<string | null>(null);
   const [progressModalTarget, setProgressModalTarget] = useState<{
     memberId: number;
     memberName?: string;
@@ -320,14 +267,16 @@ export function TrainerDashboard() {
 
   const openLoggerForSession = (session?: PTSession | null) => {
     const fallbackTarget = session ?? upNextSession ?? loggableSessions[0] ?? null;
-    setSelectedSessionId(fallbackTarget ? String(fallbackTarget.id) : '');
-    setExerciseName('');
-    setExerciseWeight('');
-    setExerciseReps('');
-    setExerciseRpe('');
-    setCoachFreeNotes(fallbackTarget?.coach_notes || '');
-    setLoggerError(null);
-    setIsLoggerOpen(true);
+    setLoggerTargetSessionId(fallbackTarget ? String(fallbackTarget.id) : '');
+  };
+
+  const handleSavedSessionNotes = (updated: PTSession) => {
+    setPtSessions((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    setActionFeedback({
+      type: 'success',
+      message: `Saved session notes for ${updated.member_name || 'athlete'}.`,
+    });
+    setLoggerTargetSessionId(null);
   };
 
   const updateSessionStatus = async (session: PTSession, newStatus: 'completed' | 'no_show') => {
@@ -376,45 +325,6 @@ export function TrainerDashboard() {
       });
     } finally {
       setUpdatingSessionId(null);
-    }
-  };
-
-  const handleSaveLog = async (e: FormEvent) => {
-    e.preventDefault();
-    const sessionId = Number(selectedSessionId);
-    if (!Number.isFinite(sessionId) || sessionId <= 0) {
-      setLoggerError('Please select a PT session to attach these notes to.');
-      return;
-    }
-
-    const formattedNote = formatCoachNoteRecord({
-      exercise: exerciseName,
-      weightKg: exerciseWeight,
-      reps: exerciseReps,
-      rpe: exerciseRpe,
-      notes: coachFreeNotes,
-    });
-
-    if (!formattedNote) {
-      setLoggerError('Enter an exercise record or coaching notes before saving.');
-      return;
-    }
-
-    setIsSavingLog(true);
-    setLoggerError(null);
-
-    try {
-      const updated = await api.updatePTSession(sessionId, { coach_notes: formattedNote });
-      setPtSessions((prev) => prev.map((item) => (item.id === sessionId ? updated : item)));
-      setActionFeedback({
-        type: 'success',
-        message: `Saved session notes for ${updated.member_name || 'athlete'}.`,
-      });
-      setIsLoggerOpen(false);
-    } catch (err) {
-      setLoggerError(extractErrorMessage(err, 'Unable to save session notes.'));
-    } finally {
-      setIsSavingLog(false);
     }
   };
 
@@ -849,405 +759,27 @@ export function TrainerDashboard() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN (5 cols) — UP-NEXT SNAPSHOT & RETENTION INSIGHTS */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* Top Card: Up-Next Client Snapshot */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase font-mono tracking-widest text-zinc-300 font-semibold flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-red animate-pulse" aria-hidden="true" />
-                  NEXT SCHEDULED PT CLIENT
-                </span>
-                <span className="text-xs font-mono text-zinc-400">
-                  {upNextSession
-                    ? formatDateTimeLabel(upNextSession.scheduled_at)
-                    : 'No upcoming session'}
-                </span>
-              </div>
-
-              {upNextSession ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white font-bold font-mono text-sm">
-                      {getInitials(upNextSession.member_name || 'Athlete')}
-                    </div>
-                    <div className="min-w-0">
-                      <Link
-                        to={`/manage/members/${upNextSession.member_id}`}
-                        className="text-base font-bold text-white hover:text-red transition-colors block truncate"
-                      >
-                        {upNextSession.member_name || upNextSession.member_code || 'Assigned Athlete'}
-                      </Link>
-                      <p className="text-xs text-zinc-400 font-mono">
-                        {upNextSession.duration_minutes} mins •{' '}
-                        {PT_STATUS_STYLE[upNextSession.status].label}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-xs space-y-2">
-                    <p className="text-zinc-400 font-mono uppercase text-[10px]">
-                      Client Notes &amp; Focus:
-                    </p>
-                    <p className="text-zinc-200 font-medium">
-                      {upNextSession.notes || 'No specific athlete notes attached to this booking.'}
-                    </p>
-                    {upNextSession.coach_notes && (
-                      <p className="text-zinc-300 font-mono pt-2 border-t border-zinc-800/80">
-                        Coach Log: {upNextSession.coach_notes}
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => openLoggerForSession(upNextSession)}
-                    className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-white text-xs font-mono font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Dumbbell className="w-3.5 h-3.5 text-red" />
-                    <span>Log Coaching / Set Notes</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="py-4 text-center space-y-2">
-                  <p className="text-xs text-zinc-400 font-mono">
-                    No upcoming confirmed 1-on-1 PT sessions right now.
-                  </p>
-                  <Link
-                    to="/manage/pt-sessions"
-                    className="inline-block text-xs font-mono text-red hover:underline"
-                  >
-                    Manage PT Schedule →
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Card: Retention Flags & Completed PT History */}
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
-                <div className="inline-flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-full">
-                  <button
-                    type="button"
-                    onClick={() => setInsightsTab('flags')}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
-                      insightsTab === 'flags'
-                        ? 'bg-zinc-800 text-white font-semibold'
-                        : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    Retention Flags ({atRiskMembers.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInsightsTab('history')}
-                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
-                      insightsTab === 'history'
-                        ? 'bg-zinc-800 text-white font-semibold'
-                        : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    Completed PT ({completedSessions.length})
-                  </button>
-                </div>
-              </div>
-
-              {insightsTab === 'flags' ? (
-                churnError ? (
-                  <p className="text-xs text-zinc-400 py-4 text-center font-mono">{churnError}</p>
-                ) : atRiskMembers.length === 0 ? (
-                  <p className="text-xs text-zinc-400 py-6 text-center font-mono">
-                    No high or medium churn risk members flagged right now.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-                    {atRiskMembers.slice(0, 8).map((member) => (
-                      <div
-                        key={member.member_id}
-                        className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 flex items-start justify-between gap-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="font-semibold text-sm text-white truncate">
-                              {member.full_name}
-                            </span>
-                            <span
-                              className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border font-semibold ${
-                                member.risk_tier === 'HIGH'
-                                  ? 'bg-red/10 text-red border-red/20'
-                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                              }`}
-                            >
-                              {member.risk_tier} RISK ({Math.round(member.churn_probability * 100)}%)
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-400 leading-relaxed">
-                            {member.top_risk_factors[0] ||
-                              `${member.days_since_last_checkin} days since last gym check-in`}
-                          </p>
-                          <p className="text-[11px] text-zinc-500 font-mono mt-1">
-                            Code: {member.member_code} • Last check-in:{' '}
-                            {member.days_since_last_checkin}d ago
-                          </p>
-                        </div>
-
-                        <Link
-                          to={`/manage/members/${member.member_id}`}
-                          className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-[11px] font-mono border border-zinc-800 transition-colors shrink-0"
-                        >
-                          Profile →
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : completedSessions.length === 0 ? (
-                <div className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30 text-center space-y-1.5">
-                  <p className="text-xs text-zinc-400 font-mono">
-                    No completed PT sessions recorded yet.
-                  </p>
-                  <Link
-                    to="/manage/members"
-                    className="inline-block text-xs text-red hover:underline font-mono"
-                  >
-                    View Gym Members →
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-                  {completedSessions.slice(0, 8).map((sess) => (
-                    <div
-                      key={sess.id}
-                      className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 flex items-start gap-3"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-emerald-400 shrink-0">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <Link
-                            to={`/manage/members/${sess.member_id}`}
-                            className="font-semibold text-sm text-white hover:text-red transition-colors truncate"
-                          >
-                            {sess.member_name || sess.member_code || `Member #${sess.member_id}`}
-                          </Link>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setProgressModalTarget({
-                                  memberId: sess.member_id,
-                                  memberName: sess.member_name || sess.member_code || undefined,
-                                })
-                              }
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red/30 bg-red/10 text-[10px] font-mono text-red hover:bg-red hover:text-white transition-colors cursor-pointer"
-                            >
-                              <TrendingUp className="w-3 h-3" />
-                              <span>View Progress</span>
-                            </button>
-                            <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                              {formatDateTimeLabel(sess.scheduled_at)}
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-zinc-300 mt-0.5">
-                          {sess.coach_notes || `${sess.duration_minutes} min session completed`}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <TrainerInsightsColumn
+            upNextSession={upNextSession}
+            getStatusLabel={(status) => PT_STATUS_STYLE[status].label}
+            onOpenLogger={openLoggerForSession}
+            insightsTab={insightsTab}
+            onTabChange={setInsightsTab}
+            atRiskMembers={atRiskMembers}
+            churnError={churnError}
+            completedSessions={completedSessions}
+            onViewProgress={setProgressModalTarget}
+          />
         </div>
 
-        {/* Real-Time Coach Session Note Logger Modal (saves via api.updatePTSession) */}
-        {isLoggerOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
-            onClick={() => setIsLoggerOpen(false)}
-          >
-            <div
-              className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl space-y-5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <Dumbbell className="w-5 h-5 text-red" />
-                  <h3 className="font-bold text-base uppercase text-white font-mono">
-                    Coach Session Notes Logger
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsLoggerOpen(false)}
-                  className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {loggableSessions.length === 0 ? (
-                <div className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-center space-y-3">
-                  <p className="text-xs font-mono text-zinc-300">
-                    You do not have any assigned PT sessions to attach workout notes to yet.
-                  </p>
-                  <Link
-                    to="/manage/pt-sessions"
-                    onClick={() => setIsLoggerOpen(false)}
-                    className="inline-block px-4 py-2 rounded-lg bg-red hover:bg-red-hover text-white text-xs font-mono uppercase tracking-wider"
-                  >
-                    Go to PT Schedule
-                  </Link>
-                </div>
-              ) : (
-                <form onSubmit={handleSaveLog} className="space-y-4">
-                  {loggerError && (
-                    <div
-                      role="alert"
-                      className="px-3.5 py-2.5 rounded-lg border border-red/30 bg-red/10 text-red-200 text-xs font-mono"
-                    >
-                      {loggerError}
-                    </div>
-                  )}
-
-                  <div>
-                    <label
-                      htmlFor="logger-session-select"
-                      className="block text-xs uppercase font-mono text-zinc-400 mb-1"
-                    >
-                      Assigned PT Session
-                    </label>
-                    <select
-                      id="logger-session-select"
-                      value={selectedSessionId}
-                      onChange={(e) => {
-                        const nextId = e.target.value;
-                        setSelectedSessionId(nextId);
-                        const found = loggableSessions.find((s) => String(s.id) === nextId);
-                        if (found) setCoachFreeNotes(found.coach_notes || '');
-                      }}
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
-                      required
-                    >
-                      <option value="">Select session...</option>
-                      {loggableSessions.map((s) => (
-                        <option key={s.id} value={String(s.id)}>
-                          {s.member_name || s.member_code || `Member #${s.member_id}`} —{' '}
-                          {formatDateTimeLabel(s.scheduled_at)} ({PT_STATUS_STYLE[s.status].label})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="logger-exercise"
-                      className="block text-xs uppercase font-mono text-zinc-400 mb-1"
-                    >
-                      Key Exercise / Focus (optional)
-                    </label>
-                    <input
-                      id="logger-exercise"
-                      type="text"
-                      placeholder="e.g., Barbell Back Squat"
-                      value={exerciseName}
-                      onChange={(e) => setExerciseName(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label
-                        htmlFor="logger-weight"
-                        className="block text-xs uppercase font-mono text-zinc-400 mb-1"
-                      >
-                        Weight (kg)
-                      </label>
-                      <input
-                        id="logger-weight"
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={exerciseWeight}
-                        onChange={(e) => setExerciseWeight(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="logger-reps"
-                        className="block text-xs uppercase font-mono text-zinc-400 mb-1"
-                      >
-                        Reps
-                      </label>
-                      <input
-                        id="logger-reps"
-                        type="number"
-                        min="1"
-                        value={exerciseReps}
-                        onChange={(e) => setExerciseReps(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="logger-rpe"
-                        className="block text-xs uppercase font-mono text-zinc-400 mb-1"
-                      >
-                        RPE (1–10)
-                      </label>
-                      <input
-                        id="logger-rpe"
-                        type="text"
-                        placeholder="8.5"
-                        value={exerciseRpe}
-                        onChange={(e) => setExerciseRpe(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="logger-notes"
-                      className="block text-xs uppercase font-mono text-zinc-400 mb-1"
-                    >
-                      Coaching Notes (saved to session record)
-                    </label>
-                    <textarea
-                      id="logger-notes"
-                      rows={3}
-                      maxLength={850}
-                      placeholder="Technique cues, progression notes, or athlete feedback..."
-                      value={coachFreeNotes}
-                      onChange={(e) => setCoachFreeNotes(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-sm focus:outline-none focus:border-red resize-none"
-                    />
-                  </div>
-
-                  <div className="pt-3 border-t border-zinc-800 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsLoggerOpen(false)}
-                      className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-mono transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSavingLog}
-                      className="px-4 py-2 rounded-lg bg-red hover:bg-red-hover text-white text-xs font-bold font-mono uppercase tracking-wider transition-colors shadow-md cursor-pointer disabled:opacity-60"
-                    >
-                      {isSavingLog ? 'Saving...' : 'Save Coach Notes'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
+        {loggerTargetSessionId !== null && (
+          <TrainerSessionNoteModal
+            initialSessionId={loggerTargetSessionId}
+            loggableSessions={loggableSessions}
+            getStatusLabel={(status) => PT_STATUS_STYLE[status].label}
+            onClose={() => setLoggerTargetSessionId(null)}
+            onSaved={handleSavedSessionNotes}
+          />
         )}
 
         <ClientProgressModal

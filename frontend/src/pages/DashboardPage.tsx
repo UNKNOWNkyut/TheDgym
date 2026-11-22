@@ -3,23 +3,22 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
-  CheckCircle2,
-  Clock,
   CreditCard,
   Dumbbell,
   Flame,
-  Lock,
   RefreshCw,
-  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { SEO } from '@/components/ui/SEO';
+import { InactiveMemberPortalView } from '@/components/dashboard/InactiveMemberPortalView';
+import { MemberClassesSection } from '@/components/dashboard/MemberClassesSection';
 import { TrainerDashboard } from '@/components/dashboard/TrainerDashboard';
-import { CLASS_TYPE_LABELS, OFFICIAL_GROUP_CLASSES } from '@/constants/coaches';
-import { GYM_INFO } from '@/constants/gymInfo';
-import { PUBLIC_PLANS } from '@/constants/plans';
 import { api } from '@/services/api';
-import { getInitials } from '@/utils/formatters';
+import {
+  extractErrorMessage,
+  formatScheduleDateTime as formatSessionDateTime,
+  getInitials,
+} from '@/utils/formatters';
 import type { AccountProfile } from '@/types/account';
 import type {
   ClassEnrollment,
@@ -70,19 +69,6 @@ const PT_STATUS_META: Record<PTSessionStatus, { label: string; badgeClass: strin
     badgeClass: 'bg-red/15 text-red-300 border-red/30',
   },
 };
-
-const dateTimeFormatter = new Intl.DateTimeFormat('en-PH', {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-function formatSessionDateTime(iso: string): string {
-  const timestamp = Date.parse(iso);
-  if (!Number.isFinite(timestamp)) return 'Schedule pending';
-  return dateTimeFormatter.format(new Date(timestamp));
-}
 
 function sortUpcomingClasses(classes: ClassSession[]): ClassSession[] {
   return [...classes].sort((a, b) => {
@@ -135,10 +121,6 @@ function removeSelfEnrollment(
       enrollments: [],
     };
   });
-}
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 export function DashboardPage() {
@@ -574,143 +556,16 @@ function MemberPortalDashboard({ user }: MemberPortalProps) {
               </div>
             </div>
 
-            {/* Live Group Conditioning & Class Reservations */}
-            <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/10">
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono">
-                    Group Conditioning &amp; Class Reservations
-                  </h2>
-                  <p className="text-xs text-white/50">
-                    Reserve complimentary athlete slots for upcoming floor sessions
-                  </p>
-                </div>
-                <span className="text-xs font-mono text-emerald-400">
-                  {reservedClasses.length} Active{' '}
-                  {reservedClasses.length === 1 ? 'Booking' : 'Bookings'}
-                </span>
-              </div>
-
-              {classFeedback && (
-                <div
-                  role={classFeedback.type === 'error' ? 'alert' : 'status'}
-                  className={`px-4 py-2.5 rounded-xl border text-xs font-mono ${
-                    classFeedback.type === 'error'
-                      ? 'border-red/30 bg-red/10 text-red-300'
-                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  }`}
-                >
-                  {classFeedback.message}
-                </div>
-              )}
-
-              {isLoadingClasses ? (
-                <div className="space-y-3">
-                  {[1, 2].map((skeleton) => (
-                    <div
-                      key={skeleton}
-                      className="h-20 rounded-xl border border-white/8 bg-white/[0.02] animate-pulse"
-                    />
-                  ))}
-                </div>
-              ) : classesError ? (
-                <div className="p-5 rounded-xl border border-red/25 bg-red/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <p className="text-xs font-mono text-red-200">{classesError}</p>
-                  <button
-                    type="button"
-                    onClick={handleRetryClasses}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/15 bg-white/10 hover:bg-white/15 text-xs font-mono text-white cursor-pointer self-start sm:self-center"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Retry</span>
-                  </button>
-                </div>
-              ) : groupClasses.length === 0 ? (
-                <div className="p-6 rounded-xl border border-white/8 bg-white/[0.02] space-y-3">
-                  <p className="text-xs font-mono text-white/75">
-                    No upcoming class sessions are open for advance reservation right now.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    {OFFICIAL_GROUP_CLASSES.map((cls) => (
-                      <div
-                        key={cls.classType}
-                        className="p-3.5 rounded-lg border border-white/8 bg-black/30 space-y-1"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-white">{cls.name}</span>
-                          <span className="text-[11px] font-mono text-emerald-400">
-                            {cls.rateLabel}
-                          </span>
-                        </div>
-                        <p className="text-xs font-mono text-white/55">
-                          {cls.coachName} • {cls.scheduleTime}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {groupClasses.map((cls) => {
-                    const isReserved = cls.enrollments.length > 0;
-                    const spotsRemaining = Math.max(0, cls.max_capacity - cls.enrolled_count);
-                    const isFull = !isReserved && spotsRemaining === 0;
-                    const isUpdating = togglingClassId === cls.id;
-                    const typeLabel = CLASS_TYPE_LABELS[cls.class_type] || cls.class_type;
-
-                    return (
-                      <div
-                        key={cls.id}
-                        className="p-4 rounded-xl border border-white/8 bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-sm text-white">{cls.name}</span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/8 text-white/75">
-                              {cls.coach_name || typeLabel}
-                            </span>
-                            {cls.coach_name && (
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-white/10 text-white/55">
-                                {typeLabel}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-white/60 font-mono mt-1">
-                            {formatSessionDateTime(cls.scheduled_at)} • {cls.duration_minutes} mins
-                            {cls.location ? ` • ${cls.location}` : ''}
-                          </p>
-                          <p className="text-[11px] text-white/45 font-mono mt-0.5">
-                            Capacity: {cls.enrolled_count} / {cls.max_capacity} ({spotsRemaining}{' '}
-                            {spotsRemaining === 1 ? 'spot' : 'spots'} left)
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={isUpdating || isFull}
-                          onClick={() => handleToggleReservation(cls)}
-                          className={`px-3 py-2 rounded-xl text-xs font-mono transition-all shrink-0 ${
-                            isFull
-                              ? 'bg-white/5 text-white/40 border border-white/10 cursor-not-allowed'
-                              : isReserved
-                                ? 'bg-red/20 text-red border border-red/40 hover:bg-red/30 cursor-pointer disabled:opacity-60'
-                                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 cursor-pointer disabled:opacity-60'
-                          }`}
-                        >
-                          {isUpdating
-                            ? 'Updating...'
-                            : isFull
-                              ? 'Class Full'
-                              : isReserved
-                                ? 'Cancel Reservation'
-                                : 'Reserve Spot'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <MemberClassesSection
+              groupClasses={groupClasses}
+              reservedCount={reservedClasses.length}
+              classFeedback={classFeedback}
+              isLoadingClasses={isLoadingClasses}
+              classesError={classesError}
+              togglingClassId={togglingClassId}
+              onRetry={handleRetryClasses}
+              onToggleReservation={handleToggleReservation}
+            />
 
             {/* My 1-on-1 Coaching Bookings */}
             <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
@@ -836,208 +691,12 @@ function MemberPortalDashboard({ user }: MemberPortalProps) {
 
         {/* CONDITIONAL VIEW: REGISTERED / INACTIVE USER */}
         {viewMode === 'INACTIVE' && (
-          <div className="space-y-8 animate-fade-in">
-            {/* Membership Activation Steps & Status Notice */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                  <div>
-                    <h2 className="text-base font-bold uppercase tracking-tight text-white font-mono">
-                      Membership Activation Progress
-                    </h2>
-                    <p className="text-xs text-white/50">
-                      Follow these 3 steps to activate your pass and unlock bookings
-                    </p>
-                  </div>
-                  <span className="text-xs font-mono text-amber-400 font-bold">
-                    {activationStepsCompleted} of 3 Done
-                  </span>
-                </div>
-
-                <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
-                  <div
-                    className="h-full bg-amber-400 rounded-full transition-all"
-                    style={{ width: `${(activationStepsCompleted / 3) * 100}%` }}
-                  />
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  {/* Step 1: Account Created */}
-                  <div className="p-3.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.03] flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs font-mono text-white">DGym athlete account active</p>
-                        <p className="text-[11px] font-mono text-white/50 truncate">
-                          {profile?.email || user.email}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 shrink-0">
-                      Completed
-                    </span>
-                  </div>
-
-                  {/* Step 2: Select & Pay Membership Pass */}
-                  <div
-                    className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                      isPendingPayment
-                        ? 'border-amber-500/35 bg-amber-500/[0.05]'
-                        : 'border-white/10 bg-white/[0.02]'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-mono text-white">
-                        {isPendingPayment
-                          ? 'Verify pending checkout payment'
-                          : 'Choose a training pass (Day Pass, Monthly, or Long-Term)'}
-                      </p>
-                      <p className="text-[11px] font-mono text-white/50 mt-0.5">
-                        {isPendingPayment
-                          ? 'Your invoice is awaiting payment verification.'
-                          : 'Pick a plan below to proceed to secure Xendit checkout.'}
-                      </p>
-                    </div>
-                    <Link
-                      to={isPendingPayment ? '/payment' : '/payment?plan=monthly'}
-                      className="text-xs font-mono font-bold text-amber-400 hover:underline shrink-0"
-                    >
-                      {isPendingPayment ? 'Resume Payment →' : 'Go to Checkout →'}
-                    </Link>
-                  </div>
-
-                  {/* Step 3: Keycard Pairing & Floor Access */}
-                  <div className="p-3.5 rounded-xl border border-white/10 bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-mono text-white/80">
-                        Collect NFC smart keycard at reception &amp; book floor classes
-                      </p>
-                      <p className="text-[11px] font-mono text-white/45 mt-0.5">
-                        Available immediately once your pass status turns Active.
-                      </p>
-                    </div>
-                    <Link
-                      to="/trainers"
-                      className="text-xs font-mono text-white/60 hover:text-white transition-colors shrink-0"
-                    >
-                      Meet Coaches →
-                    </Link>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status Notice Card */}
-              <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6 space-y-4 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-amber-400 text-xs font-mono font-bold uppercase tracking-wider mb-2">
-                    <ShieldAlert className="w-4 h-4" />
-                    <span>{isPendingPayment ? 'PAYMENT PENDING' : 'NO ACTIVE PASS'}</span>
-                  </div>
-                  <h3 className="text-base font-bold text-white">
-                    {isPendingPayment ? 'Checkout Awaiting Verification' : 'Ready to Start Training?'}
-                  </h3>
-                  <p className="text-xs text-white/65 mt-1 leading-relaxed">
-                    {isPendingPayment
-                      ? 'Your checkout invoice is pending confirmation. Resume payment verification to activate your NFC smart keycard and gym access.'
-                      : 'Your athlete profile is registered at our Rosario facility. Choose a pass below to unlock NFC smart keycard access, lockers, and coaching sessions.'}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-black/40 border border-white/8 text-[11px] font-mono space-y-1">
-                  <p className="text-white/50 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-white/40" />
-                    Facility Hours:
-                  </p>
-                  <p className="text-white">{GYM_INFO.operatingHoursSummary}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Pricing Grid */}
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-bold uppercase tracking-tight text-white font-mono">
-                  Select a Training Pass
-                </h2>
-                <p className="text-xs text-white/50">
-                  Automatic membership activation upon payment
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {PUBLIC_PLANS.map((plan) => (
-                  <div
-                    key={plan.slug}
-                    className={`rounded-2xl border p-6 flex flex-col justify-between space-y-5 transition-all ${
-                      plan.highlight
-                        ? 'border-red/40 bg-gradient-to-b from-red/10 to-[#0d0d11] shadow-[0_0_20px_rgba(229,32,26,0.15)]'
-                        : 'border-white/10 bg-[#0d0d11] hover:border-white/20'
-                    }`}
-                  >
-                    <div>
-                      {plan.badge && (
-                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-widest bg-red/20 text-red border border-red/30 mb-3">
-                          {plan.badge}
-                        </span>
-                      )}
-                      <h3 className="text-lg font-bold text-white">{plan.name}</h3>
-                      <div className="mt-2 flex items-baseline gap-1.5">
-                        <span className="text-3xl font-black font-mono text-white">
-                          {plan.priceFormatted}
-                        </span>
-                        <span className="text-xs font-mono text-white/50">{plan.period}</span>
-                      </div>
-                      <p className="text-xs text-white/65 mt-2 leading-relaxed">
-                        {plan.description}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/payment?plan=${encodeURIComponent(plan.slug)}`)}
-                      className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                        plan.highlight
-                          ? 'bg-red hover:bg-red-hover text-white shadow-md'
-                          : 'bg-white/10 hover:bg-white/20 text-white'
-                      }`}
-                    >
-                      Avail This Plan
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Locked Group Conditioning Preview (Official Schedule) */}
-            <div className="rounded-2xl border border-white/10 bg-[#0d0d11] p-6 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-white/50" />
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-white/75 font-mono">
-                    Complimentary Evening Classes (Pass Required)
-                  </h3>
-                </div>
-                <span className="text-xs font-mono text-amber-400">Included with Membership</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">
-                {OFFICIAL_GROUP_CLASSES.map((cls) => (
-                  <div
-                    key={cls.classType}
-                    className="p-4 rounded-xl border border-white/8 bg-white/[0.02] space-y-1"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-sm text-white">{cls.name}</p>
-                      <span className="text-[11px] font-mono text-emerald-400">{cls.rateLabel}</span>
-                    </div>
-                    <p className="text-xs text-white/55 font-mono">
-                      {cls.coachName} • {cls.scheduleTime}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <InactiveMemberPortalView
+            activationStepsCompleted={activationStepsCompleted}
+            isPendingPayment={isPendingPayment}
+            email={profile?.email || user.email}
+            onSelectPlan={(slug) => navigate(`/payment?plan=${encodeURIComponent(slug)}`)}
+          />
         )}
       </main>
     </div>

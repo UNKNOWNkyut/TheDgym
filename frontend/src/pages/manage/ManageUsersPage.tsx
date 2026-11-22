@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
+import { useState, useEffect, useRef, useCallback, type FormEvent, type ReactNode } from 'react'
 import { Pencil } from 'lucide-react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -10,7 +10,7 @@ import { PaginationControls } from '@/components/ui/PaginationControls'
 import { useAuth } from '@/context/AuthContext'
 import { api } from '@/services/api'
 import { getInitials } from '@/utils/formatters'
-import type { User, UserRole } from '@/types/auth'
+import type { MembershipPlan, User, UserRole } from '@/types/auth'
 
 gsap.registerPlugin()
 
@@ -141,6 +141,90 @@ function validateCreateUserForm(form: CreateUserFormState): {
   }
 }
 
+function UserModalShell({
+  titleId,
+  eyebrow,
+  title,
+  subtitle,
+  closeLabel,
+  disabled,
+  error,
+  onClose,
+  children,
+}: {
+  titleId: string
+  eyebrow: string
+  title: string
+  subtitle?: string
+  closeLabel: string
+  disabled: boolean
+  error: string | null
+  onClose: () => void
+  children: ReactNode
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 sm:p-8 shadow-2xl relative">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+          <div className="min-w-0 pr-3">
+            <p className="text-xs uppercase tracking-widest text-white/45">{eyebrow}</p>
+            <h2
+              id={titleId}
+              className="font-display text-xl font-bold uppercase text-white mt-0.5"
+            >
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="text-xs text-white/45 font-mono truncate mt-0.5">{subtitle}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-label={closeLabel}
+            disabled={disabled}
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 p-3 rounded-lg border border-red/30 bg-red/10 text-red-400 text-xs"
+          >
+            {error}
+          </div>
+        )}
+
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function ManageUsersPage() {
   const { user: currentUser, refreshUser } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -169,8 +253,13 @@ export function ManageUsersPage() {
     is_active: true,
   })
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [deletingUser, setDeletingUser] = useState(false)
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState(false)
   const [editModalError, setEditModalError] = useState<string | null>(null)
   const [editFieldErrors, setEditFieldErrors] = useState<EditUserFieldErrors>({})
+  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [selectedPlanId, setSelectedPlanId] = useState('')
 
   useEffect(() => {
     mountedRef.current = true
@@ -242,9 +331,37 @@ export function ManageUsersPage() {
     setShowAddModal(true)
   }
 
+  const loadAssignablePlans = useCallback(async () => {
+    if (membershipPlans.length > 0 || plansLoading) return
+    setPlansLoading(true)
+    try {
+      const allPlans = await api.getPlans()
+      if (!mountedRef.current) return
+      const realPlans = allPlans.filter(
+        (plan) =>
+          plan.is_active &&
+          plan.slug.toLowerCase() !== 'day-pass' &&
+          plan.duration_days > 1,
+      )
+      setMembershipPlans(realPlans)
+    } catch (err) {
+      if (mountedRef.current) {
+        setEditModalError(
+          err instanceof Error ? err.message : 'Unable to load membership plans.',
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setPlansLoading(false)
+      }
+    }
+  }, [membershipPlans.length, plansLoading])
+
   const openEditModal = (target: User) => {
     setEditModalError(null)
     setEditFieldErrors({})
+    setSelectedPlanId('')
+    setConfirmDeleteUser(false)
     setEditForm({
       full_name: target.full_name,
       phone: target.phone ?? '',
@@ -252,14 +369,17 @@ export function ManageUsersPage() {
       is_active: target.is_active,
     })
     setEditingUser(target)
+    void loadAssignablePlans()
   }
 
   const closeEditModal = useCallback(() => {
-    if (editSubmitting) return
+    if (editSubmitting || deletingUser) return
     setEditingUser(null)
     setEditModalError(null)
     setEditFieldErrors({})
-  }, [editSubmitting])
+    setSelectedPlanId('')
+    setConfirmDeleteUser(false)
+  }, [editSubmitting, deletingUser])
 
   useEffect(() => {
     if (!showAddModal && !editingUser) return
@@ -332,6 +452,8 @@ export function ManageUsersPage() {
   }
 
   const isEditingSelf = Boolean(editingUser && currentUser?.id === editingUser.id)
+  const isPromotingToMember = Boolean(editingUser?.role === 'user' && editForm.role === 'member')
+  const isEditBusy = editSubmitting || deletingUser
 
   const handleEditFieldChange = <K extends keyof EditUserFormState>(
     field: K,
@@ -339,6 +461,9 @@ export function ManageUsersPage() {
   ) => {
     setEditForm((prev) => ({ ...prev, [field]: value }))
     setEditModalError(null)
+    if (field === 'role' && value !== 'member') {
+      setSelectedPlanId('')
+    }
     if (field === 'full_name' || field === 'phone') {
       const errorKey: keyof EditUserFieldErrors = field
       setEditFieldErrors((prev) => (prev[errorKey] ? { ...prev, [errorKey]: undefined } : prev))
@@ -355,6 +480,10 @@ export function ManageUsersPage() {
       setEditModalError('Please review the highlighted fields before saving.')
       return
     }
+    if (isPromotingToMember && !selectedPlanId) {
+      setEditModalError('Please select a membership plan to promote this user to Member.')
+      return
+    }
 
     setEditSubmitting(true)
     setEditModalError(null)
@@ -366,10 +495,13 @@ export function ManageUsersPage() {
         full_name: editForm.full_name.trim(),
         phone: editForm.phone.trim(),
         ...(isEditingSelf ? {} : { role: editForm.role, is_active: editForm.is_active }),
+        ...(isPromotingToMember ? { plan_id: Number(selectedPlanId) } : {}),
       })
 
       if (!mountedRef.current) return
       setEditingUser(null)
+      setSelectedPlanId('')
+      setConfirmDeleteUser(false)
       setSuccessMsg(`Account updated for ${updated.full_name}.`)
       await fetchUsers()
       if (currentUser?.id === updated.id) {
@@ -382,6 +514,32 @@ export function ManageUsersPage() {
     } finally {
       if (mountedRef.current) {
         setEditSubmitting(false)
+      }
+    }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!editingUser || isEditingSelf || deletingUser) return
+    setDeletingUser(true)
+    setEditModalError(null)
+    setSuccessMsg(null)
+
+    try {
+      const deletedName = editingUser.full_name
+      await api.deleteUser(editingUser.id)
+      if (!mountedRef.current) return
+      setEditingUser(null)
+      setConfirmDeleteUser(false)
+      setSelectedPlanId('')
+      setSuccessMsg(`Deleted account for ${deletedName}. Paid financial records were preserved.`)
+      await fetchUsers()
+    } catch (err) {
+      if (mountedRef.current) {
+        setEditModalError(err instanceof Error ? err.message : 'Unable to delete user account.')
+      }
+    } finally {
+      if (mountedRef.current) {
+        setDeletingUser(false)
       }
     }
   }
@@ -694,54 +852,16 @@ export function ManageUsersPage() {
 
       {/* Add User Modal */}
       {showAddModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-user-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeAddModal()
-          }}
+        <UserModalShell
+          titleId="create-user-modal-title"
+          eyebrow="New Account"
+          title="Create User"
+          closeLabel="Close create user dialog"
+          disabled={submitting}
+          error={modalError}
+          onClose={closeAddModal}
         >
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 sm:p-8 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-white/45">New Account</p>
-                <h2
-                  id="create-user-modal-title"
-                  className="font-display text-xl font-bold uppercase text-white mt-0.5"
-                >
-                  Create User
-                </h2>
-              </div>
-              <button
-                type="button"
-                aria-label="Close create user dialog"
-                disabled={submitting}
-                onClick={closeAddModal}
-                className="p-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {modalError && (
-              <div
-                role="alert"
-                className="mb-4 p-3 rounded-lg border border-red/30 bg-red/10 text-red-400 text-xs"
-              >
-                {modalError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateUser} noValidate className="space-y-4">
+          <form onSubmit={handleCreateUser} noValidate className="space-y-4">
               <Input
                 id="create-user-full-name"
                 label="Full Name *"
@@ -832,73 +952,25 @@ export function ManageUsersPage() {
                   Create User
                 </Button>
               </div>
-            </form>
-          </div>
-        </div>
+          </form>
+        </UserModalShell>
       )}
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-user-modal-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeEditModal()
-          }}
+        <UserModalShell
+          titleId="edit-user-modal-title"
+          eyebrow="Edit Account"
+          title="Edit User"
+          subtitle={editingUser.email}
+          closeLabel="Close edit user dialog"
+          disabled={isEditBusy}
+          error={editModalError}
+          onClose={closeEditModal}
         >
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 sm:p-8 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
-              <div className="min-w-0 pr-3">
-                <p className="text-xs uppercase tracking-widest text-white/45">Edit Account</p>
-                <h2
-                  id="edit-user-modal-title"
-                  className="font-display text-xl font-bold uppercase text-white mt-0.5"
-                >
-                  Edit User
-                </h2>
-                <p className="text-xs text-white/45 font-mono truncate mt-0.5">
-                  {editingUser.email}
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Close edit user dialog"
-                disabled={editSubmitting}
-                onClick={closeEditModal}
-                className="p-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {editModalError && (
-              <div
-                role="alert"
-                className="mb-4 p-3 rounded-lg border border-red/30 bg-red/10 text-red-400 text-xs"
-              >
-                {editModalError}
-              </div>
-            )}
-
-            <form onSubmit={handleUpdateUser} noValidate className="space-y-4">
+          <form onSubmit={handleUpdateUser} noValidate className="space-y-4">
               <Input
                 id="edit-user-full-name"
-                label="Full Name *"
                 name="full_name"
                 type="text"
                 maxLength={150}
@@ -931,7 +1003,7 @@ export function ManageUsersPage() {
                 </label>
                 <select
                   id="edit-user-role"
-                  disabled={isEditingSelf || editSubmitting}
+                  disabled={isEditingSelf || isEditBusy}
                   value={editForm.role}
                   onChange={(e) => handleEditFieldChange('role', e.target.value as UserRole)}
                   className="w-full px-3 py-2.5 bg-surface-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -951,6 +1023,38 @@ export function ManageUsersPage() {
                 </select>
               </div>
 
+              {isPromotingToMember && (
+                <div>
+                  <label
+                    htmlFor="edit-user-membership-plan"
+                    className="block text-xs uppercase tracking-widest text-white/55 mb-1.5 font-semibold"
+                  >
+                    Membership Plan *
+                  </label>
+                  <select
+                    id="edit-user-membership-plan"
+                    disabled={isEditBusy || plansLoading}
+                    value={selectedPlanId}
+                    onChange={(e) => {
+                      setSelectedPlanId(e.target.value)
+                      setEditModalError(null)
+                    }}
+                    className="w-full px-3 py-2.5 bg-surface-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors disabled:opacity-50"
+                  >
+                    <option value="" className="bg-surface-2">
+                      {plansLoading
+                        ? 'Loading membership plans...'
+                        : 'Select membership plan...'}
+                    </option>
+                    {membershipPlans.map((plan) => (
+                      <option key={plan.id} value={String(plan.id)} className="bg-surface-2">
+                        {plan.name} — ₱{Number(plan.price_php).toLocaleString()} ({plan.duration_days}d)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label
                   htmlFor="edit-user-status"
@@ -960,7 +1064,7 @@ export function ManageUsersPage() {
                 </label>
                 <select
                   id="edit-user-status"
-                  disabled={isEditingSelf || editSubmitting}
+                  disabled={isEditingSelf || isEditBusy}
                   value={editForm.is_active ? 'active' : 'disabled'}
                   onChange={(e) =>
                     handleEditFieldChange('is_active', e.target.value === 'active')
@@ -983,23 +1087,68 @@ export function ManageUsersPage() {
                 </p>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  type="button"
-                  disabled={editSubmitting}
-                  onClick={closeEditModal}
-                >
-                  Cancel
-                </Button>
-                <Button variant="primary" size="sm" type="submit" loading={editSubmitting}>
-                  Save Changes
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/10">
+                <div>
+                  {!isEditingSelf &&
+                    (!confirmDeleteUser ? (
+                      <button
+                        type="button"
+                        disabled={isEditBusy}
+                        onClick={() => {
+                          setConfirmDeleteUser(true)
+                          setEditModalError(null)
+                        }}
+                        className="text-xs font-medium text-red-400 hover:text-red-300 border border-red/30 hover:border-red/50 hover:bg-red/10 px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        Delete User
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          type="button"
+                          loading={deletingUser}
+                          disabled={editSubmitting}
+                          onClick={() => void handleDeleteUser()}
+                        >
+                          Confirm Delete
+                        </Button>
+                        <button
+                          type="button"
+                          disabled={isEditBusy}
+                          onClick={() => setConfirmDeleteUser(false)}
+                          className="text-xs text-white/55 hover:text-white px-2 py-1 cursor-pointer disabled:opacity-40"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-3 ml-auto">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    disabled={isEditBusy}
+                    onClick={closeEditModal}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    type="submit"
+                    loading={editSubmitting}
+                    disabled={deletingUser}
+                  >
+                    Save Changes
+                  </Button>
+                </div>
               </div>
             </form>
-          </div>
-        </div>
+        </UserModalShell>
       )}
     </>
   )

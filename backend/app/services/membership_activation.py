@@ -14,27 +14,69 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.core.security import as_utc as _as_utc
+from app.models.class_session import ClassEnrollment
+from app.models.keycard_tap_log import KeycardTapLog
 from app.models.member import Member, MemberStatus
+from app.models.member_keycard import MemberKeycard
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
+from app.models.member_progress import ClientProgressEntry, MemberTrainingPlan
 from app.models.membership_plan import MembershipPlan
 from app.models.notification import Notification
+from app.models.pairing_session import PairingSession
+from app.models.prediction import Prediction
+from app.models.processed_customer import ProcessedCustomer
+from app.models.pt_session import PTSession
+from app.models.raw_transaction import RawTransaction
+from app.models.retention_strategy import RetentionStrategy
 from app.models.user import User, UserRole
+from app.models.visit import Visit
 from app.services.access_service import live_feed_manager
 from app.services.pagination import read_page_cache
 
 
-def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    if dt is None:
-        return None
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
-
-
-def _is_day_pass_plan(plan: MembershipPlan) -> bool:
+def is_day_pass_plan(plan: MembershipPlan) -> bool:
     slug = (plan.slug or "").strip().lower()
     return slug == "day-pass" or plan.duration_days == 1
+
+
+_is_day_pass_plan = is_day_pass_plan
+
+_DAY_PASS_PLAN_COND = or_(
+    func.lower(MembershipPlan.slug) == "day-pass",
+    MembershipPlan.duration_days == 1,
+)
+
+
+def real_member_filter_clause():
+    """Exclude Day-Pass-only profiles and non-customer (Admin/Trainer/Staff) links from Member listings/counts."""
+    has_day_pass = Member.memberships.any(
+        and_(
+            MemberMembership.status != MembershipStatus.CANCELLED,
+            MemberMembership.plan.has(_DAY_PASS_PLAN_COND),
+        )
+    )
+    has_real_plan = Member.memberships.any(
+        and_(
+            MemberMembership.status != MembershipStatus.CANCELLED,
+            MemberMembership.plan.has(not_(_DAY_PASS_PLAN_COND)),
+        )
+    )
+    non_customer_emails = select(func.lower(User.email)).where(
+        User.role.in_([UserRole.ADMIN, UserRole.TRAINER, UserRole.STAFF])
+    )
+    is_non_customer_user = and_(
+        Member.email.is_not(None),
+        func.lower(Member.email).in_(non_customer_emails),
+    )
+    return and_(
+        or_(not_(has_day_pass), has_real_plan),
+        not_(is_non_customer_user),
+    )
 
 
 async def _find_user_by_email(db: AsyncSession, email: Optional[str]) -> Optional[User]:
@@ -95,7 +137,7 @@ async def notify_admins_new_paid_member(
     users who do not have a registered account.
     Returns True when at least one admin notification was queued.
     """
-    if _is_day_pass_plan(plan) and not await _member_has_user_account(db, member):
+    if is_day_pass_plan(plan) and not await _member_has_user_account(db, member):
         return False
 
     admins = await _get_active_admins(db)
@@ -175,17 +217,20 @@ async def activate_member_and_notify_on_payment(
     membership.paid_amount = resolved_paid
     if payment_method is not None:
         membership.payment_method = payment_method
+    membership.payer_name_snapshot = membership.payer_name_snapshot or member.full_name
+    membership.plan_name_snapshot = membership.plan_name_snapshot or plan.name
 
     member.status = MemberStatus.ACTIVE
     member.is_active = True
 
+    day_pass = is_day_pass_plan(plan)
     linked_user = await _find_user_by_email(db, member.email)
-    if linked_user is not None and linked_user.role == UserRole.USER:
+    if linked_user is not None and linked_user.role == UserRole.USER and not day_pass:
         linked_user.role = UserRole.MEMBER
 
     read_page_cache.invalidate_prefix("members:", "users:")
 
-    if not is_new_member_activation:
+    if not is_new_member_activation or day_pass:
         return False
 
     return await notify_admins_new_paid_member(
@@ -194,6 +239,72 @@ async def activate_member_and_notify_on_payment(
         plan=plan,
         paid_amount=resolved_paid,
     )
+
+
+async def detach_and_delete_member(db: AsyncSession, member: Member) -> None:
+    """
+    Delete a Member profile cleanly while decoupling paid MemberMembership ledger rows
+    (`member_id = NULL` + payer/plan snapshots) so Finance revenue totals stay intact.
+    """
+    member_id = member.id
+    member_card_ids = select(MemberKeycard.id).where(MemberKeycard.member_id == member_id)
+    member_visit_ids = select(Visit.id).where(Visit.member_id == member_id)
+
+    await db.execute(
+        update(KeycardTapLog)
+        .where(
+            or_(
+                KeycardTapLog.member_id == member_id,
+                KeycardTapLog.keycard_id.in_(member_card_ids),
+                KeycardTapLog.visit_id.in_(member_visit_ids),
+            )
+        )
+        .values(member_id=None, keycard_id=None, visit_id=None)
+    )
+    await db.execute(
+        update(Visit).where(Visit.keycard_id.in_(member_card_ids)).values(keycard_id=None)
+    )
+
+    ms_rows = (
+        await db.execute(
+            select(MemberMembership)
+            .where(MemberMembership.member_id == member_id)
+            .options(selectinload(MemberMembership.plan))
+        )
+    ).scalars().all()
+    for ms in ms_rows:
+        is_paid = (
+            ms.status != MembershipStatus.CANCELLED
+            and ms.paid_amount is not None
+            and Decimal(str(ms.paid_amount)) > Decimal("0.00")
+        )
+        if is_paid:
+            ms.payer_name_snapshot = ms.payer_name_snapshot or member.full_name
+            ms.plan_name_snapshot = ms.plan_name_snapshot or (ms.plan.name if ms.plan else None)
+            ms.member_id = None
+            if ms.status == MembershipStatus.ACTIVE:
+                ms.status = MembershipStatus.EXPIRED
+        else:
+            await db.delete(ms)
+
+    await db.flush()
+
+    for model, col in (
+        (MemberKeycard, MemberKeycard.member_id),
+        (PairingSession, PairingSession.member_id),
+        (MemberTrainingPlan, MemberTrainingPlan.member_id),
+        (ClientProgressEntry, ClientProgressEntry.member_id),
+        (Notification, Notification.member_id),
+        (RetentionStrategy, RetentionStrategy.member_id),
+        (Prediction, Prediction.customer_id),
+        (ProcessedCustomer, ProcessedCustomer.customer_id),
+        (RawTransaction, RawTransaction.customer_id),
+        (PTSession, PTSession.member_id),
+        (ClassEnrollment, ClassEnrollment.member_id),
+        (Visit, Visit.member_id),
+        (Member, Member.id),
+    ):
+        await db.execute(delete(model).where(col == member_id))
 
 
 async def expire_elapsed_memberships(
@@ -219,7 +330,8 @@ async def expire_elapsed_memberships(
         end_utc = _as_utc(ms.end_date)
         if end_utc is not None and end_utc <= ref_now:
             ms.status = MembershipStatus.EXPIRED
-            expired_member_ids.add(ms.member_id)
+            if ms.member_id is not None:
+                expired_member_ids.add(ms.member_id)
             expired_count += 1
 
     if not expired_member_ids:

@@ -6,6 +6,7 @@ from typing import Dict, Optional, Sequence
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import ensure_utc
 from app.models.class_session import ClassEnrollment
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus, PaymentMethod
@@ -21,7 +22,7 @@ from app.services.churn_ml import predict_churn_batch, train_baseline_model
 def _as_utc(dt: datetime | str) -> datetime:
     if isinstance(dt, str):
         dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return ensure_utc(dt)
 
 
 async def _compute_features_for_members(
@@ -76,9 +77,9 @@ async def _compute_features_for_members(
 
     # 5. Total revenue lifetime
     stmt_rev = _scope(
-        select(MemberMembership.member_id, func.coalesce(func.sum(MemberMembership.paid_amount), 0)).group_by(
-            MemberMembership.member_id
-        ),
+        select(MemberMembership.member_id, func.coalesce(func.sum(MemberMembership.paid_amount), 0))
+        .where(MemberMembership.member_id.is_not(None))
+        .group_by(MemberMembership.member_id),
         MemberMembership.member_id,
     )
     rev_map = dict((await session.execute(stmt_rev)).all())

@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import require_roles
 from app.core.rate_limit import rate_limit_ai
+from app.core.security import ensure_utc as _as_utc
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
@@ -35,11 +36,6 @@ from app.services.churn_pipeline import (
 router = APIRouter(tags=["Analytics & Churn"])
 
 _MANILA_TZ = timezone(timedelta(hours=8))
-
-
-def _as_utc(dt: datetime) -> datetime:
-    """Normalize naive datetimes from SQLite to UTC-aware datetimes."""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _resolve_active_plan_name(memberships: Optional[List[MemberMembership]]) -> Optional[str]:

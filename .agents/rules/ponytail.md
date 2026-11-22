@@ -32,3 +32,9 @@ Take the first option that fully works:
 - A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.
 
 Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
+
+## Pre-Execution Discipline
+1. **State Assumptions First:** Before writing code, list your assumptions and stop to ask if anything is unclear or ambiguous.
+2. **Minimal Implementation (YAGNI):** Write the minimum code required—nothing unasked for. If 200 lines can be written cleanly in 50, rewrite it.
+3. **Surgical Diffs Only:** Touch only the exact lines required for the task. Never delete or refactor unrelated code or comments.
+4. **Test-Driven Fixes:** When fixing a bug, write a failing test that reproduces the issue first, then implement the minimal fix until it passes.

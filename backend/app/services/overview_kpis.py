@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.expense import Expense
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus
+from app.services.membership_activation import real_member_filter_clause
 
 MANILA_TZ = timezone(timedelta(hours=8))
 
@@ -122,7 +123,7 @@ async def compute_overview_kpis(
                     ),
                     0,
                 ),
-            )
+            ).where(real_member_filter_clause())
         )
     ).one()
 
@@ -146,6 +147,7 @@ async def compute_overview_kpis(
             .label("rn"),
         )
         .where(
+            MemberMembership.member_id.is_not(None),
             MemberMembership.status.in_([MembershipStatus.ACTIVE, MembershipStatus.EXPIRED]),
             MemberMembership.paid_amount.is_not(None),
             MemberMembership.paid_amount > 0,
@@ -174,6 +176,7 @@ async def compute_overview_kpis(
 
     # 3. KPI #5 (Upcoming Expirations in next 7 days) + optional KPIs #6 (Payments) & #7 (Monthly Income)
     expiring_cond = and_(
+        MemberMembership.member_id.is_not(None),
         MemberMembership.status == MembershipStatus.ACTIVE,
         MemberMembership.end_date >= now_utc,
         MemberMembership.end_date <= seven_days_utc,

@@ -309,7 +309,7 @@ async def update_membership(
     admin_notified = False
     member = None
     if payment_recorded:
-        member = await db.get(Member, ms.member_id)
+        member = await db.get(Member, ms.member_id) if ms.member_id is not None else None
         plan = await db.get(MembershipPlan, ms.plan_id)
         if member and plan:
             had_active_before = await has_other_active_membership(

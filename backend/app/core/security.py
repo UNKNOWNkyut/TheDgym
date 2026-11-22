@@ -24,8 +24,17 @@ _REVOKED_JTIS: OrderedDict[str, float] = OrderedDict()
 _USER_MIN_IAT: OrderedDict[str, float] = OrderedDict()
 
 
-def _as_utc(dt: datetime) -> datetime:
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+def ensure_utc(dt: datetime) -> datetime:
+    """Normalize naive datetimes to UTC and convert aware datetimes to UTC."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+def as_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize optional datetime to UTC, preserving None."""
+    return None if dt is None else ensure_utc(dt)
+
+
+_as_utc = ensure_utc
 
 
 def hash_password(password: str) -> str:

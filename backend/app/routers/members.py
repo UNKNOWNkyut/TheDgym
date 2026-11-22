@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import desc, select, func, or_, delete, update
+from sqlalchemy import desc, select, func, or_, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,24 +16,19 @@ from app.core.rate_limit import rate_limit_sensitive
 from app.core.security import persist_user_session_revocation, revoke_user_sessions
 from app.database import get_db
 from app.models.member import Member, MemberStatus
-from app.models.member_keycard import MemberKeycard
-from app.models.keycard_tap_log import KeycardTapLog
 from app.models.member_membership import MemberMembership, MembershipStatus
-from app.models.visit import Visit
-from app.models.pt_session import PTSession
-from app.models.class_session import ClassEnrollment
 from app.models.notification import Notification
-from app.models.retention_strategy import RetentionStrategy
-from app.models.prediction import Prediction
-from app.models.processed_customer import ProcessedCustomer
-from app.models.raw_transaction import RawTransaction
 from app.models.user import User, UserRole
 from app.models.user_biometric import UserBiometric
 from app.models.user_profile import UserProfile
 from app.schemas.gym import MemberCreate, MemberResponse, MemberUpdate
 from app.init_members import generate_member_code
 from app.services.audit import record_audit_log
-from app.services.membership_activation import expire_elapsed_memberships
+from app.services.membership_activation import (
+    detach_and_delete_member,
+    expire_elapsed_memberships,
+    real_member_filter_clause,
+)
 from app.services.overview_kpis import compute_overview_kpis
 from app.services.pagination import (
     PaginatedPage,
@@ -186,6 +181,7 @@ async def list_members(
     stmt = (
         select(Member)
         .options(selectinload(Member.memberships).selectinload(MemberMembership.plan))
+        .where(real_member_filter_clause())
     )
 
     if norm_search:
@@ -476,38 +472,7 @@ async def delete_member_permanent(
     member_name = member.full_name
     linked_user = await _find_linked_user(db, member.email)
 
-    # Detach immutable tap telemetry FKs cleanly so strict FK enforcement never fails
-    member_card_ids = select(MemberKeycard.id).where(MemberKeycard.member_id == member_id)
-    member_visit_ids = select(Visit.id).where(Visit.member_id == member_id)
-    await db.execute(
-        update(KeycardTapLog)
-        .where(
-            or_(
-                KeycardTapLog.member_id == member_id,
-                KeycardTapLog.keycard_id.in_(member_card_ids),
-                KeycardTapLog.visit_id.in_(member_visit_ids),
-            )
-        )
-        .values(member_id=None, keycard_id=None, visit_id=None)
-    )
-    await db.execute(
-        update(Visit)
-        .where(Visit.keycard_id.in_(member_card_ids))
-        .values(keycard_id=None)
-    )
-    await db.execute(delete(MemberKeycard).where(MemberKeycard.member_id == member_id))
-
-    # Delete referencing child records across dependent tables to ensure clean CASCADE deletion
-    await db.execute(delete(Notification).where(Notification.member_id == member_id))
-    await db.execute(delete(RetentionStrategy).where(RetentionStrategy.member_id == member_id))
-    await db.execute(delete(Prediction).where(Prediction.customer_id == member_id))
-    await db.execute(delete(ProcessedCustomer).where(ProcessedCustomer.customer_id == member_id))
-    await db.execute(delete(RawTransaction).where(RawTransaction.customer_id == member_id))
-    await db.execute(delete(PTSession).where(PTSession.member_id == member_id))
-    await db.execute(delete(ClassEnrollment).where(ClassEnrollment.member_id == member_id))
-    await db.execute(delete(Visit).where(Visit.member_id == member_id))
-    await db.execute(delete(MemberMembership).where(MemberMembership.member_id == member_id))
-    await db.execute(delete(Member).where(Member.id == member_id))
+    await detach_and_delete_member(db, member)
 
     deleted_linked_user = False
     if linked_user is not None:
