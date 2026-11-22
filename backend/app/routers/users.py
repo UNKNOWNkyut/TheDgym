@@ -284,11 +284,29 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    if current_user.id == user_id:
+        if user_update.is_active is False:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot disable your own active admin account.",
+            )
+        if user_update.role is not None and user_update.role != user.role:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change your own admin role.",
+            )
+
     should_revoke_sessions = False
     if user_update.full_name is not None:
-        user.full_name = user_update.full_name.strip()
+        trimmed_name = user_update.full_name.strip()
+        if len(trimmed_name) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Full name must be at least 2 characters.",
+            )
+        user.full_name = trimmed_name
     if user_update.phone is not None:
-        user.phone = user_update.phone.strip() if user_update.phone else None
+        user.phone = user_update.phone.strip() or None
     if user_update.is_active is not None:
         if user.is_active and not user_update.is_active:
             should_revoke_sessions = True

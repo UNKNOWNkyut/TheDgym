@@ -832,6 +832,7 @@ async def scan_id_ocr_cloud(payload: OcrScanRequest):
             provider="tesseract_local",
             raw_text="",
             used_external_api=False,
+            detail="OCR_SPACE_API_KEY is not configured on the server.",
         )
 
     result = await extract_id_text_ocr_space(
@@ -839,10 +840,12 @@ async def scan_id_ocr_cloud(payload: OcrScanRequest):
         settings.OCR_SPACE_API_KEY,
     )
     if not result.ok:
+        logger.warning("Cloud OCR failed: %s", result.error)
         return OcrScanResponse(
             provider="tesseract_local",
             raw_text="",
             used_external_api=False,
+            detail=result.error or "OCR.space failed to process the ID image.",
         )
 
     return OcrScanResponse(

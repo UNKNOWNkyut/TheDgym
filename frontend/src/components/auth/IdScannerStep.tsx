@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { QuarterRing } from '@/components/ui/quarter-ring'
 import { api } from '@/services/api'
-import type { SupportedIdType } from '@/types/auth'
+import type { OcrScanResponse, SupportedIdType } from '@/types/auth'
 import { describeCameraError, extractIdFaceDescriptor, toCompressedJpegDataUrl } from '@/utils/faceBiometrics'
 import {
   ID_TYPE_OPTIONS,
@@ -65,6 +65,24 @@ function stopMediaStream(stream: MediaStream | null) {
   for (const track of stream.getTracks()) {
     track.stop()
   }
+}
+
+function extractScanErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) {
+    return err.message.trim()
+  }
+  if (typeof err === 'string' && err.trim()) {
+    return err.trim()
+  }
+  if (err && typeof err === 'object') {
+    for (const key of ['detail', 'message', 'error'] as const) {
+      const value = (err as Record<string, unknown>)[key]
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim()
+      }
+    }
+  }
+  return `Unexpected ID scan error: ${String(err)}`
 }
 
 export function IdScannerStep({
@@ -164,7 +182,7 @@ export function IdScannerStep({
     setNameMismatchWarning(null)
     setIdDescriptor(null)
 
-    const compressedJpeg = toCompressedJpegDataUrl(canvas, 1024, 0.85)
+    const compressedJpeg = toCompressedJpegDataUrl(canvas, 1400, 0.82, 950_000)
     setPreviewDataUrl(compressedJpeg)
     setIdImageBase64(compressedJpeg)
 
@@ -180,16 +198,38 @@ export function IdScannerStep({
 
       setVerifyStage('ocr')
       const facePromise = extractIdFaceDescriptor(canvas)
-      const cloudOcr = await api.ocrScanId(compressedJpeg).catch(() => ({
-        provider: 'tesseract_local',
-        raw_text: '',
-        used_external_api: false,
-      }))
+      let cloudOcr: OcrScanResponse
+      try {
+        cloudOcr = await api.ocrScanId(compressedJpeg)
+      } catch (ocrErr) {
+        console.error('[IdScannerStep] OCR API request failed:', ocrErr)
+        await facePromise.catch(() => null)
+        setScanError(extractScanErrorMessage(ocrErr))
+        return
+      }
 
-      const ocrResult =
-        cloudOcr.used_external_api && cloudOcr.raw_text
-          ? parsePhilippineIdText(cloudOcr.raw_text, 88, idType)
-          : await scanPhilippineId(canvas, idType)
+      let ocrResult
+      if (cloudOcr.used_external_api && cloudOcr.raw_text) {
+        ocrResult = parsePhilippineIdText(cloudOcr.raw_text, 88, idType)
+      } else {
+        console.error(
+          '[IdScannerStep] Cloud OCR fallback:',
+          cloudOcr.detail || 'No text returned from cloud OCR',
+        )
+        try {
+          ocrResult = await scanPhilippineId(canvas, idType)
+        } catch (localErr) {
+          console.error('[IdScannerStep] Local OCR fallback failed:', localErr)
+          await facePromise.catch(() => null)
+          const localMessage = extractScanErrorMessage(localErr)
+          setScanError(
+            cloudOcr.detail
+              ? `Cloud OCR failed (${cloudOcr.detail}); local OCR fallback also failed: ${localMessage}`
+              : localMessage,
+          )
+          return
+        }
+      }
 
       const typeValidation = validateSelectedIdType(
         ocrResult.rawText,
@@ -198,8 +238,10 @@ export function IdScannerStep({
       )
       if (!typeValidation.matched) {
         await facePromise.catch(() => null)
+        const baseReason =
+          typeValidation.reason || 'Scanned document does not match the selected ID Type.'
         setScanError(
-          typeValidation.reason || 'Scanned document does not match the selected ID Type.',
+          cloudOcr.detail ? `Cloud OCR error (${cloudOcr.detail}). ${baseReason}` : baseReason,
         )
         return
       }
@@ -236,11 +278,8 @@ export function IdScannerStep({
       )
       setVerifyStage('done')
     } catch (err) {
-      setScanError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to scan valid ID. Please retake with clearer lighting.',
-      )
+      console.error('[IdScannerStep] ID scan error:', err)
+      setScanError(extractScanErrorMessage(err))
     } finally {
       setScanning(false)
     }
@@ -270,12 +309,14 @@ export function IdScannerStep({
     const img = new Image()
     img.onload = async () => {
       try {
+        const longestSide = Math.max(img.naturalWidth, img.naturalHeight, 1)
+        const scale = Math.min(1, 1400 / longestSide)
         const canvas = document.createElement('canvas')
-        canvas.width = img.naturalWidth
-        canvas.height = img.naturalHeight
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
         const ctx = canvas.getContext('2d')
         if (!ctx) return
-        ctx.drawImage(img, 0, 0)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
         await processIdCanvas(canvas)
       } finally {
         URL.revokeObjectURL(objectUrl)

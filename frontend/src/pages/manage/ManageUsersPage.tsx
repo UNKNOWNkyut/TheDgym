@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
+import { Pencil } from 'lucide-react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { SEO } from '@/components/ui/SEO'
@@ -27,6 +28,18 @@ interface CreateUserFieldErrors {
   full_name?: string
   email?: string
   password?: string
+  phone?: string
+}
+
+interface EditUserFormState {
+  full_name: string
+  phone: string
+  role: UserRole
+  is_active: boolean
+}
+
+interface EditUserFieldErrors {
+  full_name?: string
   phone?: string
 }
 
@@ -88,20 +101,29 @@ function filterUsers(
   })
 }
 
-function validateCreateUserForm(form: CreateUserFormState): {
-  valid: boolean
-  errors: CreateUserFieldErrors
-} {
-  const errors: CreateUserFieldErrors = {}
-  const trimmedName = form.full_name.trim()
-  const trimmedEmail = form.email.trim()
-  const trimmedPhone = form.phone.trim()
+function validateNameAndPhone(fullName: string, phone: string): EditUserFieldErrors {
+  const errors: EditUserFieldErrors = {}
+  const trimmedName = fullName.trim()
 
   if (trimmedName.length < 2) {
     errors.full_name = 'Full name must be at least 2 characters.'
   } else if (trimmedName.length > 150) {
     errors.full_name = 'Full name must be 150 characters or fewer.'
   }
+
+  if (phone.trim().length > 32) {
+    errors.phone = 'Phone number must be 32 characters or fewer.'
+  }
+
+  return errors
+}
+
+function validateCreateUserForm(form: CreateUserFormState): {
+  valid: boolean
+  errors: CreateUserFieldErrors
+} {
+  const errors: CreateUserFieldErrors = validateNameAndPhone(form.full_name, form.phone)
+  const trimmedEmail = form.email.trim()
 
   if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
     errors.email = 'Please enter a valid email address.'
@@ -113,10 +135,6 @@ function validateCreateUserForm(form: CreateUserFormState): {
     errors.password = 'Password must be 128 characters or fewer.'
   }
 
-  if (trimmedPhone.length > 32) {
-    errors.phone = 'Phone number must be 32 characters or fewer.'
-  }
-
   return {
     valid: Object.keys(errors).length === 0,
     errors,
@@ -124,7 +142,7 @@ function validateCreateUserForm(form: CreateUserFormState): {
 }
 
 export function ManageUsersPage() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, refreshUser } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
 
@@ -143,6 +161,16 @@ export function ManageUsersPage() {
   const [modalError, setModalError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<CreateUserFieldErrors>({})
   const [form, setForm] = useState<CreateUserFormState>(INITIAL_CREATE_FORM)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [editForm, setEditForm] = useState<EditUserFormState>({
+    full_name: '',
+    phone: '',
+    role: 'member',
+    is_active: true,
+  })
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editModalError, setEditModalError] = useState<string | null>(null)
+  const [editFieldErrors, setEditFieldErrors] = useState<EditUserFieldErrors>({})
 
   useEffect(() => {
     mountedRef.current = true
@@ -214,18 +242,37 @@ export function ManageUsersPage() {
     setShowAddModal(true)
   }
 
+  const openEditModal = (target: User) => {
+    setEditModalError(null)
+    setEditFieldErrors({})
+    setEditForm({
+      full_name: target.full_name,
+      phone: target.phone ?? '',
+      role: target.role,
+      is_active: target.is_active,
+    })
+    setEditingUser(target)
+  }
+
+  const closeEditModal = useCallback(() => {
+    if (editSubmitting) return
+    setEditingUser(null)
+    setEditModalError(null)
+    setEditFieldErrors({})
+  }, [editSubmitting])
+
   useEffect(() => {
-    if (!showAddModal) return
+    if (!showAddModal && !editingUser) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeAddModal()
-      }
+      if (event.key !== 'Escape') return
+      if (editingUser) closeEditModal()
+      else if (showAddModal) closeAddModal()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showAddModal, closeAddModal])
+  }, [showAddModal, closeAddModal, editingUser, closeEditModal])
 
   const filteredUsers = filterUsers(users, search, roleFilter, statusFilter)
   const activeCount = users.filter((u) => u.is_active).length
@@ -280,6 +327,61 @@ export function ManageUsersPage() {
     } finally {
       if (mountedRef.current) {
         setSubmitting(false)
+      }
+    }
+  }
+
+  const isEditingSelf = Boolean(editingUser && currentUser?.id === editingUser.id)
+
+  const handleEditFieldChange = <K extends keyof EditUserFormState>(
+    field: K,
+    value: EditUserFormState[K],
+  ) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }))
+    setEditModalError(null)
+    if (field === 'full_name' || field === 'phone') {
+      const errorKey: keyof EditUserFieldErrors = field
+      setEditFieldErrors((prev) => (prev[errorKey] ? { ...prev, [errorKey]: undefined } : prev))
+    }
+  }
+
+  const handleUpdateUser = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!editingUser) return
+
+    const errors = validateNameAndPhone(editForm.full_name, editForm.phone)
+    if (Object.keys(errors).length > 0) {
+      setEditFieldErrors(errors)
+      setEditModalError('Please review the highlighted fields before saving.')
+      return
+    }
+
+    setEditSubmitting(true)
+    setEditModalError(null)
+    setEditFieldErrors({})
+    setSuccessMsg(null)
+
+    try {
+      const updated = await api.updateUser(editingUser.id, {
+        full_name: editForm.full_name.trim(),
+        phone: editForm.phone.trim(),
+        ...(isEditingSelf ? {} : { role: editForm.role, is_active: editForm.is_active }),
+      })
+
+      if (!mountedRef.current) return
+      setEditingUser(null)
+      setSuccessMsg(`Account updated for ${updated.full_name}.`)
+      await fetchUsers()
+      if (currentUser?.id === updated.id) {
+        await refreshUser()
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        setEditModalError(err instanceof Error ? err.message : 'Unable to update user account.')
+      }
+    } finally {
+      if (mountedRef.current) {
+        setEditSubmitting(false)
       }
     }
   }
@@ -506,7 +608,7 @@ export function ManageUsersPage() {
                   filteredUsers.map((u) => {
                     const isSelf = currentUser?.id === u.id
                     return (
-                      <tr key={u.id} className="hover:bg-white/5 transition-colors">
+                      <tr key={u.id} className="group hover:bg-white/[0.03] transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-red/10 border border-red/20 flex items-center justify-center text-red text-xs font-bold shrink-0">
@@ -553,7 +655,20 @@ export function ManageUsersPage() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-white/45 text-xs font-mono">
-                          {formatUserDate(u.created_at)}
+                          <div className="flex items-center justify-between gap-3">
+                            <span>{formatUserDate(u.created_at)}</span>
+                            {currentUser?.role === 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(u)}
+                                title="Edit user"
+                                aria-label="Edit user"
+                                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150 text-zinc-400 hover:text-white hover:bg-zinc-800 p-1.5 rounded-md cursor-pointer"
+                              >
+                                <Pencil className="w-4 h-4" aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -715,6 +830,171 @@ export function ManageUsersPage() {
                 </Button>
                 <Button variant="primary" size="sm" type="submit" loading={submitting}>
                   Create User
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-user-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeEditModal()
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-6 sm:p-8 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
+              <div className="min-w-0 pr-3">
+                <p className="text-xs uppercase tracking-widest text-white/45">Edit Account</p>
+                <h2
+                  id="edit-user-modal-title"
+                  className="font-display text-xl font-bold uppercase text-white mt-0.5"
+                >
+                  Edit User
+                </h2>
+                <p className="text-xs text-white/45 font-mono truncate mt-0.5">
+                  {editingUser.email}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close edit user dialog"
+                disabled={editSubmitting}
+                onClick={closeEditModal}
+                className="p-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {editModalError && (
+              <div
+                role="alert"
+                className="mb-4 p-3 rounded-lg border border-red/30 bg-red/10 text-red-400 text-xs"
+              >
+                {editModalError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateUser} noValidate className="space-y-4">
+              <Input
+                id="edit-user-full-name"
+                label="Full Name *"
+                name="full_name"
+                type="text"
+                maxLength={150}
+                autoComplete="off"
+                placeholder="e.g. Carlos Mendoza"
+                error={editFieldErrors.full_name}
+                value={editForm.full_name}
+                onChange={(e) => handleEditFieldChange('full_name', e.target.value)}
+              />
+
+              <Input
+                id="edit-user-phone"
+                label="Contact / Phone"
+                name="phone"
+                type="tel"
+                maxLength={32}
+                autoComplete="off"
+                placeholder="09XX XXX XXXX"
+                error={editFieldErrors.phone}
+                value={editForm.phone}
+                onChange={(e) => handleEditFieldChange('phone', e.target.value)}
+              />
+
+              <div>
+                <label
+                  htmlFor="edit-user-role"
+                  className="block text-xs uppercase tracking-widest text-white/55 mb-1.5 font-semibold"
+                >
+                  Role Permission *
+                </label>
+                <select
+                  id="edit-user-role"
+                  disabled={isEditingSelf || editSubmitting}
+                  value={editForm.role}
+                  onChange={(e) => handleEditFieldChange('role', e.target.value as UserRole)}
+                  className="w-full px-3 py-2.5 bg-surface-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="admin" className="bg-surface-2">
+                    Admin (Full Control)
+                  </option>
+                  <option value="trainer" className="bg-surface-2">
+                    Trainer (Coaching)
+                  </option>
+                  <option value="member" className="bg-surface-2">
+                    Member (Client)
+                  </option>
+                  <option value="user" className="bg-surface-2">
+                    User (Registered)
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="edit-user-status"
+                  className="block text-xs uppercase tracking-widest text-white/55 mb-1.5 font-semibold"
+                >
+                  Account Status *
+                </label>
+                <select
+                  id="edit-user-status"
+                  disabled={isEditingSelf || editSubmitting}
+                  value={editForm.is_active ? 'active' : 'disabled'}
+                  onChange={(e) =>
+                    handleEditFieldChange('is_active', e.target.value === 'active')
+                  }
+                  className="w-full px-3 py-2.5 bg-surface-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-red/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="active" className="bg-surface-2">
+                    Active
+                  </option>
+                  <option value="disabled" className="bg-surface-2">
+                    Disabled
+                  </option>
+                </select>
+              </div>
+
+              {isEditingSelf && (
+                <p className="text-xs text-white/50">
+                  Your own admin role and active status cannot be changed here to prevent
+                  self-lockout.
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  disabled={editSubmitting}
+                  onClick={closeEditModal}
+                >
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" type="submit" loading={editSubmitting}>
+                  Save Changes
                 </Button>
               </div>
             </form>

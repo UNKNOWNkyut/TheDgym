@@ -143,6 +143,7 @@ class OcrScanResponse(BaseModel):
     provider: str
     raw_text: str = ""
     used_external_api: bool = False
+    detail: Optional[str] = None
 
 
 class BiometricProvidersResponse(BaseModel):

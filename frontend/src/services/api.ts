@@ -58,6 +58,7 @@ import type {
   TrainingPlanRecord,
   TrainingPlanUpsertPayload,
   User,
+  UserRole,
   Visit,
   VisitCreate,
 } from '@/types/auth'
@@ -267,6 +268,7 @@ export const api = {
     return request<OcrScanResponse>('/api/auth/biometrics/ocr', {
       method: 'POST',
       body: JSON.stringify({ image_base64: imageBase64 }),
+      timeoutMs: 25_000,
     })
   },
 
@@ -361,6 +363,21 @@ export const api = {
   }): Promise<User> {
     return request<User>('/api/users', {
       method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async updateUser(
+    userId: number,
+    data: {
+      full_name?: string
+      phone?: string
+      role?: UserRole
+      is_active?: boolean
+    },
+  ): Promise<User> {
+    return request<User>(`/api/users/${userId}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     })
   },

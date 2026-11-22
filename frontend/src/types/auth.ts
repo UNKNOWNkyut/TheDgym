@@ -107,6 +107,7 @@ export interface OcrScanResponse {
   provider: string
   raw_text: string
   used_external_api: boolean
+  detail?: string | null
 }
 
 export interface BiometricProvidersStatus {

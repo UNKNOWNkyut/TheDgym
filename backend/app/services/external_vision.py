@@ -114,8 +114,9 @@ async def extract_id_text_ocr_space(
             client=client,
         )
     except Exception as exc:
-        logger.warning("OCR.space request failed: %s", exc)
-        return ExternalOcrResult(ok=False, provider="ocr_space", error=str(exc))
+        err_text = str(exc).strip() or exc.__class__.__name__
+        logger.warning("OCR.space request failed: %s", err_text)
+        return ExternalOcrResult(ok=False, provider="ocr_space", error=err_text)
 
     if payload.get("IsErroredOnProcessing"):
         err_msg = payload.get("ErrorMessage") or payload.get("ErrorDetails") or "OCR.space processing error"

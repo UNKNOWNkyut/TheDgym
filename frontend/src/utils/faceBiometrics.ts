@@ -17,26 +17,60 @@ export interface ExtractedFaceResult {
   snapshotDataUrl?: string
 }
 
+function encodeCanvasWithSizeCap(
+  sourceCanvas: HTMLCanvasElement,
+  quality: number,
+  maxDataUrlChars?: number,
+): string {
+  let currentQuality = quality
+  let dataUrl = sourceCanvas.toDataURL('image/jpeg', currentQuality)
+
+  if (!maxDataUrlChars || dataUrl.length <= maxDataUrlChars) {
+    return dataUrl
+  }
+
+  while (dataUrl.length > maxDataUrlChars && currentQuality > 0.48) {
+    currentQuality = Math.max(0.48, Number((currentQuality - 0.12).toFixed(2)))
+    dataUrl = sourceCanvas.toDataURL('image/jpeg', currentQuality)
+  }
+
+  if (dataUrl.length > maxDataUrlChars) {
+    const shrunk = document.createElement('canvas')
+    shrunk.width = Math.max(1, Math.round(sourceCanvas.width * 0.75))
+    shrunk.height = Math.max(1, Math.round(sourceCanvas.height * 0.75))
+    const ctx = shrunk.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(sourceCanvas, 0, 0, shrunk.width, shrunk.height)
+      dataUrl = shrunk.toDataURL('image/jpeg', 0.72)
+    }
+  }
+
+  return dataUrl
+}
+
 /** Downscale and compress a canvas snapshot into a compact JPEG data URI (<150 KB typically). */
 export function toCompressedJpegDataUrl(
   source: HTMLCanvasElement,
   maxDim = 960,
   quality = 0.84,
+  maxDataUrlChars?: number,
 ): string {
   const longestSide = Math.max(source.width, source.height, 1)
   const scale = Math.min(1, maxDim / longestSide)
-  if (scale === 1) {
-    return source.toDataURL('image/jpeg', quality)
+
+  let targetCanvas = source
+  if (scale < 1) {
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(source.width * scale))
+    out.height = Math.max(1, Math.round(source.height * scale))
+    const ctx = out.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(source, 0, 0, out.width, out.height)
+      targetCanvas = out
+    }
   }
 
-  const out = document.createElement('canvas')
-  out.width = Math.max(1, Math.round(source.width * scale))
-  out.height = Math.max(1, Math.round(source.height * scale))
-  const ctx = out.getContext('2d')
-  if (!ctx) return source.toDataURL('image/jpeg', quality)
-
-  ctx.drawImage(source, 0, 0, out.width, out.height)
-  return out.toDataURL('image/jpeg', quality)
+  return encodeCanvasWithSizeCap(targetCanvas, quality, maxDataUrlChars)
 }
 
 export const ID_SELFIE_MATCH_LIMIT = 0.62
