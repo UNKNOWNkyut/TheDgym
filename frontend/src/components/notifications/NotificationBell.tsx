@@ -102,23 +102,28 @@ export function NotificationBell({ user }: NotificationBellProps) {
     }
     window.addEventListener('dgym:refresh-notifications', handleInstantRefresh)
 
-    // Real-time WebSocket push for Admin Check-In notifications across all portal pages
+    // Real-time WebSocket push for Admin & Trainer notifications across portal pages
     let ws: WebSocket | null = null
     let reconnectTimer: number | undefined
     let unmounted = false
+    const isStaffRole = user.role === 'admin' || user.role === 'trainer'
 
-    const connectAdminNotifWs = () => {
-      if (unmounted || user.role !== 'admin') return
+    const connectNotifWs = () => {
+      if (unmounted || !isStaffRole) return
       try {
         ws = new WebSocket(api.getAccessLiveFeedWsUrl())
         ws.onmessage = (evt) => {
           try {
             const packet = JSON.parse(evt.data)
-            if (
-              packet?.event === 'admin_notification' ||
-              (packet?.event === 'keycard_tap' &&
-                packet?.data?.decision === 'granted_check_in')
-            ) {
+            const isAdminEvent =
+              user.role === 'admin' &&
+              (packet?.event === 'admin_notification' ||
+                (packet?.event === 'keycard_tap' &&
+                  packet?.data?.decision === 'granted_check_in'))
+            const isTargetedPtEvent =
+              packet?.event === 'pt_booking_notification' &&
+              packet?.data?.user_id === user.id
+            if (isAdminEvent || isTargetedPtEvent) {
               fetchServerNotifications()
             }
           } catch {
@@ -127,7 +132,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
         }
         ws.onclose = () => {
           if (!unmounted) {
-            reconnectTimer = window.setTimeout(connectAdminNotifWs, 5000)
+            reconnectTimer = window.setTimeout(connectNotifWs, 5000)
           }
         }
         ws.onerror = () => ws?.close()
@@ -136,8 +141,8 @@ export function NotificationBell({ user }: NotificationBellProps) {
       }
     }
 
-    if (user.role === 'admin') {
-      connectAdminNotifWs()
+    if (isStaffRole) {
+      connectNotifWs()
     }
 
     return () => {
@@ -147,7 +152,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
       if (reconnectTimer) window.clearTimeout(reconnectTimer)
       ws?.close()
     }
-  }, [fetchServerNotifications, user.role])
+  }, [fetchServerNotifications, user.id, user.role])
 
   // Re-fetch when opened to ensure fresh status
   useEffect(() => {

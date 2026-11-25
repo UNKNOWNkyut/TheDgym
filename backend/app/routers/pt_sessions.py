@@ -10,9 +10,12 @@ from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.member import Member, MemberStatus
 from app.models.member_membership import MemberMembership, MembershipStatus
+from app.models.notification import Notification
 from app.models.pt_session import PTSession, PTSessionStatus
+from app.services.access_service import live_feed_manager
 from app.services.audit import record_audit_log
 from app.services.membership_activation import expire_elapsed_memberships
+from app.services.visit_sweeper import to_ph_time
 from app.schemas.training_and_visits import (
     PTSessionCreate,
     PTSessionBookCreate,
@@ -211,6 +214,21 @@ async def book_pt_session(
     )
     db.add(pt)
     await db.flush()
+
+    ph_dt = to_ph_time(sched_utc)
+    when_label = f"{ph_dt.strftime('%b')} {ph_dt.day}, {ph_dt.strftime('%I:%M %p').lstrip('0')}"
+    db.add(
+        Notification(
+            user_id=payload.trainer_id,
+            member_id=member.id,
+            title="New PT Session Request",
+            message=f"{member.full_name} requested a PT session on {when_label}.",
+            type="pt_booking",
+            action_text="Review Request",
+            action_url="/manage/pt-sessions",
+            is_read=False,
+        )
+    )
     await record_audit_log(
         db,
         action="booking.pt.created",
@@ -223,6 +241,11 @@ async def book_pt_session(
     )
     await db.commit()
     await db.refresh(pt)
+
+    await live_feed_manager.broadcast_event(
+        "pt_booking_notification",
+        {"user_id": payload.trainer_id, "pt_session_id": pt.id},
+    )
 
     loaded = await _load_pt_session(pt.id, db)
     return _format_pt_session(loaded)

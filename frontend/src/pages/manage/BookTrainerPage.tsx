@@ -199,9 +199,7 @@ function BookTrainerContent() {
 
     try {
       const selectedPkg = OFFICIAL_PT_PACKAGES.find((p) => p.id === selectedPackageId)
-      const packagePrefix = selectedPkg
-        ? `[${selectedPkg.name} (${selectedPkg.priceFormatted})]`
-        : ''
+      const packagePrefix = selectedPkg ? `[PT Session — ${selectedPkg.name}]` : ''
       const combinedNotes = [packagePrefix, notes.trim()]
         .filter(Boolean)
         .join(' ')
@@ -381,15 +379,13 @@ function BookTrainerContent() {
             )}
           </div>
 
-          {/* STEP 2: Select PT Package & Schedule */}
+          {/* STEP 2: PT Session & Schedule */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-red/20 text-red font-mono text-xs font-bold flex items-center justify-center border border-red/30">
                 2
               </span>
-              <h2 className="text-base font-semibold text-white">
-                Select PT Package, Date &amp; Time Slot
-              </h2>
+              <h2 className="text-base font-semibold text-white">PT Session</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -411,8 +407,8 @@ function BookTrainerContent() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="text-xs font-mono text-red font-semibold">
-                        {pkg.priceFormatted}
+                      <span className="text-[11px] uppercase tracking-wider font-mono text-red font-semibold">
+                        PT Session
                       </span>
                       <span className="text-[11px] text-white/50 font-mono">
                         {pkg.durationMinutes} mins
