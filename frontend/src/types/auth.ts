@@ -418,8 +418,9 @@ export interface ExpenseCategoryCreate {
 
 export interface Expense {
   id: number
-  category_id: number
-  category_name: string
+  name: string
+  category_id: number | null
+  category_name: string | null
   amount: string
   expense_date: string
   description: string
@@ -432,15 +433,17 @@ export interface Expense {
 }
 
 export interface ExpenseCreate {
-  category_id: number
+  name: string
+  category_id?: number | null
   amount: number
   expense_date: string
-  description: string
+  description?: string
   receipt_path?: string
 }
 
 export interface ExpenseUpdate {
-  category_id?: number
+  name?: string
+  category_id?: number | null
   amount?: number
   expense_date?: string
   description?: string
@@ -448,7 +451,7 @@ export interface ExpenseUpdate {
 }
 
 interface ExpenseCategoryTotal {
-  category_id: number
+  category_id: number | null
   category_name: string
   total: string
 }

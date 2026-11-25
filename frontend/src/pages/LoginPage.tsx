@@ -18,6 +18,9 @@ const DEMO_ACCOUNTS = [
   { role: 'Trainer', email: 'trainer@thedgym.com', pass: 'trainer12345', badge: 'Coach' },
   { role: 'Active Member', email: 'member@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
   { role: 'Registered User', email: 'user@thedgym.com', pass: 'user12345', badge: 'No Plan' },
+  { role: 'Nicole Reyes', email: 'nicole.reyes@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
+  { role: 'Christian Bautista', email: 'christian.bautista@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
+  { role: 'Jasmine Villanueva', email: 'jasmine.villanueva@thedgym.com', pass: 'member12345', badge: 'Verified Plan' },
 ]
 
 function sanitizeInternalRedirect(raw: string | null): string | null {
@@ -109,6 +112,18 @@ export function LoginPage() {
     clearError()
   }
 
+  const authenticateWithPassword = async (targetEmail: string, targetPassword: string) => {
+    try {
+      const challengeRes = await login({ email: targetEmail, password: targetPassword })
+      if (challengeRes.requires_face_verification) {
+        setEnrollIdData(null)
+        setChallenge(challengeRes)
+      }
+    } catch {
+      // Error is stored in context and displayed
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setValidationError(null)
@@ -123,15 +138,7 @@ export function LoginPage() {
       return
     }
 
-    try {
-      const challengeRes = await login({ email, password })
-      if (challengeRes.requires_face_verification) {
-        setEnrollIdData(null)
-        setChallenge(challengeRes)
-      }
-    } catch {
-      // Error is stored in context and displayed
-    }
+    await authenticateWithPassword(email, password)
   }
 
   const handleGoogleCredential = useCallback(
@@ -290,6 +297,7 @@ export function LoginPage() {
     setPassword(demoPass)
     setValidationError(null)
     clearError()
+    void authenticateWithPassword(demoEmail, demoPass)
   }
 
   return (
@@ -536,20 +544,22 @@ export function LoginPage() {
               <div className="grid grid-cols-2 gap-2">
                 {DEMO_ACCOUNTS.map((acc, idx) => (
                   <button
-                    key={acc.role}
+                    key={acc.email}
                     type="button"
                     onClick={() => fillDemo(acc.email, acc.pass)}
                     disabled={isLoading || showLoading}
                     className={`p-2.5 rounded-lg border border-white/8 bg-surface-2 hover:border-white/20 hover:bg-white/5 transition-all duration-150 text-left group disabled:opacity-50 cursor-pointer ${
-                      idx === 4 ? 'col-span-2' : ''
+                      idx === DEMO_ACCOUNTS.length - 1 && DEMO_ACCOUNTS.length % 2 === 1
+                        ? 'col-span-2'
+                        : ''
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-white group-hover:text-red transition-colors">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-xs font-semibold text-white group-hover:text-red transition-colors truncate">
                         {acc.role}
                       </span>
                       <span
-                        className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-mono ${
+                        className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-mono shrink-0 ${
                           acc.badge === 'Verified Plan'
                             ? 'bg-green-500/10 text-green-400 border border-green-500/25'
                             : acc.badge === 'No Plan'

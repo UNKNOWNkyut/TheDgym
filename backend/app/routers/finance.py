@@ -51,10 +51,16 @@ ANNUAL_MONTH_NAMES = [
 # HELPER FUNCTIONS
 
 def _expense_to_response(expense: Expense) -> ExpenseResponse:
+    resolved_name = (
+        (expense.name or "").strip()
+        or (expense.category.name if expense.category else "")
+        or expense.description
+    )
     return ExpenseResponse(
         id=expense.id,
+        name=resolved_name,
         category_id=expense.category_id,
-        category_name=expense.category.name if expense.category else "Unknown",
+        category_name=expense.category.name if expense.category else (resolved_name or None),
         amount=expense.amount,
         expense_date=expense.expense_date,
         description=expense.description,
@@ -209,7 +215,7 @@ async def list_expenses(
 
     stmt = (
         select(Expense)
-        .join(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
+        .outerjoin(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
         .options(selectinload(Expense.category), selectinload(Expense.recorded_by))
     )
 
@@ -224,6 +230,7 @@ async def list_expenses(
         search_term = f"%{search.strip()}%"
         stmt = stmt.where(
             or_(
+                Expense.name.ilike(search_term),
                 Expense.description.ilike(search_term),
                 ExpenseCategory.name.ilike(search_term),
             )
@@ -254,18 +261,28 @@ async def create_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
-    category = await _get_category_or_404(db, data.category_id)
-    if not category.is_active:
+    category: Optional[ExpenseCategory] = None
+    if data.category_id is not None:
+        category = await _get_category_or_404(db, data.category_id)
+        if not category.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This expense category is inactive.",
+            )
+
+    resolved_name = (data.name or "").strip() or (category.name if category else "")
+    if not resolved_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This expense category is inactive.",
+            detail="Please enter an expense name.",
         )
 
     expense = Expense(
+        name=resolved_name,
         category_id=data.category_id,
         amount=data.amount,
         expense_date=data.expense_date,
-        description=data.description.strip(),
+        description=(data.description or "").strip(),
         receipt_path=data.receipt_path.strip() if data.receipt_path else None,
         recorded_by_user_id=current_user.id,
         is_archived=False,
@@ -290,7 +307,16 @@ async def update_expense(
         )
 
     update_data = data.model_dump(exclude_unset=True)
-    if "category_id" in update_data:
+    if "name" in update_data:
+        clean_name = (update_data["name"] or "").strip()
+        if not clean_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Expense name cannot be empty.",
+            )
+        update_data["name"] = clean_name
+
+    if "category_id" in update_data and update_data["category_id"] is not None:
         category = await _get_category_or_404(db, update_data["category_id"])
         if not category.is_active:
             raise HTTPException(
@@ -301,7 +327,7 @@ async def update_expense(
     if "description" in update_data and update_data["description"] is not None:
         update_data["description"] = update_data["description"].strip()
     if "receipt_path" in update_data and update_data["receipt_path"] is not None:
-        update_data["receipt_path"] = update_data["receipt_path"].strip()
+        update_data["receipt_path"] = update_data["receipt_path"].strip() or None
 
     for field, value in update_data.items():
         setattr(expense, field, value)
@@ -311,13 +337,13 @@ async def update_expense(
 
 
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def archive_expense(
+async def delete_expense(
     expense_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles([UserRole.ADMIN])),
 ):
     expense = await _load_expense_or_404(db, expense_id)
-    expense.is_archived = True
+    await db.delete(expense)
     await db.commit()
 
 
@@ -372,20 +398,22 @@ async def get_finance_summary(
     )
     total_expenses = Decimal(expenses_result.scalar_one() or 0)
 
-    # EXPENSE BREAKDOWN BY CATEGORY
+    # EXPENSE BREAKDOWN BY CATEGORY / EXPENSE NAME
+    label_expr = func.coalesce(func.nullif(Expense.name, ""), ExpenseCategory.name, "General")
     breakdown_result = await db.execute(
         select(
-            ExpenseCategory.id,
-            ExpenseCategory.name,
+            Expense.category_id,
+            label_expr,
             func.coalesce(func.sum(Expense.amount), 0),
         )
-        .join(Expense, Expense.category_id == ExpenseCategory.id)
+        .select_from(Expense)
+        .outerjoin(ExpenseCategory, Expense.category_id == ExpenseCategory.id)
         .where(
             Expense.is_archived.is_(False),
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
         )
-        .group_by(ExpenseCategory.id, ExpenseCategory.name)
+        .group_by(Expense.category_id, label_expr)
         .order_by(func.sum(Expense.amount).desc())
     )
     breakdown = [

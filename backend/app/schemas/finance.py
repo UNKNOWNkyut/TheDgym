@@ -57,8 +57,14 @@ class ExpenseCategoryResponse(BaseModel):
 class ExpenseCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    category_id: int = Field(
-        ...,
+    name: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=150,
+    )
+
+    category_id: Optional[int] = Field(
+        None,
         ge=1,
     )
 
@@ -73,8 +79,7 @@ class ExpenseCreate(BaseModel):
     expense_date: date
 
     description: str = Field(
-        ...,
-        min_length=1,
+        "",
         max_length=2000,
     )
 
@@ -86,6 +91,12 @@ class ExpenseCreate(BaseModel):
 
 class ExpenseUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=150,
+    )
 
     category_id: Optional[int] = Field(
         None,
@@ -104,7 +115,6 @@ class ExpenseUpdate(BaseModel):
 
     description: Optional[str] = Field(
         None,
-        min_length=1,
         max_length=2000,
     )
 
@@ -117,8 +127,9 @@ class ExpenseUpdate(BaseModel):
 class ExpenseResponse(BaseModel):
     id: int
 
-    category_id: int
-    category_name: str
+    name: str
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
 
     amount: Decimal
     expense_date: date
@@ -138,7 +149,7 @@ class ExpenseResponse(BaseModel):
 # FINANCIAL SUMMARY
 
 class ExpenseCategoryTotal(BaseModel):
-    category_id: int
+    category_id: Optional[int] = None
     category_name: str
     total: Decimal
 

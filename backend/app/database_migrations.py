@@ -5,6 +5,22 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 logger = logging.getLogger("dgym.migrations")
 
 
+def _inspect_nullable_set_null_fk(sync_conn, table_name: str, col_name: str) -> tuple[bool, bool]:
+    inspector = inspect(sync_conn)
+    col = next((c for c in inspector.get_columns(table_name) if c["name"] == col_name), None)
+    is_nullable = bool(col and col.get("nullable"))
+    if sync_conn.dialect.name == "sqlite":
+        rows = sync_conn.execute(text(f"PRAGMA foreign_key_list({table_name})")).all()
+        has_set_null = any(r[3] == col_name and str(r[6] or "").upper() == "SET NULL" for r in rows)
+        return is_nullable, has_set_null
+    fk = next(
+        (f for f in inspector.get_foreign_keys(table_name) if f.get("constrained_columns") == [col_name]),
+        None,
+    )
+    has_set_null = bool(fk and str((fk.get("options") or {}).get("ondelete", "")).upper() == "SET NULL")
+    return is_nullable, has_set_null
+
+
 async def _migrate_member_memberships_table(conn, mm_cols: set[str]) -> None:
     """Add snapshot columns and decouple `member_id` FK (`NULL`, `ON DELETE SET NULL`)."""
     for col_name, col_len in (("payer_name_snapshot", 255), ("plan_name_snapshot", 100)):
@@ -14,21 +30,9 @@ async def _migrate_member_memberships_table(conn, mm_cols: set[str]) -> None:
             )
             logger.info("[MIGRATION] Added column member_memberships.%s", col_name)
 
-    def _inspect_member_id(sync_conn) -> tuple[bool, bool]:
-        inspector = inspect(sync_conn)
-        col = next(
-            (c for c in inspector.get_columns("member_memberships") if c["name"] == "member_id"),
-            None,
-        )
-        is_nullable = bool(col and col.get("nullable"))
-        fk = next(
-            (f for f in inspector.get_foreign_keys("member_memberships") if f.get("constrained_columns") == ["member_id"]),
-            None,
-        )
-        has_set_null = bool(fk and str((fk.get("options") or {}).get("ondelete", "")).upper() == "SET NULL")
-        return is_nullable, has_set_null
-
-    is_nullable, has_set_null = await conn.run_sync(_inspect_member_id)
+    is_nullable, has_set_null = await conn.run_sync(
+        _inspect_nullable_set_null_fk, "member_memberships", "member_id"
+    )
     if is_nullable and has_set_null:
         return
 
@@ -102,6 +106,108 @@ async def _migrate_member_memberships_table(conn, mm_cols: set[str]) -> None:
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_member_memberships_member_id ON member_memberships (member_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_member_memberships_plan_id ON member_memberships (plan_id)"))
         logger.info("[MIGRATION] Rebuilt SQLite member_memberships with nullable ON DELETE SET NULL member_id")
+
+
+async def _migrate_expenses_table(conn, exp_cols: set[str]) -> None:
+    """Add `expenses.name`, backfill from categories, and decouple `category_id` FK (`NULL`, `ON DELETE SET NULL`)."""
+    if "name" not in exp_cols:
+        await conn.execute(text("ALTER TABLE expenses ADD COLUMN name VARCHAR(150) NULL"))
+        if conn.dialect.name == "postgresql":
+            await conn.execute(
+                text(
+                    "UPDATE expenses e SET name = ec.name "
+                    "FROM expense_categories ec "
+                    "WHERE e.category_id = ec.id AND (e.name IS NULL OR e.name = '')"
+                )
+            )
+        else:
+            await conn.execute(
+                text(
+                    "UPDATE expenses SET name = ("
+                    "  SELECT ec.name FROM expense_categories ec WHERE ec.id = expenses.category_id"
+                    ") WHERE category_id IS NOT NULL AND (name IS NULL OR name = '')"
+                )
+            )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_expenses_name ON expenses (name)"))
+        logger.info("[MIGRATION] Added and backfilled column expenses.name")
+
+    is_nullable, has_set_null = await conn.run_sync(
+        _inspect_nullable_set_null_fk, "expenses", "category_id"
+    )
+    if is_nullable and has_set_null:
+        return
+
+    if conn.dialect.name == "postgresql":
+        if not is_nullable:
+            await conn.execute(text("ALTER TABLE expenses ALTER COLUMN category_id DROP NOT NULL"))
+        fk_rows = (
+            await conn.execute(
+                text(
+                    "SELECT tc.constraint_name, rc.delete_rule "
+                    "FROM information_schema.table_constraints tc "
+                    "JOIN information_schema.key_column_usage kcu "
+                    "  ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema "
+                    "JOIN information_schema.referential_constraints rc "
+                    "  ON tc.constraint_name = rc.constraint_name AND tc.constraint_schema = rc.constraint_schema "
+                    "WHERE tc.table_name = 'expenses' AND tc.constraint_type = 'FOREIGN KEY' "
+                    "  AND kcu.column_name = 'category_id'"
+                )
+            )
+        ).all()
+        need_fk = True
+        for cname, delete_rule in fk_rows:
+            if str(delete_rule or "").upper() == "SET NULL":
+                need_fk = False
+            else:
+                await conn.execute(text(f'ALTER TABLE expenses DROP CONSTRAINT "{cname}"'))
+        if need_fk:
+            await conn.execute(
+                text(
+                    "ALTER TABLE expenses ADD CONSTRAINT fk_expenses_category_id "
+                    "FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE SET NULL"
+                )
+            )
+        logger.info("[MIGRATION] Updated expenses.category_id to nullable ON DELETE SET NULL (PostgreSQL)")
+        return
+
+    if conn.dialect.name == "sqlite":
+        cols_order = (
+            "id", "name", "category_id", "amount", "expense_date", "description",
+            "receipt_path", "recorded_by_user_id", "is_archived", "created_at", "updated_at",
+        )
+        cols_csv = ", ".join(cols_order)
+        await conn.execute(text("DROP TABLE IF EXISTS expenses__new"))
+        await conn.execute(
+            text(
+                "CREATE TABLE expenses__new ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "name VARCHAR(150) NULL, "
+                "category_id INTEGER NULL REFERENCES expense_categories(id) ON DELETE SET NULL, "
+                "amount NUMERIC(12, 2) NOT NULL, "
+                "expense_date DATE NOT NULL, "
+                "description TEXT NOT NULL, "
+                "receipt_path VARCHAR(500) NULL, "
+                "recorded_by_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL, "
+                "is_archived BOOLEAN NOT NULL, "
+                "created_at TIMESTAMP NOT NULL, "
+                "updated_at TIMESTAMP NOT NULL)"
+            )
+        )
+        await conn.execute(
+            text(f"INSERT INTO expenses__new ({cols_csv}) SELECT {cols_csv} FROM expenses")
+        )
+        await conn.execute(text("DROP TABLE expenses"))
+        await conn.execute(text("ALTER TABLE expenses__new RENAME TO expenses"))
+        for idx_name, col_sql in (
+            ("ix_expenses_id", "id"),
+            ("ix_expenses_name", "name"),
+            ("ix_expenses_category_id", "category_id"),
+            ("ix_expenses_expense_date", "expense_date"),
+            ("ix_expenses_recorded_by_user_id", "recorded_by_user_id"),
+            ("ix_expenses_is_archived", "is_archived"),
+        ):
+            await conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON expenses ({col_sql})"))
+        logger.info("[MIGRATION] Rebuilt SQLite expenses with nullable ON DELETE SET NULL category_id")
 
 
 async def run_startup_column_migrations(engine: AsyncEngine) -> None:
@@ -194,6 +300,10 @@ async def run_startup_column_migrations(engine: AsyncEngine) -> None:
                 logger.info(
                     "[MIGRATION] Created partial unique index uq_member_memberships_payment_reference_nonempty"
                 )
+
+        exp_cols = await conn.run_sync(_get_existing_columns, "expenses")
+        if exp_cols:
+            await _migrate_expenses_table(conn, exp_cols)
 
         biometric_cols = await conn.run_sync(_get_existing_columns, "user_biometrics")
         if biometric_cols:

@@ -1,11 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { api } from '@/services/api'
-import type { Expense, ExpenseCategory } from '@/types/auth'
+import type { Expense } from '@/types/auth'
 
 interface AddExpenseModalProps {
   open: boolean
-  categories: ExpenseCategory[]
   expense?: Expense | null
   onClose: () => void
   onSaved: () => void
@@ -21,15 +20,13 @@ function getTodayInputValue() {
 
 export function AddExpenseModal(props: AddExpenseModalProps) {
   if (!props.open) return null
-  const formKey = props.expense
-    ? `edit-${props.expense.id}`
-    : `new-${props.categories[0]?.id ?? 'none'}`
+  const formKey = props.expense ? `edit-${props.expense.id}` : 'new'
   return <AddExpenseForm key={formKey} {...props} />
 }
 
-function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseModalProps) {
-  const [categoryId, setCategoryId] = useState(() =>
-    expense ? String(expense.category_id) : categories.length > 0 ? String(categories[0].id) : '',
+function AddExpenseForm({ expense, onClose, onSaved }: AddExpenseModalProps) {
+  const [expenseName, setExpenseName] = useState(
+    () => expense?.name || expense?.category_name || '',
   )
   const [amount, setAmount] = useState(() => (expense ? String(expense.amount) : ''))
   const [expenseDate, setExpenseDate] = useState(() =>
@@ -44,11 +41,11 @@ function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseMod
     event.preventDefault()
     setError('')
 
-    const parsedCategory = Number(categoryId)
+    const trimmedName = expenseName.trim()
     const parsedAmount = Number(amount)
 
-    if (!parsedCategory) {
-      setError('Please select an expense category.')
+    if (!trimmedName) {
+      setError('Please enter an expense.')
       return
     }
     if (!parsedAmount || parsedAmount <= 0) {
@@ -59,15 +56,11 @@ function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseMod
       setError('Please select the expense date.')
       return
     }
-    if (!description.trim()) {
-      setError('Please enter an expense description.')
-      return
-    }
 
     setSaving(true)
     try {
       const data = {
-        category_id: parsedCategory,
+        name: trimmedName,
         amount: parsedAmount,
         expense_date: expenseDate,
         description: description.trim(),
@@ -125,30 +118,19 @@ function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseMod
             </div>
           )}
 
-          {categories.length === 0 && (
-            <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
-              You need to create an expense category first.
-            </div>
-          )}
-
           <div className="space-y-1.5">
-            <label htmlFor="expense-category" className="text-sm font-medium text-white/70">
-              Category
+            <label htmlFor="expense-name" className="text-sm font-medium text-white/70">
+              Enter Expense
             </label>
-            <select
-              id="expense-category"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+            <input
+              id="expense-name"
+              type="text"
+              value={expenseName}
+              onChange={(event) => setExpenseName(event.target.value)}
+              placeholder="Enter expense name"
+              className="w-full rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/30"
               required
-            >
-              <option value="">Select category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -198,9 +180,8 @@ function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseMod
               rows={4}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Example: October electricity bill"
+              placeholder="Optional notes"
               className="w-full resize-none rounded-lg border border-white/10 bg-surface-2 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/30"
-              required
             />
           </div>
 
@@ -223,7 +204,7 @@ function AddExpenseForm({ categories, expense, onClose, onSaved }: AddExpenseMod
             <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" loading={saving} disabled={categories.length === 0}>
+            <Button type="submit" loading={saving}>
               {expense ? 'Save Changes' : 'Add Expense'}
             </Button>
           </div>

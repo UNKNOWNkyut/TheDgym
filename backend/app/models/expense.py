@@ -26,10 +26,16 @@ class Expense(Base):
         autoincrement=True,
     )
 
+    name = Column(
+        String(150),
+        nullable=True,
+        index=True,
+    )
+
     category_id = Column(
         Integer,
-        ForeignKey("expense_categories.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("expense_categories.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 
@@ -47,6 +53,7 @@ class Expense(Base):
     description = Column(
         Text,
         nullable=False,
+        default="",
     )
 
     # Reserved for receipt upload later.

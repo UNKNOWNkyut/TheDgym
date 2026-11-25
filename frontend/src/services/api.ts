@@ -710,7 +710,7 @@ export const api = {
     })
   },
 
-  async archiveExpense(id: number): Promise<void> {
+  async deleteExpense(id: number): Promise<void> {
     return request<void>(`/api/finance/expenses/${id}`, { method: 'DELETE' })
   },
 

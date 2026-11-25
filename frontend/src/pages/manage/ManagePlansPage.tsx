@@ -193,7 +193,6 @@ export function ManagePlansPage() {
                 <tr>
                   <th className="py-3 px-4">Order</th>
                   <th className="py-3 px-4">Plan Name</th>
-                  <th className="py-3 px-4">Slug</th>
                   <th className="py-3 px-4">Duration</th>
                   <th className="py-3 px-4">Price (PHP)</th>
                   <th className="py-3 px-4">Status</th>
@@ -206,7 +205,6 @@ export function ManagePlansPage() {
                     <tr key={i} className="animate-pulse">
                       <td className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-8" /></td>
                       <td className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-32" /></td>
-                      <td className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-20" /></td>
                       <td className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-16" /></td>
                       <td className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-20" /></td>
                       <td className="py-4 px-4"><div className="h-4 bg-white/5 rounded w-16" /></td>
@@ -215,7 +213,7 @@ export function ManagePlansPage() {
                   ))
                 ) : plans.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-white/40 text-sm">
+                    <td colSpan={6} className="py-12 text-center text-white/40 text-sm">
                       No membership plans found.
                     </td>
                   </tr>
@@ -227,7 +225,6 @@ export function ManagePlansPage() {
                         <p className="font-semibold text-white">{p.name}</p>
                         <p className="text-xs text-white/40 max-w-sm line-clamp-1">{p.description || '—'}</p>
                       </td>
-                      <td className="py-3 px-4 font-mono text-xs text-white/50">{p.slug}</td>
                       <td className="py-3 px-4 text-white/70">
                         {p.duration_days} day{p.duration_days !== 1 ? 's' : ''}
                       </td>
